@@ -2,33 +2,39 @@ QFED:
   fixture: true
   develop: develop
 
-ESMA_env:
-  local: ./ESMA_env
+env:
+  local: ./@env
   remote: ../ESMA_env.git
-  tag: v3.11.0
+  tag: v3.13.0
   develop: main
 
-ESMA_cmake:
-  local: ./ESMA_cmake
+cmake:
+  local: ./@cmake
   remote: ../ESMA_cmake.git
-  tag: v3.10.0
+  tag: v3.16.0
   develop: develop
 
 ecbuild:
-  local: ./ESMA_cmake/ecbuild
+  local: ./@cmake/@ecbuild
   remote: ../ecbuild.git
   tag: geos/v1.2.0
 
-MAPL:
-  local: ./ESMF/Shared/MAPL@
-  remote: ../MAPL.git
-  tag: v2.8.6
-  develop: develop
+  #MAPL:
+  #  local: ./src/Shared/@MAPL
+  #  remote: ../MAPL.git
+  #  tag: v2.21.3
+  #  develop: develop
 
 GMAO_Shared:
-  local: ./ESMF/Shared/GMAO_Shared@
+  local: ./src/Shared/@GMAO_Shared
   remote: ../GMAO_Shared.git
-  tag: v1.4.10
+  tag: v1.5.5
   sparse: ./config/GMAO_Shared.sparse
   develop: main
+
+GMAOpyobs:
+  local: ./src/Shared/@GMAOpyobs
+  remote: ../GMAOpyobs.git
+  branch: feature/adarmenov/pyobs-qfed
+  develop: develop
 
