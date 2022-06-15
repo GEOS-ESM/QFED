@@ -1,21 +1,19 @@
 import os
+import re
 
 from types      import *
 from glob       import glob
 from datetime   import date, timedelta
 
-from numpy      import (array, zeros, zeros_like, ones_like, any, 
-                        linspace, arange, sum, sin, cos, sqrt, 
-                        logical_and, logical_or, bitwise_and)
+import numpy as np
 
 from pyhdf.SD   import *
 
 from gfio       import GFIO
 from pyobs      import IGBP_
-from pyobs.binObs_ import binareas, binareasnr
+from binObs_    import binareas, binareasnr
 
-__VERSION__ = 2.5
-__CVSTAG__  = '@CVSTAG'
+from qfed.version import __version__, __tag__
 
 # MxD14 collection 6 fire mask pixel classes
 WATER  = 3     # non-fire water pixel
@@ -54,26 +52,32 @@ class MxD14_L3(object):
 
          IgbpDir -- directory for the IGBP database
 
-         refine  -- refinement level for a base 4x5 GEOS-5 grid
-                       refine=1  produces a      4x5       grid
-                       refine=2  produces a      2x2.50    grid
-                       refine=4  produces a      1x1.25    grid
-                       refine=8  produces a   0.50x0.625   grid
-                       refine=16 produces a   0.25x0.3125  grid
-                       refine=32 produces a  0.125x0.15625 grid
+         refine  -- refinement level for a base 4x5 GEOS grid
+                       refine=1   produces a      4x5        grid
+                       refine=2   produces a      2x2.50     grid
+                       refine=4   produces a      1x1.25     grid
+                       refine=8   produces a   0.50x0.625    grid
+                       refine=16  produces a   0.25x0.3125   grid
+                       refine=32  produces a  0.125x0.15625  grid
 
        Alternatively, one can specify the grid resolution with a
        single letter:
 
-         res     -- single letter denoting GEOS-5 resolution,
-                       res='a'  produces a      4x5       grid
-                       res='b'  produces a      2x2.50    grid
-                       res='c'  produces a      1x1.25    grid
-                       res='d'  produces a   0.50x0.625   grid
-                       res='e'  produces a   0.25x0.3125  grid
-                       res='f'  produces a  0.125x0.15625 grid
-                    or,
-                       res='0.1x0.1' produces   0.1x0.1   grid
+         res     -- single letter denoting GEOS resolution:
+                       res='a'    produces a      4x5        grid
+                       res='b'    produces a      2x2.50     grid
+                       res='c'    produces a      1x1.25     grid
+                       res='d'    produces a   0.50x0.625    grid
+                       res='e'    produces a   0.25x0.3125   grid
+                       res='f'    produces a  0.125x0.15625  grid
+                  -- cubed sphere GEOS notation:
+                       ...
+                       res='c90'  produces approx.    1x1    grid 
+                       res='c180' produces approx.  0.5x0.5  grid
+                       res='c360' produces approx. 0.25x0.25 grid 
+                       ...                       
+                  -- or
+                       res='0.1x0.1' produces 0.1x0.1 grid
 
                    NOTE: *res*, if specified, supersedes *refine*.
 
@@ -86,14 +90,20 @@ class MxD14_L3(object):
 
 #      Output grid resolution
 #      ----------------------
-       if res is not None:
-           if res=='a': refine = 1 
-           if res=='b': refine = 2
-           if res=='c': refine = 4
-           if res=='d': refine = 8
-           if res=='e': refine = 16
-           if res=='f': refine = 32
-           if res=='0.1x0.1': refine = None
+       cubed = re.compile('c[0-9]+')
+       if cubed.match(res):
+          refine = None
+          isCubed = True
+       else:
+          isCubed = False
+          if res is not None:
+              if res=='a': refine = 1 
+              if res=='b': refine = 2
+              if res=='c': refine = 4
+              if res=='d': refine = 8
+              if res=='e': refine = 16
+              if res=='f': refine = 32
+              if res=='0.1x0.1': refine = None
 
 #      Initially are lists of numpy arrays for each granule
 #      ----------------------------------------------------
@@ -122,35 +132,42 @@ class MxD14_L3(object):
 
            self.im = im
            self.jm = jm
-           self.glon = linspace(-180.,180.,self.im,endpoint=False)
-           self.glat = linspace(-90.,90.,self.jm)
+           self.glon = np.linspace(-180.,180.,self.im,endpoint=False)
+           self.glat = np.linspace(-90.,90.,self.jm)
        else:
-           if res=='0.1x0.1':
-              self.grid_type = 'DE_x_PE'
+           if isCubed:
+                 self.grid_type = 'GEOS-5 A-Grid'
+                 self.im = int(res[1:len(res)])
+                 self.jm = self.im*6
+                 self.glon = np.linspace(1,self.im,self.im)
+                 self.glat = np.linspace(1,self.jm,self.jm)
+           else:
+              if res=='0.1x0.1':
+                 self.grid_type = 'DE_x_PE'
 
-              self.im = 3600
-              self.jm = 1800
+                 self.im = 3600
+                 self.jm = 1800
 
-              d_lon = 360.0 / self.im
-              d_lat = 180.0 / self.jm
+                 d_lon = 360.0 / self.im
+                 d_lat = 180.0 / self.jm
 
-              self.glon = linspace(-180+d_lon/2, 180-d_lon/2, self.im)
-              self.glat = linspace( -90+d_lat/2,  90-d_lat/2, self.jm)
+                 self.glon = np.linspace(-180+d_lon/2, 180-d_lon/2, self.im)
+                 self.glat = np.linspace( -90+d_lat/2,  90-d_lat/2, self.jm)
 
        assert (self.grid_type != None)
 
 #      Gridded accumulators
 #      --------------------
-       self.gLand  = zeros((self.im,self.jm))
-       self.gWater = zeros((self.im,self.jm))
-       self.gCloud = zeros((self.im,self.jm))
-       self.gFRP   = zeros((4,self.im,self.jm))
+       self.gLand  = np.zeros((self.im,self.jm))
+       self.gWater = np.zeros((self.im,self.jm))
+       self.gCloud = np.zeros((self.im,self.jm))
+       self.gFRP   = np.zeros((4,self.im,self.jm))
 
 #      Land/water state
 #      ----------------
        self.lws = None
 
-       if type(Path) is not ListType:
+       if not isinstance(Path, list):
            Path = [Path, ]
 
 #      Fire Products
@@ -178,20 +195,21 @@ class MxD14_L3(object):
                              'Background FRP Density (Savanna)',
                              'Background FRP Density (Grasslands)'),
                   vunits  = ('km2', 'km2', 'km2', 'MW', 'MW', 'MW', 'MW', 
-                            'MW km-2', 'MW km-2', 'MW km-2', 'MW km-2'),
-                  title   = 'QFED Level3a v%3.1f (%s) Gridded FRP Estimates'%(__VERSION__, _getTagName(tag)),
-                  source  = 'NASA/GSFC/GMAO Aerosol Group',
-                  contact = 'arlindo.dasilva@nasa.gov; anton.darmenov@nasa.gov')
+                             'MW km-2', 'MW km-2', 'MW km-2', 'MW km-2'),
+                  title   = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__),
+                  source  = 'NASA/GSFC/GMAO GEOS Aerosol Group',
+                  contact = ('%s; %s') % ('arlindo.dasilva@nasa.gov', 'anton.darmenov@nasa.gov') 
+                  )
 
 
        if self.date is None:
-           print "[x] did not find matching files, skipped writing an output file"
+           print('[x] did not find matching files, skipped writing an output file')
            return
 
        if qc == True:
            self.qualityControl()
        else:
-           print '[!] skipping QC procedures'
+           print('[!] skipping QC procedures')
 
        self._write_ana(filename=filename,dir=dir['ana'],expid=expid,file_meta=meta,bootstrap=bootstrap)
     
@@ -211,9 +229,9 @@ class MxD14_L3(object):
 
 
        if bootstrap:
-           print 
-           print '[i] Bootstrapping FRP forecast!'
-           print
+           print('') 
+           print('[i] Bootstrapping FRP forecast!')
+           print('')
 
            f = GFIO()
 
@@ -234,10 +252,10 @@ class MxD14_L3(object):
        f.write(file_meta['vname'][6], nymd, nhms, self.gFRP[3,:,:])
 
        if bootstrap:
-           f.write(file_meta['vname'][ 7], nymd, nhms, zeros_like(self.gFRP[0,:,:]))
-           f.write(file_meta['vname'][ 8], nymd, nhms, zeros_like(self.gFRP[0,:,:]))
-           f.write(file_meta['vname'][ 9], nymd, nhms, zeros_like(self.gFRP[0,:,:]))
-           f.write(file_meta['vname'][10], nymd, nhms, zeros_like(self.gFRP[0,:,:]))
+           f.write(file_meta['vname'][ 7], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
+           f.write(file_meta['vname'][ 8], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
+           f.write(file_meta['vname'][ 9], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
+           f.write(file_meta['vname'][10], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
 
        try:
            f.close()
@@ -245,7 +263,7 @@ class MxD14_L3(object):
            pass
 
        if self.verb >=1:
-           print "[w] Wrote file %s" % self.filename
+           print('[w] Wrote file {file:s}'.format(file=self.filename))
 
 
     def _write_bkg(self,filename=None,dir='.',expid='qfed2',file_meta=None, FillValue=1.0e20):
@@ -272,7 +290,7 @@ class MxD14_L3(object):
                 title=file_meta['title'], source=file_meta['source'], 
                 contact=file_meta['contact'])
 
-       missing = zeros_like(self.gFRP[0,:,:])
+       missing = np.zeros_like(self.gFRP[0,:,:])
        missing[:,:] = FillValue
 
        for v in file_meta['vname']:
@@ -284,7 +302,7 @@ class MxD14_L3(object):
            pass
 
        if self.verb >=1:
-           print "[w] Wrote file %s" % _filename
+           print('[w] Wrote file {file:s}'.format(file=_filename))
 
 
 #     ......................................................................
@@ -299,7 +317,7 @@ class MxD14_L3(object):
             if os.path.isdir(item):      self._readDir(item)
             elif os.path.isfile(item):   self._readGranule(item)
             else:
-                print "%s is not a valid file or directory, ignoring it"%item
+                print("%s is not a valid file or directory, ignoring it"%item)
 #---
     def _readDir(self,dir):
         """Recursively, look for files in directory."""
@@ -308,7 +326,7 @@ class MxD14_L3(object):
             if os.path.isdir(path):      self._readDir(path)
             elif os.path.isfile(path):   self._readGranule(path)
             else:
-                print "%s is not a valid file or directory, ignoring it"%item
+                print("%s is not a valid file or directory, ignoring it"%item)
 
 #---
     def _readGranule(self,filename):
@@ -320,7 +338,7 @@ class MxD14_L3(object):
            mxd14 = SD(filename)
         except HDF4Error:
             if self.verb >= 1:
-                print "- %s: not recognized as an HDF file"%filename
+                print("- %s: not recognized as an HDF file"%filename)
             return 
 
 #       Figure out MxD03 pathname
@@ -343,7 +361,7 @@ class MxD14_L3(object):
         try:
             gfilename = glob(self.GeoDir+'/'+MxD03+'/'+year+'/'+doy+'/'+base+'*.hdf')[0]
         except:
-            print "[x] cannot find geo-location file for <%s>, ignoring granule"%base
+            print("[x] cannot find geo-location file for <%s>, ignoring granule"%base)
             return 
 
 #       Record date and collection
@@ -361,7 +379,7 @@ class MxD14_L3(object):
 #       -----------------------------
         if mxd14.select('FP_longitude').checkempty():
             if self.verb >= 2:
-                print "[x] no fires in granule <%s>, ignoring it <"%base
+                print("[x] no fires in granule <%s>, ignoring it <"%base)
             n_fires = 0
 
 #       There are fires in granule
@@ -374,14 +392,14 @@ class MxD14_L3(object):
                 mxd03 = SD(gfilename)
             except HDF4Error:
                 if self.verb >= 1:
-                    print "[x] cannot open geo-location file <%s>, ignoring granule"%gfilename
+                    print("[x] cannot open geo-location file <%s>, ignoring granule"%gfilename)
                 return 
 
 #           Get no-fire areas
 #           -----------------
             rc = self._readAreas(mxd14,mxd03)
             if rc:
-                print "[x] problems with geo-location file <%s>, ignoring granule"%gfilename
+                print("[x] problems with geo-location file <%s>, ignoring granule"%gfilename)
                 return # inconsistent MOD03, skip granule
 
 #           Read fire properties
@@ -403,7 +421,7 @@ class MxD14_L3(object):
             i = [n for n in range(n_fires_initial) if self.lws[fp_line[n],fp_sample[n]] == QA_WATER]
             if len(i) > 0:
                 if self.verb > 1:
-                    print "      --> found %d FIRE pixel(s) over water" % len(i)
+                    print("      --> found %d FIRE pixel(s) over water" % len(i))
 
                 self.gWater += _binareas(lon[i],lat[i],area[i],self.im,self.jm,grid_type=self.grid_type)
 
@@ -417,7 +435,7 @@ class MxD14_L3(object):
                 area = area[i] 
             else:
                 if self.verb > 1:
-                    print "      --> no FIRE pixels over land/coast"
+                    print("      --> no FIRE pixels over land/coast")
 
                 return
  
@@ -425,7 +443,7 @@ class MxD14_L3(object):
 
             if n_fires_initial != n_fires:
                 if self.verb > 1:
-                    print "      --> reduced the number of FIRE pixels from %d to %d" % (n_fires_initial, n_fires)
+                    print("      --> reduced the number of FIRE pixels from %d to %d" % (n_fires_initial, n_fires))
 
 
 #           Bin area of burning pixels
@@ -437,14 +455,14 @@ class MxD14_L3(object):
             veg = _getSimpleVeg(lon,lat,self.IgbpDir)
             for b in (1,2,3,4):
                 i = (veg==b)
-                if any(i):
+                if np.any(i):
                     blon = lon[i]
                     blat = lat[i]
                     bfrp = frp[i]
                     self.gFRP[b-1,:,:] += _binareas(blon,blat,bfrp,self.im,self.jm,grid_type=self.grid_type)
 
         if n_fires>0 and self.verb>=1:
-            print '[ ] Processed <'+os.path.basename(filename)[0:19]+'> with %4d fires'%n_fires
+            print('[ ] Processed <'+os.path.basename(filename)[0:19]+'> with %4d fires'%n_fires)
 
 #---
     def _readAreas(self,mxd14,mxd03):
@@ -481,29 +499,29 @@ class MxD14_L3(object):
         except:
             minLat, maxLat = (-90.0, 90.0)
 
-        i_lon = logical_and(Lon >= minLon, Lon <= maxLon)
-        i_lat = logical_and(Lat >= minLat, Lat <= maxLat)
-        valid = logical_and(i_lon, i_lat)
+        i_lon = np.logical_and(Lon >= minLon, Lon <= maxLon)
+        i_lat = np.logical_and(Lat >= minLat, Lat <= maxLat)
+        valid = np.logical_and(i_lon, i_lat)
 
 
 #       algorithm QA 
 #       ------------
         qa = mxd14.select('algorithm QA').get()
-        self.lws = bitwise_and(qa, 3)  # land/water state is stored in bits 0-1
+        self.lws = np.bitwise_and(qa, 3)  # land/water state is stored in bits 0-1
 
-        i_water = logical_and(self.lws==QA_WATER, valid)
-        i_land  = logical_and(logical_or(self.lws==QA_COAST, self.lws==QA_LAND), valid)
+        i_water = np.logical_and(self.lws==QA_WATER, valid)
+        i_land  = np.logical_and(np.logical_or(self.lws==QA_COAST, self.lws==QA_LAND), valid)
 
 
 #       Calculate pixel area
 #       --------------------
-        Area = zeros((nLines,nSamples))
-        Area[:] = _pixar(1+arange(nSamples))
+        Area = np.zeros((nLines,nSamples))
+        Area[:] = _pixar(1+np.arange(nSamples))
 
         # non-fire land pixel
-        i = logical_and(fmask==NOFIRE, valid)
+        i = np.logical_and(fmask==NOFIRE, valid)
 
-        if any(i):
+        if np.any(i):
 
 #           Condensed 1D arrays of clear-land not burning pixels
 #           ----------------------------------------------------
@@ -517,12 +535,12 @@ class MxD14_L3(object):
 
         else:
             if self.verb > 1:
-                print "      --> no NOFIRE pixel for granule"
+                print("      --> no NOFIRE pixel for granule")
 
         # non-fire water or cloud over water
-        i = logical_or(logical_and(fmask==WATER, valid), logical_and(logical_and(fmask==CLOUD, valid), i_water))
+        i = np.logical_or(np.logical_and(fmask==WATER, valid), np.logical_and(np.logical_and(fmask==CLOUD, valid), i_water))
 
-        if any(i):
+        if np.any(i):
 
 #           Condensed 1D arrays of water pixels
 #           -----------------------------------
@@ -536,12 +554,12 @@ class MxD14_L3(object):
 
         else:
             if self.verb > 1:
-                print "      --> no WATER pixel for granule"
+                print("      --> no WATER pixel for granule")
 
         # cloud over land only
-        i = logical_and(logical_and(fmask==CLOUD, valid), i_land)
+        i = np.logical_and(np.logical_and(fmask==CLOUD, valid), i_land)
 
-        if any(i):
+        if np.any(i):
 
 #           Condensed 1D arrays of cloud pixels
 #           -----------------------------------
@@ -555,7 +573,7 @@ class MxD14_L3(object):
 
         else:
             if self.verb > 1:
-                print "      --> no CLOUD pixel for granule"
+                print("      --> no CLOUD pixel for granule")
 
         return 0
     
@@ -583,7 +601,7 @@ class MxD14_L3(object):
 
         # Combustion rate constant
         Alpha = 1.37e-6 # kg(dry mater)/J
-        A_f   = Alpha * array((2.5, 4.5,  1.8, 1.8))
+        A_f   = Alpha * np.array((2.5, 4.5,  1.8, 1.8))
        
         # Satellite Fudge Factor
         # ----------------------
@@ -596,7 +614,7 @@ class MxD14_L3(object):
 
         n_biomes = 4
 
-        E = zeros((n_biomes, self.im, self.jm))
+        E = np.zeros((n_biomes, self.im, self.jm))
 
         A_l = self.gLand
         A_w = self.gWater
@@ -604,7 +622,7 @@ class MxD14_L3(object):
 
         A_o = A_l + A_w
 
-        # apply the 'sequential-b0' method to compute the emissions
+        # apply the 'sequential-b0' method to compute emissions
         for b in range(n_biomes):
             E[b,:,:] += units_factor * A_f[b] * S_f[self.sat] * B_f[b] * self.gFRP[b,:,:]
 
@@ -614,7 +632,7 @@ class MxD14_L3(object):
             E_b[i] = E_b[i] / (A_o[i] + A_c[i]) * ((A_l[i] + 2*A_c[i]) / (A_l[i] + A_c[i]))
             E[b,:,:] = E_b
         
-        E_total = sum(E[:,:,:], axis=0)
+        E_total = np.sum(E[:,:,:], axis=0)
         
         # column density of OC emitted for 24 hours, g m-2
         M = (1e3 * E_total) * (24 * 3600) 
@@ -627,31 +645,32 @@ class MxD14_L3(object):
 
         i_cap = aod_oc > max_aod_oc
 
-        if (self.verb > 1) and any(i_cap):
-            print 'Maximum estimated AOD(OC) : %.2f' % aod_oc.max()
-            print 'Maximum FRP(TF)           : %.2f' % self.gFRP[0,:,:].max()
-            print 'Maximum FRP(XF)           : %.2f' % self.gFRP[1,:,:].max()
-            print 'Maximum FRP(SV)           : %.2f' % self.gFRP[2,:,:].max()
-            print 'Maximum FRP(GL)           : %.2f' % self.gFRP[3,:,:].max()
+        if (self.verb > 1) and np.any(i_cap):
+            print('Maximum estimated AOD(OC) : %.2f' % aod_oc.max())
+            print('Maximum FRP(TF)           : %.2f' % self.gFRP[0,:,:].max())
+            print('Maximum FRP(XF)           : %.2f' % self.gFRP[1,:,:].max())
+            print('Maximum FRP(SV)           : %.2f' % self.gFRP[2,:,:].max())
+            print('Maximum FRP(GL)           : %.2f' % self.gFRP[3,:,:].max())
 
-        q = ones_like(aod_oc)
+        q = np.ones_like(aod_oc)
         q[i_cap] = max_aod_oc / aod_oc[i_cap]
 
         for b in range(n_biomes):
             FRP = q*self.gFRP[b,:,:]
             self.gFRP[b,:,:] = FRP
         
-        n_cap = sum(i_cap)
+        n_cap = np.sum(i_cap)
         if n_cap > 0:
-            p_cap = 100.0 * n_cap / (sum(E_total.ravel() > 0))
-            print '[!] FRPs in %d grid cells (%.1f%% of grid cells with fires) were capped.' % (n_cap, p_cap)
+            p_cap = 100.0 * n_cap / (np.sum(E_total.ravel() > 0))
+            print('[!] FRPs in %d grid cells (%.1f%% of grid cells with fires) were capped.' % (n_cap, p_cap))
 
-        if (self.verb > 1) and any(i_cap):
-            print 'After capping the emissions'
-            print 'Maximum FRP(TF)           : %.2f' % self.gFRP[0,:,:].max()
-            print 'Maximum FRP(XF)           : %.2f' % self.gFRP[1,:,:].max()
-            print 'Maximum FRP(SV)           : %.2f' % self.gFRP[2,:,:].max()
-            print 'Maximum FRP(GL)           : %.2f' % self.gFRP[3,:,:].max()
+        if (self.verb > 1) and np.any(i_cap):
+            print('After capping the emissions')
+            print('Maximum FRP(TF)           : %.2f' % self.gFRP[0,:,:].max())
+            print('Maximum FRP(XF)           : %.2f' % self.gFRP[1,:,:].max())
+            print('Maximum FRP(SV)           : %.2f' % self.gFRP[2,:,:].max())
+            print('Maximum FRP(GL)           : %.2f' % self.gFRP[3,:,:].max())
+
 
 #..............................................................
 
@@ -662,7 +681,7 @@ def _binareas(lon, lat, area, im, jm, grid_type='GEOS-5 A-Grid'):
     elif grid_type == 'DE_x_PE':
         result = binareasnr(lon,lat,area,im,jm)
     else:
-        result = None        
+        result = None 
    
     return result
 
@@ -684,9 +703,9 @@ def _pixar(sample):
     r  = Re + h
     q  = Re / r
 
-    cos_sa   = cos(sa)
-    sin_sa   = sin(sa)
-    sqrt_trm = sqrt(q*q - sin_sa*sin_sa)
+    cos_sa   = np.cos(sa)
+    sin_sa   = np.sin(sa)
+    sqrt_trm = np.sqrt(q*q - sin_sa*sin_sa)
     
     dS = s*Re * (cos_sa / sqrt_trm - 1)
     dT = s*r  * (cos_sa - sqrt_trm)
@@ -724,7 +743,7 @@ def _getSimpleVeg(lon,lat,Path,nonVeg=None):
     # substitute non vegetation (water, snow/ice) data with 
     # another type, e.g. GRASSLAND by default
     if nonVeg != None:
-        i = logical_or(veg == -15, veg == -17)
+        i = np.logical_or(veg == -15, veg == -17)
         veg[i] = nonVeg # could be one of the biomes, i.e., 1, 2, 3 or 4
 
     return veg
@@ -733,8 +752,8 @@ def _getTagName(tag):
     if tag != None:
         tag_name = tag
     else:    
-        if __CVSTAG__ not in (None, ''):
-            tag_name = __CVSTAG__
+        if __TAG__ not in (None, ''):
+            tag_name = __TAG__
         else:
             tag_name = 'unknown'
 
