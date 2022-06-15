@@ -160,8 +160,6 @@ if __name__ == "__main__":
 #           -----------------
             fires.write(dir=dir, expid=args.expid+'_'+MxD14, qc=qc, bootstrap=args.bootstrap)
 
-            print ('****DEBUG****')
-
 #           Compress it unless the user disabled it
 #           ---------------------------------------
             if not args.uncompressed and fires.doy != None:
