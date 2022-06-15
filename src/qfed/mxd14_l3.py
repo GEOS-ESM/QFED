@@ -3,13 +3,13 @@ import re
 
 from types      import *
 from glob       import glob
-from datetime   import date, timedelta
+from datetime   import date, datetime, timedelta
 
 import numpy as np
+import netCDF4 as nc
 
 from pyhdf.SD   import *
 
-from gfio       import GFIO
 from pyobs      import IGBP_
 from binObs_    import binareas, binareasnr
 
@@ -211,10 +211,10 @@ class MxD14_L3(object):
        else:
            print('[!] skipping QC procedures')
 
-       self._write_ana(filename=filename,dir=dir['ana'],expid=expid,file_meta=meta,bootstrap=bootstrap)
+       self._write_ana(filename=filename,dir=dir['ana'],expid=expid,bootstrap=bootstrap,fill_value=1e20)
     
 
-    def _write_ana(self,filename=None,dir='.',expid='qfed2',file_meta=None,bootstrap=False):
+    def _write_ana(self,filename=None,dir='.',expid='qfed2',bootstrap=False,fill_value=1e15):
        """
        Writes gridded Areas and FRP to file.
        """
@@ -233,40 +233,167 @@ class MxD14_L3(object):
            print('[i] Bootstrapping FRP forecast!')
            print('')
 
-           f = GFIO()
+           # create a file
+           f = nc.Dataset(self.filename, 'w', format='NETCDF4')
+    
+           # global attributes
+           f.Conventions = 'COARDS'
+           f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
+           f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__)
+           f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+           f.Version     = str(__version__)
+           f.Processed   = str(datetime.now())
+           f.History     = '' 
 
-           f.create(self.filename, file_meta['vname'], nymd, nhms, 
-                    lon=self.glon, lat=self.glat,
-                    vtitle=file_meta['vtitle'], vunits=file_meta['vunits'], 
-                    title=file_meta['title'], source=file_meta['source'], 
-                    contact=file_meta['contact'])
+           # dimensions
+           f.createDimension('lon', len(self.glon))
+           f.createDimension('lat', len(self.glat))
+           f.createDimension('time', None)
+ 
+           # variables
+           v_lon    = f.createVariable('lon',  'f8', ('lon'))
+           v_lat    = f.createVariable('lat',  'f8', ('lat'))
+           v_time   = f.createVariable('time', 'i4', ('time'))
+
+           v_land   = f.createVariable('land',   'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_water  = f.createVariable('water',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_cloud  = f.createVariable('cloud',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+
+           v_frp_tf = f.createVariable('frp_tf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_frp_xf = f.createVariable('frp_xf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_frp_sv = f.createVariable('frp_sv', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_frp_gl = f.createVariable('frp_gl', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           
+           v_fb_tf  = f.createVariable('fb_tf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_fb_xf  = f.createVariable('fb_xf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_fb_sv  = f.createVariable('fb_sv',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           v_fb_gl  = f.createVariable('fb_gl',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           
+
+           # variables attributes
+           v_lon.long_name         = 'longitude'
+           v_lon.standard_name     = 'longitude'
+           v_lon.units             = 'degrees_east'
+           v_lon.comment           = 'center_of_cell'
+
+           v_lat.long_name         = 'latitude'
+           v_lat.standard_name     = 'latitude'
+           v_lat.units             = 'degrees_north'
+           v_lat.comment           = 'center_of_cell'
+
+           begin_date        = int(self.date.strftime('%Y%m%d'))
+           begin_time        = int(self.date.strftime('%H%M%S'))
+           v_time.long_name  = 'time'
+           v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.date)
+           v_time.begin_date = np.array(begin_date, dtype=np.int32)
+           v_time.begin_time = np.array(begin_time, dtype=np.int32)
+
+           v_land.long_name = "Observed Clear Land Area"
+           v_land.units = "km2"
+           v_land.missing_value = np.array(fill_value, np.float32)
+           v_land.fmissing_value = np.array(fill_value, np.float32)
+           v_land.vmin = np.array(fill_value, np.float32)
+           v_land.vmax = np.array(fill_value, np.float32)
+           
+           v_water.long_name = "Water Area"
+           v_water.units = "km2"
+           v_water.missing_value = np.array(fill_value, np.float32)
+           v_water.fmissing_value = np.array(fill_value, np.float32)
+           v_water.vmin = np.array(fill_value, np.float32)
+           v_water.vmax = np.array(fill_value, np.float32)
+           
+           v_cloud.long_name = "Obscured by Clouds Area"
+           v_cloud.units = "km2"
+           v_cloud.missing_value = np.array(fill_value, np.float32)
+           v_cloud.fmissing_value = np.array(fill_value, np.float32)
+           v_cloud.vmin = np.array(fill_value, np.float32)
+           v_cloud.vmax = np.array(fill_value, np.float32)
+           
+           v_frp_tf.long_name = "Fire Radiative Power (Tropical Forests)"
+           v_frp_tf.units = "MW"
+           v_frp_tf.missing_value = np.array(fill_value, np.float32)
+           v_frp_tf.fmissing_value = np.array(fill_value, np.float32)
+           v_frp_tf.vmin = np.array(fill_value, np.float32)
+           v_frp_tf.vmax = np.array(fill_value, np.float32)
+           
+           v_frp_xf.long_name = "Fire Radiative Power (Extra-tropical Forests)"
+           v_frp_xf.units = "MW"
+           v_frp_xf.missing_value = np.array(fill_value, np.float32)
+           v_frp_xf.fmissing_value = np.array(fill_value, np.float32)
+           v_frp_xf.vmin = np.array(fill_value, np.float32)
+           v_frp_xf.vmax = np.array(fill_value, np.float32)
+           
+           v_frp_sv.long_name = "Fire Radiative Power (Savanna)"
+           v_frp_sv.units = "MW"
+           v_frp_sv.missing_value = np.array(fill_value, np.float32)
+           v_frp_sv.fmissing_value = np.array(fill_value, np.float32)
+           v_frp_sv.vmin = np.array(fill_value, np.float32)
+           v_frp_sv.vmax = np.array(fill_value, np.float32)
+           
+           v_frp_gl.long_name = "Fire Radiative Power (Grasslands)"
+           v_frp_gl.units = "MW"
+           v_frp_gl.missing_value = np.array(fill_value, np.float32)
+           v_frp_gl.fmissing_value = np.array(fill_value, np.float32)
+           v_frp_gl.vmin = np.array(fill_value, np.float32)
+           v_frp_gl.vmax = np.array(fill_value, np.float32)
+           
+           v_fb_tf.long_name = "Background FRP Density (Tropical Forests)"
+           v_fb_tf.units = "MW km-2"
+           v_fb_tf.missing_value = np.array(fill_value, np.float32)
+           v_fb_tf.fmissing_value = np.array(fill_value, np.float32)
+           v_fb_tf.vmin = np.array(fill_value, np.float32)
+           v_fb_tf.vmax = np.array(fill_value, np.float32)
+           
+           v_fb_xf.long_name = "Background FRP Density (Extra-tropical Forests)"
+           v_fb_xf.units = "MW km-2"
+           v_fb_xf.missing_value = np.array(fill_value, np.float32)
+           v_fb_xf.fmissing_value = np.array(fill_value, np.float32)
+           v_fb_xf.vmin = np.array(fill_value, np.float32)
+           v_fb_xf.vmax = np.array(fill_value, np.float32)
+           
+           v_fb_sv.long_name = "Background FRP Density (Savanna)"
+           v_fb_sv.units = "MW km-2"
+           v_fb_sv.missing_value = np.array(fill_value, np.float32)
+           v_fb_sv.fmissing_value = np.array(fill_value, np.float32)
+           v_fb_sv.vmin = np.array(fill_value, np.float32)
+           v_fb_sv.vmax = np.array(fill_value, np.float32)
+           
+           v_fb_gl.long_name = "Background FRP Density (Grasslands)"
+           v_fb_gl.units = "MW km-2"
+           v_fb_gl.missing_value = np.array(fill_value, np.float32)
+           v_fb_gl.fmissing_value = np.array(fill_value, np.float32)
+           v_fb_gl.vmin = np.array(fill_value, np.float32)
+           v_fb_gl.vmax = np.array(fill_value, np.float32)
+
+           # data
+           v_time[:] = np.array((0,))
+           v_lon[:]  = np.array(self.glon)
+           v_lat[:]  = np.array(self.glat)
        else:
-           f = GFIO(self.filename, 'w')
+           f = nc.Dataset(self.filename, 'r+', format='NETCDF4')
 
-       f.write(file_meta['vname'][0], nymd, nhms, self.gLand)
-       f.write(file_meta['vname'][1], nymd, nhms, self.gWater)
-       f.write(file_meta['vname'][2], nymd, nhms, self.gCloud)
-       f.write(file_meta['vname'][3], nymd, nhms, self.gFRP[0,:,:])
-       f.write(file_meta['vname'][4], nymd, nhms, self.gFRP[1,:,:])
-       f.write(file_meta['vname'][5], nymd, nhms, self.gFRP[2,:,:])
-       f.write(file_meta['vname'][6], nymd, nhms, self.gFRP[3,:,:])
+       # data
+       v_land[0,:,:]   = np.transpose(self.gLand)
+       v_water[0,:,:]  = np.transpose(self.gWater)
+       v_cloud[0,:,:]  = np.transpose(self.gCloud)
+       v_frp_tf[0,:,:] = np.transpose(self.gFRP[0,:,:])
+       v_frp_xf[0,:,:] = np.transpose(self.gFRP[1,:,:])
+       v_frp_sv[0,:,:] = np.transpose(self.gFRP[2,:,:])
+       v_frp_gl[0,:,:] = np.transpose(self.gFRP[3,:,:])
 
        if bootstrap:
-           f.write(file_meta['vname'][ 7], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
-           f.write(file_meta['vname'][ 8], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
-           f.write(file_meta['vname'][ 9], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
-           f.write(file_meta['vname'][10], nymd, nhms, np.zeros_like(self.gFRP[0,:,:]))
-
-       try:
-           f.close()
-       except:
-           pass
+           v_fb_tf[0,:,:] = np.zeros_like(np.transpose(self.gFRP[0,:,:]))
+           v_fb_xf[0,:,:] = np.zeros_like(np.transpose(self.gFRP[0,:,:]))
+           v_fb_sv[0,:,:] = np.zeros_like(np.transpose(self.gFRP[0,:,:]))
+           v_fb_gl[0,:,:] = np.zeros_like(np.transpose(self.gFRP[0,:,:]))
+       
+       f.close()
 
        if self.verb >=1:
            print('[w] Wrote file {file:s}'.format(file=self.filename))
 
 
-    def _write_bkg(self,filename=None,dir='.',expid='qfed2',file_meta=None, FillValue=1.0e20):
+    def _write_bkg(self,filename=None,dir='.',expid='qfed2',fill_value=1e15):
        """
        Creates L3a file valid at day + 1. Data fields are filled with FillValue.
        """
@@ -277,29 +404,164 @@ class MxD14_L3(object):
        nhms = 120000
 
        if filename is None:
-           _filename = os.path.join(dir, '%s.frp.%s.%d.nc4'%(expid, self.col, nymd))
+          _filename = os.path.join(dir, '%s.frp.%s.%d.nc4'%(expid, self.col, nymd))
        else:
           _dir, _file = os.path.split(filename)
           _filename = os.path.join(_dir, '_%s'%_file)
 
-       f = GFIO()
 
-       f.create(_filename, file_meta['vname'], nymd, nhms, 
-                lon=self.glon, lat=self.glat,
-                vtitle=file_meta['vtitle'], vunits=file_meta['vunits'], 
-                title=file_meta['title'], source=file_meta['source'], 
-                contact=file_meta['contact'])
+       # create a file
+       f = nc.Dataset(_filename, 'w', format='NETCDF4')
+    
+       # global attributes
+       f.Conventions = 'COARDS'
+       f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
+       f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__)
+       f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+       f.Version     = str(__version__)
+       f.Processed   = str(datetime.now())
+       f.History     = '' 
 
-       missing = np.zeros_like(self.gFRP[0,:,:])
-       missing[:,:] = FillValue
-
-       for v in file_meta['vname']:
-           f.write(v, nymd, nhms, missing)
+       # dimensions
+       f.createDimension('lon', len(self.glon))
+       f.createDimension('lat', len(self.glat))
+       f.createDimension('time', None)
  
-       try:
-           f.close()
-       except:
-           pass
+       # variables
+       v_lon    = f.createVariable('lon',  'f8', ('lon'))
+       v_lat    = f.createVariable('lat',  'f8', ('lat'))
+       v_time   = f.createVariable('time', 'i4', ('time'))
+
+       v_land   = f.createVariable('land',   'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_water  = f.createVariable('water',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_cloud  = f.createVariable('cloud',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+
+       v_frp_tf = f.createVariable('frp_tf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_frp_xf = f.createVariable('frp_xf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_frp_sv = f.createVariable('frp_sv', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_frp_gl = f.createVariable('frp_gl', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       
+       v_fb_tf  = f.createVariable('fb_tf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_fb_xf  = f.createVariable('fb_xf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_fb_sv  = f.createVariable('fb_sv',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+       v_fb_gl  = f.createVariable('fb_gl',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+
+
+       # variables attributes
+       v_lon.long_name         = 'longitude'
+       v_lon.standard_name     = 'longitude'
+       v_lon.units             = 'degrees_east'
+       v_lon.comment           = 'center_of_cell'
+
+       v_lat.long_name         = 'latitude'
+       v_lat.standard_name     = 'latitude'
+       v_lat.units             = 'degrees_north'
+       v_lat.comment           = 'center_of_cell'
+
+       begin_date        = int(_date.strftime('%Y%m%d'))
+       begin_time        = int(_date.strftime('%H%M%S'))
+       v_time.long_name  = 'time'
+       v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(_date)
+       v_time.begin_date = np.array(begin_date, dtype=np.int32)
+       v_time.begin_time = np.array(begin_time, dtype=np.int32)
+
+       v_land.long_name = "Observed Clear Land Area"
+       v_land.units = "km2"
+       v_land.missing_value = np.array(fill_value, np.float32)
+       v_land.fmissing_value = np.array(fill_value, np.float32)
+       v_land.vmin = np.array(fill_value, np.float32)
+       v_land.vmax = np.array(fill_value, np.float32)
+       
+       v_water.long_name = "Water Area"
+       v_water.units = "km2"
+       v_water.missing_value = np.array(fill_value, np.float32)
+       v_water.fmissing_value = np.array(fill_value, np.float32)
+       v_water.vmin = np.array(fill_value, np.float32)
+       v_water.vmax = np.array(fill_value, np.float32)
+       
+       v_cloud.long_name = "Obscured by Clouds Area"
+       v_cloud.units = "km2"
+       v_cloud.missing_value = np.array(fill_value, np.float32)
+       v_cloud.fmissing_value = np.array(fill_value, np.float32)
+       v_cloud.vmin = np.array(fill_value, np.float32)
+       v_cloud.vmax = np.array(fill_value, np.float32)
+       
+       v_frp_tf.long_name = "Fire Radiative Power (Tropical Forests)"
+       v_frp_tf.units = "MW"
+       v_frp_tf.missing_value = np.array(fill_value, np.float32)
+       v_frp_tf.fmissing_value = np.array(fill_value, np.float32)
+       v_frp_tf.vmin = np.array(fill_value, np.float32)
+       v_frp_tf.vmax = np.array(fill_value, np.float32)
+       
+       v_frp_xf.long_name = "Fire Radiative Power (Extra-tropical Forests)"
+       v_frp_xf.units = "MW"
+       v_frp_xf.missing_value = np.array(fill_value, np.float32)
+       v_frp_xf.fmissing_value = np.array(fill_value, np.float32)
+       v_frp_xf.vmin = np.array(fill_value, np.float32)
+       v_frp_xf.vmax = np.array(fill_value, np.float32)
+       
+       v_frp_sv.long_name = "Fire Radiative Power (Savanna)"
+       v_frp_sv.units = "MW"
+       v_frp_sv.missing_value = np.array(fill_value, np.float32)
+       v_frp_sv.fmissing_value = np.array(fill_value, np.float32)
+       v_frp_sv.vmin = np.array(fill_value, np.float32)
+       v_frp_sv.vmax = np.array(fill_value, np.float32)
+       
+       v_frp_gl.long_name = "Fire Radiative Power (Grasslands)"
+       v_frp_gl.units = "MW"
+       v_frp_gl.missing_value = np.array(fill_value, np.float32)
+       v_frp_gl.fmissing_value = np.array(fill_value, np.float32)
+       v_frp_gl.vmin = np.array(fill_value, np.float32)
+       v_frp_gl.vmax = np.array(fill_value, np.float32)
+       
+       v_fb_tf.long_name = "Background FRP Density (Tropical Forests)"
+       v_fb_tf.units = "MW km-2"
+       v_fb_tf.missing_value = np.array(fill_value, np.float32)
+       v_fb_tf.fmissing_value = np.array(fill_value, np.float32)
+       v_fb_tf.vmin = np.array(fill_value, np.float32)
+       v_fb_tf.vmax = np.array(fill_value, np.float32)
+       
+       v_fb_xf.long_name = "Background FRP Density (Extra-tropical Forests)"
+       v_fb_xf.units = "MW km-2"
+       v_fb_xf.missing_value = np.array(fill_value, np.float32)
+       v_fb_xf.fmissing_value = np.array(fill_value, np.float32)
+       v_fb_xf.vmin = np.array(fill_value, np.float32)
+       v_fb_xf.vmax = np.array(fill_value, np.float32)
+       
+       v_fb_sv.long_name = "Background FRP Density (Savanna)"
+       v_fb_sv.units = "MW km-2"
+       v_fb_sv.missing_value = np.array(fill_value, np.float32)
+       v_fb_sv.fmissing_value = np.array(fill_value, np.float32)
+       v_fb_sv.vmin = np.array(fill_value, np.float32)
+       v_fb_sv.vmax = np.array(fill_value, np.float32)
+       
+       v_fb_gl.long_name = "Background FRP Density (Grasslands)"
+       v_fb_gl.units = "MW km-2"
+       v_fb_gl.missing_value = np.array(fill_value, np.float32)
+       v_fb_gl.fmissing_value = np.array(fill_value, np.float32)
+       v_fb_gl.vmin = np.array(fill_value, np.float32)
+       v_fb_gl.vmax = np.array(fill_value, np.float32)
+
+       # data
+       v_time[:] = np.array((0,))
+       v_lon[:]  = np.array(self.glon)
+       v_lat[:]  = np.array(self.glat)
+
+       missing = np.full(np.transpose(self.gFRP[0,:,:]), fill_value)
+
+       v_land[0,:,:]   = missing[:,:] 
+       v_water[0,:,:]  = missing[:,:]
+       v_cloud[0,:,:]  = missing[:,:]
+       v_frp_tf[0,:,:] = missing[:,:]
+       v_frp_xf[0,:,:] = missing[:,:]
+       v_frp_sv[0,:,:] = missing[:,:]
+       v_frp_gl[0,:,:] = missing[:,:]
+       v_fb_tf[0,:,:]  = missing[:,:]
+       v_fb_xf[0,:,:]  = missing[:,:]
+       v_fb_sv[0,:,:]  = missing[:,:]
+       v_fb_gl[0,:,:]  = missing[:,:]
+      
+       f.close()
 
        if self.verb >=1:
            print('[w] Wrote file {file:s}'.format(file=_filename))

@@ -19,19 +19,6 @@ ecbuild:
   remote: ../ecbuild.git
   tag: geos/v1.2.0
 
-  #MAPL:
-  #  local: ./src/Shared/@MAPL
-  #  remote: ../MAPL.git
-  #  tag: v2.21.3
-  #  develop: develop
-
-GMAO_Shared:
-  local: ./src/Shared/@GMAO_Shared
-  remote: ../GMAO_Shared.git
-  tag: v1.5.5
-  sparse: ./config/GMAO_Shared.sparse
-  develop: main
-
 GMAOpyobs:
   local: ./src/Shared/@GMAOpyobs
   remote: ../GMAOpyobs.git
