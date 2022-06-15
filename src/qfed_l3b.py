@@ -15,7 +15,9 @@ from datetime       import date, timedelta
 from optparse       import OptionParser
 from glob           import glob
 
-from gfio           import GFIO
+import numpy as np
+import netCDF4 as nc
+
 from qfed.emissions import Emissions
 
 Sat = { 'MOD14': 'MODIS_TERRA', 'MYD14': 'MODIS_AQUA' }
@@ -108,7 +110,7 @@ if __name__ == "__main__":
 
             try:
                 ifn = glob(pat)[0]
-                f = GFIO(ifn)
+                f = nc.Dataset(ifn, 'r')
             except:
                 print("[x] cannot find/read input FRP file for %s, ignoring it"%d)
                 continue
@@ -116,22 +118,21 @@ if __name__ == "__main__":
             if Verb:
                 print("[] Reading ", ifn) 
 
-            Land[sat]  = f.read('land')
-            Water[sat] = f.read('water')
-            Cloud[sat] = f.read('cloud')
+            Land[sat]  = np.transpose(f.variables['land' ][0,:,:])
+            Water[sat] = np.transpose(f.variables['water'][0,:,:])
+            Cloud[sat] = np.transpose(f.variables['cloud'][0,:,:])
             
-            FRP[sat] = [ f.read('frp_tf'),
-                         f.read('frp_xf'),
-                         f.read('frp_sv'),
-                         f.read('frp_gl') ]
+            FRP[sat] = [ np.transpose(f.variables['frp_tf'][0,:,:]),
+                         np.transpose(f.variables['frp_xf'][0,:,:]),
+                         np.transpose(f.variables['frp_sv'][0,:,:]),
+                         np.transpose(f.variables['frp_gl'][0,:,:]) ]
 
-            F[sat]   = [ f.read('fb_tf'),
-                         f.read('fb_xf'),
-                         f.read('fb_sv'),
-                         f.read('fb_gl') ]
+            F[sat]   = [ np.transpose(f.variables['fb_tf'][0,:,:]),
+                         np.transpose(f.variables['fb_xf'][0,:,:]),
+                         np.transpose(f.variables['fb_sv'][0,:,:]),
+                         np.transpose(f.variables['fb_gl'][0,:,:]) ]
 
             col = ifn.split('/')[-1].split('.')[2] # collection
-
 
 #       FRP density forecast files
 #       --------------------------
