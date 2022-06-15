@@ -372,6 +372,15 @@ class MxD14_L3(object):
        else:
            f = nc.Dataset(self.filename, 'r+', format='NETCDF4')
 
+           v_land   = f.variables['land'  ]
+           v_water  = f.variables['water' ]
+           v_cloud  = f.variables['cloud' ]
+           v_frp_tf = f.variables['frp_tf']
+           v_frp_xf = f.variables['frp_xf']
+           v_frp_sv = f.variables['frp_sv']
+           v_frp_gl = f.variables['frp_gl']
+ 
+
        # data
        v_land[0,:,:]   = np.transpose(self.gLand)
        v_water[0,:,:]  = np.transpose(self.gWater)
@@ -547,7 +556,7 @@ class MxD14_L3(object):
        v_lon[:]  = np.array(self.glon)
        v_lat[:]  = np.array(self.glat)
 
-       missing = np.full(np.transpose(self.gFRP[0,:,:]), fill_value)
+       missing = np.full(np.transpose(self.gFRP[0,:,:]).shape, fill_value)
 
        v_land[0,:,:]   = missing[:,:] 
        v_water[0,:,:]  = missing[:,:]
