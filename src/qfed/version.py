@@ -1,2 +1,6 @@
-__version__ = '2.5.r1-geos-esm'
+'''
+QFED version information
+'''
+
+__version__ = '3.0.0'
 __tag__     = 'n/a'
