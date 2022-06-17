@@ -10,3 +10,8 @@ install (
   PROGRAMS qfed_l3a.py qfed_l3b.py 
   DESTINATION bin
   )
+
+install (
+  FILES config.yaml pix_size_viirs_iband.txt
+  DESTINATION etc
+  )
