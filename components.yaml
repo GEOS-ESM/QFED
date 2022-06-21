@@ -22,6 +22,5 @@ ecbuild:
 GMAOpyobs:
   local: ./src/Shared/@GMAOpyobs
   remote: ../GMAOpyobs.git
-  branch: feature/adarmenov/pyobs-qfed
   develop: develop
 
