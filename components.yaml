@@ -22,5 +22,6 @@ ecbuild:
 GMAOpyobs:
   local: ./src/Shared/@GMAOpyobs
   remote: ../GMAOpyobs.git
+  branch: develop
   develop: develop
 
