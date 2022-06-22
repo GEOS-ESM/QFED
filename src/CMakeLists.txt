@@ -12,6 +12,6 @@ install (
   )
 
 install (
-  FILES config.yaml pix_size_viirs_iband.txt
+  FILES config.yaml
   DESTINATION etc
   )
