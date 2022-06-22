@@ -477,9 +477,11 @@ def viirs_pixel_area(sample):
     fitted to VIIRS 375m pixel dimensions data provided by 
     Wilfrid Schroeder (NOAA; personal communication)
  
-    Note that:
+    Note that in the tabulated data:
         sample = 0     at nadir
         sample = 3199  at the edge (either left or right)
+    whereas in the VIIRS granules/images the samples are 
+    in the interval [0, 6399].
 
     The tabulated data has two points of discontinuity:
         breakpoint = (1184, 1920)    

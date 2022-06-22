@@ -42,7 +42,7 @@ class Grid:
 
     def __parse(self, alias):
         '''
-        Map name alias with a refine factor and a CubedSphere flag.
+        Map name alias to either a lat/lon refine factor or a cubed-sphere spec.
         '''
 
         if isinstance(alias, int):
