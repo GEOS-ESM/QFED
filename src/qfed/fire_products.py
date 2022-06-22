@@ -503,7 +503,7 @@ def viirs_pixel_area(sample):
         _area[s_i:s_e] = p(np.arange(s_i, s_e)/3200.0)
  
     # sample the reconstructed data
-    area = _area[np.abs(sample)]
+    area = np.concatenate((_area[::-1], _area[:]))[sample]
     return area
 
 
