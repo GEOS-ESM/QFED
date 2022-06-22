@@ -361,7 +361,6 @@ class VIIRS(ActiveFireProduct):
     def get_pixel_classes(self, file, land=0, water=1):
 
         '''
-
         # non-fire land pixel
         i = np.logical_and(i_land_nofire, valid)
 
@@ -371,9 +370,6 @@ class VIIRS(ActiveFireProduct):
 
         # cloud over land only
         i = np.logical_and(i_land_cloud, valid)
-
-
-        
         '''
 
         fire_mask = self.get_fire_mask(file)

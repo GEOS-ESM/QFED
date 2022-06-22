@@ -458,9 +458,6 @@ class GriddedFRP():
            print('[w] Wrote file {file:s}'.format(file=filename))
 
 
-
-
-
 def _binareas(lon, lat, area, im, jm, grid_type='GEOS-5 A-Grid'):
 
     if grid_type == 'GEOS-5 A-Grid':
