@@ -10,7 +10,7 @@ warnings.simplefilter('ignore',DeprecationWarning)
 warnings.simplefilter('always',UserWarning)
 
 import os
-from datetime       import date, timedelta
+from datetime       import datetime, timedelta
 
 from optparse       import OptionParser
 from glob           import glob
@@ -92,7 +92,7 @@ if __name__ == "__main__":
 #   --------------------------
     for doy in range(int(doy_beg),int(doy_end)+1):
 
-        d = date(int(year),1,1) + timedelta(days=(doy - 1))
+        d = datetime(int(year),1,1) + timedelta(days=(doy - 1)) + timedelta(hours=12)
 
 #       Read input FRP and Area for each satellite
 #       ------------------------------------------

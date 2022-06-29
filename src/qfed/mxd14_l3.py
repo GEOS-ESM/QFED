@@ -3,7 +3,7 @@ import re
 
 from types      import *
 from glob       import glob
-from datetime   import date, datetime, timedelta
+from datetime   import datetime, timedelta
 
 import numpy as np
 import netCDF4 as nc
@@ -287,6 +287,7 @@ class MxD14_L3(object):
            v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.date)
            v_time.begin_date = np.array(begin_date, dtype=np.int32)
            v_time.begin_time = np.array(begin_time, dtype=np.int32)
+           v_time.time_increment = np.array(240000, dtype=np.int32)
 
            v_land.long_name = "Observed Clear Land Area"
            v_land.units = "km2"
@@ -399,7 +400,7 @@ class MxD14_L3(object):
        f.close()
 
        if self.verb >=1:
-           print('[w] Wrote file {file:s}'.format(file=self.filename))
+           print('[ ] Wrote file {file:s}'.format(file=self.filename))
 
 
     def _write_bkg(self,filename=None,dir='.',expid='qfed2',fill_value=1e15):
@@ -473,6 +474,7 @@ class MxD14_L3(object):
        v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(_date)
        v_time.begin_date = np.array(begin_date, dtype=np.int32)
        v_time.begin_time = np.array(begin_time, dtype=np.int32)
+       v_time.time_increment = np.array(240000, dtype=np.int32)
 
        v_land.long_name = "Observed Clear Land Area"
        v_land.units = "km2"
@@ -573,7 +575,7 @@ class MxD14_L3(object):
        f.close()
 
        if self.verb >=1:
-           print('[w] Wrote file {file:s}'.format(file=_filename))
+           print('[ ] Wrote file {file:s}'.format(file=_filename))
 
 
 #     ......................................................................
@@ -639,7 +641,7 @@ class MxD14_L3(object):
 #       --------------------------
         if self.doy is None:
             self.doy  = int(doy)
-            self.date = date(int(year),1,1) + timedelta(days=self.doy - 1)
+            self.date = datetime(int(year),1,1) + timedelta(days=(self.doy-1)) + timedelta(hours=12)
 
         if self.col is None:
             # adopt the collection version of the MxD14 files 
@@ -650,7 +652,7 @@ class MxD14_L3(object):
 #       -----------------------------
         if mxd14.select('FP_longitude').checkempty():
             if self.verb >= 2:
-                print("[x] no fires in granule <%s>, ignoring it <"%base)
+                print("[ ] no fires in granule <%s>, ignoring it "%base)
             n_fires = 0
 
 #       There are fires in granule
