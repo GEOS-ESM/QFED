@@ -1,98 +1,121 @@
 #!/usr/bin/env python3
-# -W ignore::DeprecationWarning
+
 
 """
   A Python script to create QFED Level 3b files.
 """
 
-import warnings
-warnings.simplefilter('ignore',DeprecationWarning)
-warnings.simplefilter('always',UserWarning)
-
 import os
-from datetime       import datetime, timedelta
-
-from optparse       import OptionParser
-from glob           import glob
+import warnings
+import argparse
+from datetime import datetime, timedelta
+from glob import glob
 
 import numpy as np
 import netCDF4 as nc
 
+from qfed.version import __version__
 from qfed.emissions import Emissions
 
 Sat = { 'MOD14': 'MODIS_TERRA', 'MYD14': 'MODIS_AQUA' }
 
-#---------------------------------------------------------------------
+
+
+def parse_arguments(default_values):
+    '''
+    Parse command line arguments
+    '''
+
+    parser = argparse.ArgumentParser(prog='QFED', description='Creates QFED Level 3b files')
+
+    parser.add_argument('-V', '--version', action='version', 
+                        version='%(prog)s {version:s}'.format(version=__version__))
+
+    parser.add_argument('-i', '--input', dest='level3a_dir', 
+                        default=default_values['level3a_dir'],
+                        help='directory for input FRP files (default=%s)'\
+                            %default_values['level3a_dir'])
+
+    parser.add_argument('-o', '--output', dest='level3b_dir', 
+                        default=default_values['level3b_dir'],
+                        help='directory for output emissions files (default=%s)'\
+                            %default_values['level3b_dir'])
+
+    parser.add_argument('-p', '--products', dest='products', 
+                        default=default_values['products'],
+                        help='list of MODIS fire products (default=%s)'\
+                            %default_values['products'])
+    
+    parser.add_argument('-x', '--expid', dest='expid', 
+                        default=default_values['expid'],
+                        help='experiment id (default=%s)'\
+                            %default_values['expid'])
+
+    parser.add_argument('-u', '--uncompressed',
+                        action='store_true', 
+                        help='do not compress output files (default=False)')
+
+    parser.add_argument('-n', '--ndays', dest='ndays', type=int, 
+                        default=default_values['fill_days'],
+                        help='Number of days to fill in (default=%d)'\
+                            %default_values['fill_days'])
+
+    parser.add_argument('-v', '--verbose',
+                        action='count', default=0, help='verbose')
+
+    parser.add_argument('year', type=int, 
+                        help="year specified in 'yyyy' format")
+
+    parser.add_argument('doy', nargs='+', type=int,
+                        help='single DOY, or start and end DOYs')
+
+
+    args = parser.parse_args()
+
+    # modify the Namespace object to set the 'doy' argument value
+    if len(args.doy) == 1:
+        doy_beg = args.doy[0]
+        doy_end = doy_beg
+    elif len(args.doy) == 2:
+        doy_beg = min(args.doy[0], args.doy[1])
+        doy_end = max(args.doy[0], args.doy[1])
+    else:
+        parser.error("must have one or two DOY arguments: doy | 'start doy' 'end doy'")
+
+    args.doy = [doy_beg, doy_end]
+
+    return args
+
+
+def display_banner():
+    print('')
+    print('QFED Level 3B Processing')
+    print('------------------------')
+    print('')
+
+
 
 if __name__ == "__main__":
 
-    expid       = 'qfed2'
-    level3a_dir = '/nobackup/2/MODIS/Level3'
-    level3b_dir = '/nobackup/2/MODIS/Level3'
-    products    = 'MOD14,MYD14'
-    fill_days   = 1
+    default_values = dict(expid       = 'qfed2',
+                          level3a_dir = '/nobackup/2/MODIS/Level3',
+                          level3b_dir = '/nobackup/2/MODIS/Level3',
+                          products    = 'MOD14,MYD14',
+                          fill_days   = 1)
 
-    
-#   Parse command line options
-#   --------------------------
-    parser = OptionParser(usage="Usage: %prog [options] year doy_beg [doy_end]",
-                          version='qfed_level3b-1.0.b2' )
+    args = parse_arguments(default_values)
 
-    parser.add_option("-i", "--input", dest="level3a_dir",
-                      default=level3a_dir,
-                      help="directory for input FRP files (default=%s)"\
-                           %level3a_dir )
+    if args.verbose > 0:
+        display_banner()
 
-    parser.add_option("-o", "--output", dest="level3b_dir",
-                      default=level3b_dir,
-                      help="directory for output Emission files (default=%s)"\
-                           %level3b_dir )
 
-    parser.add_option("-p", "--products", dest="products", default=products,
-                      help="CSV list of MODIS fire products (default=%s)"\
-                           %products )
-    
-    parser.add_option("-x", "--expid", dest="expid", default=expid,
-                      help="experiment id (default=%s)"\
-                           %expid )
-
-    parser.add_option("-u", "--uncompressed",
-                      action="store_true", dest="uncompressed",
-                      help="do not use n4zip to compress gridded output file (default=False)")
-
-    parser.add_option("-n", "--ndays", dest="ndays", type="int", default=fill_days,
-                      help="Number of days to fill in (default=%d)"\
-                           %fill_days )
-
-    parser.add_option("-v", "--verbose",
-                      action="store_true", dest="verbose")    
-
-    (options, args) = parser.parse_args()
-    
-    if len(args) == 2:
-        year, doy_beg = args
-        doy_end = doy_beg
-    elif len(args) == 3:
-        year, doy_beg, doy_end = args
-    else:
-        parser.error("must have 2 or 3 arguments: year and day-of-year range")
-        
-    if options.verbose:
-        Verb=1
-        print("")
-        print("                          QFED Level 3B Processing")
-        print("                          ------------------------")
-        print("")
-    else:
-        Verb=0
-
-    Products = options.products.split(',')
+    Products = args.products.split(',')
 
 #   Grid FRP and observed area
 #   --------------------------
-    for doy in range(int(doy_beg),int(doy_end)+1):
+    for doy in range(args.doy[0], args.doy[1] + 1):
 
-        d = datetime(int(year),1,1) + timedelta(days=(doy - 1)) + timedelta(hours=12)
+        d = datetime(args.year,1,1) + timedelta(days=(doy - 1)) + timedelta(hours=12)
 
 #       Read input FRP and Area for each satellite
 #       ------------------------------------------
@@ -103,8 +126,8 @@ if __name__ == "__main__":
 
 #           Open input file
 #           ---------------
-            l3a_dir  = os.path.join(options.level3a_dir, MxD14, 'Y%04d'%d.year, 'M%02d'%d.month)
-            l3a_file = '%s_%s.frp.???.%04d%02d%02d.nc4'%(options.expid, MxD14, d.year, d.month, d.day)
+            l3a_dir  = os.path.join(args.level3a_dir, MxD14, 'Y%04d'%d.year, 'M%02d'%d.month)
+            l3a_file = '%s_%s.frp.???.%04d%02d%02d.nc4'%(args.expid, MxD14, d.year, d.month, d.day)
             
             pat = os.path.join(l3a_dir, l3a_file)
 
@@ -115,7 +138,7 @@ if __name__ == "__main__":
                 print("[x] cannot find/read input FRP file for %s, ignoring it"%d)
                 continue
 
-            if Verb:
+            if args.verbose > 0:
                 print("[] Reading ", ifn) 
 
             Land[sat]  = np.transpose(f.variables['land' ][0,:,:])
@@ -142,23 +165,23 @@ if __name__ == "__main__":
             sat = Sat[MxD14]
  
             if sat in list(FRP.keys()):
-                l3a_dir  = os.path.join(options.level3a_dir, MxD14, 'Y%04d'%d_.year, 'M%02d'%d_.month)
-                l3a_file = '%s_%s.frp.%s.%04d%02d%02d.nc4'%(options.expid, MxD14, col, d_.year, d_.month, d_.day)
+                l3a_dir  = os.path.join(args.level3a_dir, MxD14, 'Y%04d'%d_.year, 'M%02d'%d_.month)
+                l3a_file = '%s_%s.frp.%s.%04d%02d%02d.nc4'%(args.expid, MxD14, col, d_.year, d_.month, d_.day)
             
                 forecast_files[sat] = os.path.join(l3a_dir, l3a_file)
 
 
 #       Create the top level directory for output files
 #       -----------------------------------------------
-        dir = os.path.join(options.level3b_dir, 'QFED')
+        dir = os.path.join(args.level3b_dir, 'QFED')
         rc = os.system("/bin/mkdir -p %s"%dir)
         if rc:
             raise IOError('cannot create output directory')
 
 #       Write output file
 #       -----------------
-        E = Emissions(d, FRP, F, Land, Water, Cloud, Verb=Verb)
+        E = Emissions(d, FRP, F, Land, Water, Cloud, Verb=(args.verbose > 0))
         E.calculate()
-        E.write(dir=dir, forecast=forecast_files, expid=options.expid, col=col, ndays=options.ndays, 
-                uncompressed=options.uncompressed)
+        E.write(dir=dir, forecast=forecast_files, expid=args.expid, col=col, ndays=args.ndays, 
+                uncompressed=args.uncompressed)
         
