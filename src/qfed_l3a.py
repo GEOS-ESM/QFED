@@ -5,13 +5,11 @@
   A Python script to create QFED Level 3a files.
 """
 
-import warnings
-
 import os
+import warnings
+import argparse
 
-from datetime      import date, timedelta
-
-import argparse  
+from datetime import date, timedelta
 
 from qfed.version import __version__
 from qfed.mxd14_l3 import MxD14_L3
@@ -26,51 +24,57 @@ def parse_arguments(default_values):
     parser = argparse.ArgumentParser(prog='QFED', description='Creates QFED Level 3a files')
 
     parser.add_argument('-V', '--version', action='version', 
-                      version='%(prog)s {version:s}'.format(version='3.0.rc1'))
+                        version='%(prog)s {version:s}'.format(version=__version__))
 
-    parser.add_argument('-f', '--mxd14', dest='level2_dir', default=default_values['level2_dir'],
-                      help='directory for MOD14/MYD14 fire files (default=%s)'\
-                           %default_values['level2_dir'])
+    parser.add_argument('-f', '--mxd14', dest='level2_dir', 
+                        default=default_values['level2_dir'],
+                        help='directory for MOD14/MYD14 fire files (default=%s)'\
+                            %default_values['level2_dir'])
 
-    parser.add_argument('-g', '--mxd03', dest='level1_dir', default=default_values['level1_dir'],
-                      help='directory for MOD03/MYD03 geolocaltion files (default=%s)'\
-                           %default_values['level1_dir'])
+    parser.add_argument('-g', '--mxd03', dest='level1_dir', 
+                        default=default_values['level1_dir'],
+                        help='directory for MOD03/MYD03 geolocaltion files (default=%s)'\
+                            %default_values['level1_dir'])
 
-    parser.add_argument('-i', '--igbp', dest='igbp_dir', default=default_values['igbp_dir'],
-                      help='directory for IGBP vegetation database (default=%s)'\
-                           %default_values['igbp_dir'])
+    parser.add_argument('-i', '--igbp', dest='igbp_dir', 
+                        default=default_values['igbp_dir'],
+                        help='directory for IGBP vegetation database (default=%s)'\
+                            %default_values['igbp_dir'])
     
-    parser.add_argument('-o', '--output', dest='level3_dir', default=default_values['level3_dir'],
-                      help='directory for output files (default=%s)'\
-                           %default_values['level3_dir'])
+    parser.add_argument('-o', '--output', dest='level3_dir', 
+                        default=default_values['level3_dir'],
+                        help='directory for output files (default=%s)'\
+                            %default_values['level3_dir'])
 
-    parser.add_argument('-p', '--products', dest='products', default=default_values['products'],
-                      help='CSV list of MODIS fire products (default=%s)'\
-                           %default_values['products'])
+    parser.add_argument('-p', '--products', dest='products', 
+                        default=default_values['products'],
+                        help='CSV list of MODIS fire products (default=%s)'\
+                            %default_values['products'])
     
-    parser.add_argument('-r', '--resolution', dest='res', default=default_values['res'],
-                      help='horizontal resolution: a for 4x5, b for 2x2.5, etc. (default=%s)'\
-                           %default_values['res'])
+    parser.add_argument('-r', '--resolution', dest='res', 
+                        default=default_values['res'],
+                        help='horizontal resolution: a for 4x5, b for 2x2.5, etc. (default=%s)'\
+                            %default_values['res'])
     
-    parser.add_argument('-x', '--expid', dest='expid', default=default_values['expid'],
-                      help='experiment id (default=%s)'\
-                           %default_values['expid'])
+    parser.add_argument('-x', '--expid', dest='expid', 
+                        default=default_values['expid'],
+                        help='experiment id (default=%s)'\
+                            %default_values['expid'])
 
     parser.add_argument('-q', '--disable-qc', 
-                      action='store_true', dest='disable_qc',
-                      help='disable quality control procedures (default=%s)'\
-                           % False)
+                        action='store_true', dest='disable_qc',
+                        help='disable quality control procedures (default=False)')
 
     parser.add_argument('-b', '--bootstrap', 
-                      action='store_true', dest='bootstrap',
-                      help='initialize FRP forecast (default=False)')
+                        action='store_true', dest='bootstrap',
+                        help='initialize FRP forecast (default=False)')
 
     parser.add_argument('-u', '--uncompressed',
-                      action='store_true', 
-                      help='do not compress output files (default=False)')
+                        action='store_true', 
+                        help='do not compress output files (default=False)')
 
     parser.add_argument('-v', '--verbose',
-                      action='count', default=0, help='verbose')
+                        action='count', default=0, help='verbose')
 
     parser.add_argument('year', type=int, 
                         help="year specified in 'yyyy' format")
@@ -93,11 +97,16 @@ def parse_arguments(default_values):
 
     args.doy = [doy_beg, doy_end]
 
-
     return args
 
 
-#---------------------------------------------------------------------
+def display_banner():
+    print('')
+    print('QFED Level 3A Processing')
+    print('------------------------')
+    print('')
+
+
 
 if __name__ == "__main__":
 
@@ -112,11 +121,8 @@ if __name__ == "__main__":
 
     args = parse_arguments(default_values)
 
-    if args.verbose > 0:
-        print('')
-        print('QFED Level 3A Processing')
-        print('------------------------')
-        print('')
+    if args.verbose > 0: 
+        display_banner()
 
     Products = args.products.split(',')
 
