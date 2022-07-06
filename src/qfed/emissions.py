@@ -444,6 +444,7 @@ class Emissions(object):
            v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.date)
            v_time.begin_date = np.array(begin_date, dtype=np.int32)
            v_time.begin_time = np.array(begin_time, dtype=np.int32)
+           v_time.time_increment = np.array(240000, dtype=np.int32)
 
            v_biomass.long_name = vtitle[0]
            v_biomass.units = 'kg s-1 m-2'
@@ -570,6 +571,7 @@ class Emissions(object):
            v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(_date)
            v_time.begin_date = np.array(begin_date, dtype=np.int32)
            v_time.begin_time = np.array(begin_time, dtype=np.int32)
+           v_time.time_increment = np.array(240000, dtype=np.int32)
     
            v_land.long_name = "Observed Clear Land Area"
            v_land.units = "km2"

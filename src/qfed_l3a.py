@@ -25,23 +25,23 @@ def parse_arguments(default_values):
     parser = argparse.ArgumentParser(prog='QFED', description='Creates QFED Level 3a files')
 
     parser.add_argument('-c', '--config', dest='config', default=default_values['config'],
-                      help='config file (default=%s)'\
-                           %default_values['config'])
+                        help='config file (default=%s)'\
+                            %default_values['config'])
 
     parser.add_argument('-o', '--output', dest='frp_dir', default=default_values['frp_dir'],
-                      help='directory for output files (default=%s)'\
-                           %default_values['frp_dir'])
+                        help='directory for output files (default=%s)'\
+                            %default_values['frp_dir'])
 
     parser.add_argument('-p', '--products', dest='products', default=default_values['products'],
-                      help='list of fire products (default=%s)'\
-                           %default_values['products'])
+                        help='list of fire products (default=%s)'\
+                            %default_values['products'])
     
     parser.add_argument('-r', '--resolution', dest='res', default=default_values['res'],
-                      help='horizontal resolution (default=%s)'\
-                           %default_values['res'])
+                        help='horizontal resolution (default=%s)'\
+                            %default_values['res'])
 
     parser.add_argument('-v', '--verbose',
-                      action='count', default=0, help='verbose')
+                        action='count', default=0, help='verbose')
 
      
     args = parser.parse_args()
@@ -60,7 +60,13 @@ def read_config(config):
     return data
 
 
-#---------------------------------------------------------------------
+def display_banner():
+    print('')
+    print('QFED Level 3A Processing')
+    print('------------------------')
+    print('')
+
+
 
 if __name__ == "__main__":
 
@@ -79,7 +85,8 @@ if __name__ == "__main__":
     config = read_config(args.config)
     products = args.products.split(',')
 
-    print(args.verbose)
+    if args.verbose > 0: 
+        display_banner()
 
     for p in products:
         instrument, satellite = p.split('/')
