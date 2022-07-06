@@ -58,7 +58,7 @@ class FileSelector():
                 fp_file = os.path.basename(match[0])
                 result.append((gp_dir, fp_dir, fp_file))
 
-                if self.verbosity > 0:
+                if self.verbosity > 1:
                     print('found: ', gp_dir, fp_dir, fp_file)
 
             t = t + timedelta(seconds=step)
@@ -86,18 +86,21 @@ class GriddedFRP():
         gp_file = self._fp_reader.get_geolocation_file(fp_path)
         gp_path_search = os.path.join(geolocation_dir, gp_file)
 
-        print(fp_path, '\n', gp_file)
+        if self.verbosity > 1:
+            print(fp_path, '\n', gp_file)
 
         gp_path = glob(gp_path_search)
         if not gp_path:
-            print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(gp_file, fire_product_file))
+            if self.verbosity > 0:
+                print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(gp_file, fire_product_file))
             return
           
         # read and bin data 
         n_fires = self._fp_reader.get_num_fire_pixels(fp_path)
 
         if n_fires == 0:
-            print('[i]    no fires in {0:s} ...ignoring it'.format(fire_product_file))
+            if self.verbosity > 0:
+                print('[i]    no fires in {0:s} ...ignoring it'.format(fire_product_file))
             return
         else:
             self._fire_mask = self._fp_reader.get_fire_mask(fp_path)
@@ -108,7 +111,8 @@ class GriddedFRP():
 
             # fires
             self._process_fires(fp_path)
-            print('[i]    processed {0:s}'.format(fire_product_file))
+            if self.verbosity > 0:
+                print('[i]    processed {0:s}'.format(fire_product_file))
     
     
     def _process_areas(self, geolocation_product_path, fire_product_path):
@@ -132,7 +136,7 @@ class GriddedFRP():
 
         # non-fire land pixel
         i = np.logical_and(i_land_nofire, valid)
-        
+
         if np.any(i):
             # condensed 1D arrays of clear-land not burning pixels
             lon_ = lon[i].ravel()
@@ -142,8 +146,8 @@ class GriddedFRP():
             # bin areas of no-fires and sum
             self.land += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
         else:
-            print('[i]    no NON-FIRE pixel for granule')
-
+            if self.verbosity > 0:
+                print('[i]    no NON-FIRE pixel for granule')
 
         # non-fire water or cloud over water (very likely a non-fire)
         i = np.logical_and(np.logical_or(i_water_cloud, i_water), valid)
@@ -197,7 +201,7 @@ class GriddedFRP():
         #   1. fires in water pixels (likely offshore gas flaring)
         #   2. fires in vegetation free pixels (likely gas flaring in deserts)
         #   ... see _getSimpleVeg()
-         
+
         # bin area of fire pixels 
         self.land += _binareas(fp_lon, fp_lat, fp_area, self.im, self.jm, grid_type=self.grid_type)
 
@@ -258,7 +262,8 @@ class GriddedFRP():
        """
 
        if timestamp is None:
-           print('[x] did not find matching files, skipped writing an output file')
+           if self.verbosity > 0:
+               print('[w]    did not find matching files, skipped writing an output file')
            return
 
        if qc == True:
@@ -268,7 +273,8 @@ class GriddedFRP():
 
            pass
        else:
-           print('[!] skipping QC procedures')
+           if self.verbosity > 0:
+               print('[i]    skipping QC procedures')
 
        self._write_ana(filename=filename, date=timestamp, dir=dir['ana'], bootstrap=bootstrap, fill_value=fill_value)
     
@@ -282,9 +288,10 @@ class GriddedFRP():
        nhms = 120000
 
        if bootstrap:
-           print('') 
-           print('[i] Bootstrapping FRP forecast!')
-           print('')
+           if self.verbosity > 0:
+               print('') 
+               print('[i]    bootstrapping FRP forecast!')
+               print('')
 
            # create a file
            f = nc.Dataset(filename, 'w', format='NETCDF4')
@@ -454,8 +461,8 @@ class GriddedFRP():
        
        f.close()
 
-       if self.verbosity >=1:
-           print('[w] Wrote file {file:s}'.format(file=filename))
+       if self.verbosity > 0:
+           print('[i]    wrote file {file:s}'.format(file=filename))
 
 
 def _binareas(lon, lat, area, im, jm, grid_type='GEOS-5 A-Grid'):

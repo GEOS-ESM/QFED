@@ -39,8 +39,8 @@ class GeolocationProduct(ABC):
         return lon, lat, valid, lon_range, lat_range
 
     def message_on_file_error(self, file):
-        if self.verbosity >= 1:
-            print('[w] cannot open geo-location file <{0:s}>, ignoring granule'.format(file))
+        if self.verbosity > 0:
+            print('[w]    cannot open geo-location file <{0:s}>, ignoring granule'.format(file))
 
     @abc.abstractmethod
     def get_longitude(self):
