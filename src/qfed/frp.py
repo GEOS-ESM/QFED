@@ -199,7 +199,7 @@ class GriddedFRP():
         #   ... see _getSimpleVeg()
          
         # bin area of fire pixels 
-        self.land = _binareas(fp_lon, fp_lat, fp_area, self.im, self.jm, grid_type=self.grid_type)
+        self.land += _binareas(fp_lon, fp_lat, fp_area, self.im, self.jm, grid_type=self.grid_type)
 
         # bin FRP for each fire type
         veg = _getSimpleVeg(fp_lon, fp_lat, self.IgbpDir)
