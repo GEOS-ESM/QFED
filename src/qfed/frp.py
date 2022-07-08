@@ -201,6 +201,46 @@ class GriddedFRP():
         #   1. fires in water pixels (likely offshore gas flaring)
         #   2. fires in vegetation free pixels (likely gas flaring in deserts)
         #   ... see _getSimpleVeg()
+        if False:
+#           Determine if there are fires from water pixels (likely offshore gas flaring) and exclude them
+#           ---------------------------------------------------------------------------------------------
+            # MxD14 collection 6 algorithm quality assessment bits: land/water state (bits 0-1)
+            QA_WATER = 0
+            QA_COAST = 1
+            QA_LAND  = 2
+
+            n_fires_initial = fp_frp.size
+            lws = self._fp_reader.get_land_water_mask(fire_product_path)
+
+            i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == QA_WATER]
+            #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == 1]
+            if len(i) > 0:
+                if self.verbosity > 0:
+                    print('       --> found %d FIRE pixel(s) over water' % len(i))
+
+                self.water += _binareas(fp_lon[i], fp_lat[i], fp_area[i], self.im, self.jm, grid_type=self.grid_type)
+
+            i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (QA_COAST, QA_LAND)]
+            #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (0, )]
+            if len(i) > 0:
+                fp_lon = fp_lon[i]
+                fp_lat = fp_lat[i]
+                fp_frp = fp_frp[i]
+                fp_line = fp_line[i]
+                fp_sample = fp_sample[i]
+                fp_area = fp_area[i] 
+            else:
+                if self.verbosity > 0:
+                    print('       --> no FIRE pixels over land/coast')
+
+                return
+ 
+            n_fires = fp_frp.size
+
+            if n_fires_initial != n_fires:
+                if self.verbosity > 0:
+                    print('       --> reduced the number of FIRE pixels from %d to %d' % (n_fires_initial, n_fires))
+            
 
         # bin area of fire pixels 
         self.land += _binareas(fp_lon, fp_lat, fp_area, self.im, self.jm, grid_type=self.grid_type)
@@ -233,7 +273,7 @@ class GriddedFRP():
         # self.grid_type = self._grid
         self.grid_type = 'GEOS-5 A-Grid'
 
-        # TODO: remove the hardoceded IGBP directory
+        # TODO: remove the hardcoded IGBP directory
         self.IgbpDir = '/discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/'
 
 
@@ -477,7 +517,7 @@ def _binareas(lon, lat, area, im, jm, grid_type='GEOS-5 A-Grid'):
     return result
 
 
-def _getSimpleVeg(lon,lat,Path,nonVeg=None):
+def _getSimpleVeg(lon, lat, Path, nonVeg=None):
     """
         Given the pathname for the IGBP datasets, returns
     information about the *aggregated* vegetation type:  
