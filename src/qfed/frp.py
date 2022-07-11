@@ -93,8 +93,26 @@ class GriddedFRP():
         if not gp_path:
             if self.verbosity > 0:
                 print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(gp_file, fire_product_file))
+
+            # TODO: Interrupting the processing 'here' means that  
+            #       none of the no-fire pixels (water, land, cloud, etc.)
+            #       are accounted for in the corresponding area accumulators,
+            #       which will bias the emissions high in cloud free conditions. 
+            #       Consider for example an intermittent fire at a location  
+            #       that is in two or more granules within the time accumulation
+            #       window, but only one of the granules had an active fire at 
+            #       this location. If the processing is not interrupted, the 
+            #       emissions will be ~ FRP/(2*cell_area), whereas if the 
+            #       processing is interrupted the emissions will be 
+            #       ~ FRP/cell_area. 
+            #       However, if the fire was active, but it was not detected 
+            #       because it was obscured by clouds then the emission 
+            #       estimates will not be biased because ~(2*FRP)/(2*cell_area) = 
+            #       = FRP/cell_area.
+
+            # interrupt further processing of data associated with this granule
             return
-          
+
         # read and bin data 
         n_fires = self._fp_reader.get_num_fire_pixels(fp_path)
 
