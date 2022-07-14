@@ -39,7 +39,12 @@ class FileSelector():
         self.verbosity = verbosity
 
     def search(self, datetime_start, datetime_end, step=60.0):
-
+        '''
+        Returns list of tuples containing geolocation directory
+        and the corresponding fire product directory and file name.
+        The list includes all time stamped directories and file names
+        found to match the specified time window.
+        '''
         result = []
 
         t = datetime_start
@@ -353,7 +358,7 @@ class GriddedFRP():
 
            # create a file
            f = nc.Dataset(filename, 'w', format='NETCDF4')
-    
+
            # global attributes
            f.Conventions = 'COARDS'
            f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
@@ -381,12 +386,12 @@ class GriddedFRP():
            v_frp_xf = f.createVariable('frp_xf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
            v_frp_sv = f.createVariable('frp_sv', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
            v_frp_gl = f.createVariable('frp_gl', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           
+
            v_fb_tf  = f.createVariable('fb_tf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
            v_fb_xf  = f.createVariable('fb_xf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
            v_fb_sv  = f.createVariable('fb_sv',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
            v_fb_gl  = f.createVariable('fb_gl',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           
+
 
            # variables attributes
            v_lon.long_name         = 'longitude'
@@ -412,21 +417,21 @@ class GriddedFRP():
            v_land.fmissing_value = np.array(fill_value, np.float32)
            v_land.vmin = np.array(fill_value, np.float32)
            v_land.vmax = np.array(fill_value, np.float32)
-           
+
            v_water.long_name = "Water Area"
            v_water.units = "km2"
            v_water.missing_value = np.array(fill_value, np.float32)
            v_water.fmissing_value = np.array(fill_value, np.float32)
            v_water.vmin = np.array(fill_value, np.float32)
            v_water.vmax = np.array(fill_value, np.float32)
-           
+
            v_cloud.long_name = "Obscured by Clouds Area"
            v_cloud.units = "km2"
            v_cloud.missing_value = np.array(fill_value, np.float32)
            v_cloud.fmissing_value = np.array(fill_value, np.float32)
            v_cloud.vmin = np.array(fill_value, np.float32)
            v_cloud.vmax = np.array(fill_value, np.float32)
-           
+
            v_frp_tf.long_name = "Fire Radiative Power (Tropical Forests)"
            v_frp_tf.units = "MW"
            v_frp_tf.missing_value = np.array(fill_value, np.float32)
@@ -500,7 +505,7 @@ class GriddedFRP():
            v_frp_xf = f.variables['frp_xf']
            v_frp_sv = f.variables['frp_sv']
            v_frp_gl = f.variables['frp_gl']
- 
+
 
        # data
        v_land[0,:,:]   = np.transpose(self.land)
@@ -516,7 +521,7 @@ class GriddedFRP():
            v_fb_xf[0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
            v_fb_sv[0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
            v_fb_gl[0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-       
+
        f.close()
 
        if self.verbosity > 0:
@@ -531,7 +536,7 @@ def _binareas(lon, lat, area, im, jm, grid_type='GEOS-5 A-Grid'):
         result = binareasnr(lon,lat,area,im,jm)
     else:
         result = None 
-   
+
     return result
 
 
@@ -593,7 +598,7 @@ def _test_file_selector():
 
     files = fs.search(date_start, date_end)
     print('MODIS/Aqua: \n', files, '\n\n')
- 
+
     # VIIRS/NPP
     fs = FileSelector(os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}'),
                       os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}'),
@@ -662,7 +667,7 @@ def _test_frp():
     frp = GriddedFRP(grid_, fs, gp_reader, fp_reader)
     frp.grid(time_s, time_e)
     frp.save(filename='qfed3-foo.frp.viirs-npp.nc4', timestamp=time, bootstrap=True)
-      
+
 
     # VIIRS-JPSS1
     fs = FileSelector(os.path.join(viirs_dir, 'Level1', 'VJ103IMG', '{0:%Y}', '{0:%j}'),
