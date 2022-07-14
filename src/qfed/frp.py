@@ -99,6 +99,16 @@ class GriddedFRP():
             if self.verbosity > 0:
                 print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(gp_file, fire_product_file))
 
+            # interrupt further processing of data associated with this granule
+            return
+
+        # read and bin data 
+        n_fires = self._fp_reader.get_num_fire_pixels(fp_path)
+
+        if n_fires == 0:
+            if self.verbosity > 0:
+                print('[i]    no fires in {0:s} ...ignoring it'.format(fire_product_file))
+
             # TODO: Interrupting the processing 'here' means that  
             #       none of the no-fire pixels (water, land, cloud, etc.)
             #       are accounted for in the corresponding area accumulators,
@@ -116,14 +126,6 @@ class GriddedFRP():
             #       = FRP/cell_area.
 
             # interrupt further processing of data associated with this granule
-            return
-
-        # read and bin data 
-        n_fires = self._fp_reader.get_num_fire_pixels(fp_path)
-
-        if n_fires == 0:
-            if self.verbosity > 0:
-                print('[i]    no fires in {0:s} ...ignoring it'.format(fire_product_file))
             return
         else:
             self._fire_mask = self._fp_reader.get_fire_mask(fp_path)
