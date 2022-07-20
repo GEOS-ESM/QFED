@@ -4,11 +4,11 @@ Basic representation of lat/lon and cubed sphere grids.
 
 
 import re
-from enum import Enum
+from enum import Enum, unique
 import numpy as np
 
 
-
+@unique
 class GridType(Enum):
     LATLON = 'lat/lon'
     CUBEDSPHERE = 'cubed sphere'
@@ -56,7 +56,7 @@ class Grid:
                refine = None
                is_cubed_sphere = True
            else:
-               factor = {'a':1, 'b':2, 'c': 4, 'd': 8, 'e':16, 'f':32, '0.1x0.1':None}
+               factor = {'a': 1, 'b': 2, 'c': 4, 'd': 8, 'e':16, 'f':32, '0.1x0.1':None}
                refine = factor[alias]
                is_cubed_sphere = False
         
@@ -123,24 +123,3 @@ class Grid:
     def lat(self):
         return self.__glat
 
-
-
-def __test__():
-    '''
-    Test basic functionality of Grid instances. 
-    '''
-
-    for name in ('c', 'e', '0.1x0.1', 'c90', 'c360'):
-        grid = Grid(name)
-       
-        print ('name: {0:s}'.format(name))
-        print ('type: {0:s}'.format(grid.type))
-        print ('dimensions: x={x:d}, y={y:d}'.format(**grid.dimensions()))
-        print ('lon: ', grid.lon())
-        print ('lat: ', grid.lat())
-        print ('')
-
-
-if __name__ == '__main__':
-
-    __test__()
