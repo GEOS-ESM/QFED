@@ -3,12 +3,10 @@ import unittest
 import os
 import sys
 
-print(sys.path)
-
 import qfed.grid
 
 class test(unittest.TestCase):
-    def test_dimensions(self):
+    def test_basic_functionality(self):
         '''
         Test basic functionality of Grid instances. 
         '''
@@ -25,5 +23,4 @@ class test(unittest.TestCase):
 
 
 if __name__ == '__main__':
-
     unittest.main()
