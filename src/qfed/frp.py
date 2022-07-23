@@ -13,11 +13,11 @@ import netCDF4 as nc
 from pyobs import IGBP_
 from binObs_ import binareas, binareasnr
 
-from . import version
-from . import grid
-from . import instruments
-from . import geolocation_products
-from . import fire_products
+from qfed import version
+from qfed import grid
+from qfed import instruments
+from qfed import geolocation_products
+from qfed import fire_products
 
 
 
@@ -26,76 +26,68 @@ from . import fire_products
 BIOMES = ('tf', 'xt', 'sv', 'gl')
 
 
-class FileSelector():
-    '''
-    Search for files matching a timestamped search pattern.
-    '''
-
-    def __init__(self, path_geolocation_product, path_fire_product, template_fire_product, verbosity=0):
-        self._path_geolocation_product = path_geolocation_product
-        self._path_fire_product = path_fire_product
-        self._template_fire_product = template_fire_product
-
-        self.verbosity = verbosity
-
-    def search(self, datetime_start, datetime_end, step=60.0):
-        '''
-        Returns list of tuples containing geolocation directory
-        and the corresponding fire product directory and file name.
-        The list includes all time stamped directories and file names
-        found to match the specified time window.
-        '''
-        result = []
-
-        t = datetime_start
-        while t < datetime_end:
-            fp_path = os.path.join(self._path_fire_product.format(t),
-                                   self._template_fire_product.format(t))
-
-            gp_dir = self._path_geolocation_product.format(t)
-
-            if self.verbosity > 1:
-                print(gp_dir, fp_path)
-
-            match = glob(fp_path)
-            if match:
-                fp_dir  = os.path.dirname(match[0])
-                fp_file = os.path.basename(match[0])
-                result.append((gp_dir, fp_dir, fp_file))
-
-                if self.verbosity > 1:
-                    print('found: ', gp_dir, fp_dir, fp_file)
-
-            t = t + timedelta(seconds=step)
-
-        return result
-
 
 class GriddedFRP():
-    def __init__(self, grid, selector, geolocation_product_reader, fire_product_reader, verbosity=0):
+    '''
+    Grids FRP, areas of fire pixels and areas of non-fire pixels 
+    by aggregating data from multiple granules.
+    '''
+
+    def __init__(self, grid, finder, geolocation_product_reader, fire_product_reader, verbosity=0):
         self._grid = grid
-        self._selector = selector
+        self._finder = finder
         self._gp_reader = geolocation_product_reader
         self._fp_reader = fire_product_reader
         self.verbosity = verbosity
+
+    def _get_file_paths(self, geolocation_dir, fire_product_dir, fire_product_file):
+        '''
+        Construct full paths to the fire product file/granule and the 
+        associated with it geolocation file.
+        '''
+
+        # construct full path to the active fire product file
+        fp_filepath = os.path.join(fire_product_dir, fire_product_file)
+
+        # obtain the geolocation filename and construct full path to it
+        gp_file = self._fp_reader.get_geolocation_file(fp_filepath)
+        gp_path_search = os.path.join(geolocation_dir, gp_file)
+
+        if self.verbosity > 5:
+            print(fp_filepath, '\n', gp_file)
+
+        _gp_path = glob(gp_path_search)
+        if not _gp_path:
+            gp_filepath = None
+        else:
+            gp_filepath = _gp_path[0]
+
+        return (gp_filepath, fp_filepath)
+
+
+    def _set_coordinates(self, geolocation_product_path):
+        self.lon, self.lat, self.valid, self.lon_range, self.lat_range = \
+                  self._gp_reader.get_coordinates(geolocation_product_path)
+
+
+    def _set_fire_mask(self): 
+
+        self._fire_mask = self._fp_reader.get_fire_mask(fp_path)
+        self._algorithm_qa = self._fp_reader.get_algorithm_qa(fp_path)
+
+        assert self.lon.shape == self.lat.shape == self._fire_mask.shape
+  
+
 
     def _process(self, geolocation_dir, fire_product_dir, fire_product_file):
         '''
         Read and process paired geolocation and fire product files.
         '''
 
-        # construct full path to the fire product file/granule
-        fp_path = os.path.join(fire_product_dir, fire_product_file)
+        # file paths to the geolocation and fire files
+        gp_path, fp_path = self._get_file_paths(geolocation_dir, fire_product_dir, fire_product_file)
 
-        # obtain the geolocation filename and construct full path to it
-        gp_file = self._fp_reader.get_geolocation_file(fp_path)
-        gp_path_search = os.path.join(geolocation_dir, gp_file)
-
-        if self.verbosity > 1:
-            print(fp_path, '\n', gp_file)
-
-        gp_path = glob(gp_path_search)
-        if not gp_path:
+        if gp_path is None:
             if self.verbosity > 0:
                 print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(gp_file, fire_product_file))
 
@@ -128,15 +120,21 @@ class GriddedFRP():
             # interrupt further processing of data associated with this granule
             return
         else:
+            if self.verbosity > 0:
+                print('[i]    processing {0:s}'.format(fire_product_file))
+
+
             self._fire_mask = self._fp_reader.get_fire_mask(fp_path)
             self._algorithm_qa = self._fp_reader.get_algorithm_qa(fp_path)
 
             # non-fire
-            self._process_areas(gp_path[0], fp_path)
+            self._process_areas(gp_path, fp_path)
 
             # fires
             self._process_fires(fp_path)
-            if self.verbosity > 0:
+
+            # done
+            if self.verbosity > 1:
                 print('[i]    processed {0:s}'.format(fire_product_file))
     
     
@@ -171,7 +169,7 @@ class GriddedFRP():
             # bin areas of no-fires and sum
             self.land += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
         else:
-            if self.verbosity > 0:
+            if self.verbosity > 1:
                 print('[i]    no NON-FIRE pixel for granule')
 
         # non-fire water or cloud over water (very likely a non-fire)
@@ -316,7 +314,7 @@ class GriddedFRP():
         self._algorithm_qa = None
 
         # search for files
-        search = self._selector.search(date_start, date_end)
+        search = self._finder.find(date_start, date_end)
         for gp_dir, fp_dir, fp_file in search:
             self._process(gp_dir, fp_dir, fp_file)
 
@@ -577,45 +575,6 @@ def _getSimpleVeg(lon, lat, Path, nonVeg=None):
 
 
 
-def _test_file_selector():
-    
-    modis_dir = '/discover/nobackup/dao_ops/intermediate/flk/modis'
-    viirs_dir = '/discover/nobackup/projects/eis_fire/data/VIIRS'
-
-    date_start = datetime(2020, 10, 26, 0)
-    date_end   = datetime(2020, 10, 26, 1)
-
-    # MODIS/Terra
-    fs = FileSelector(os.path.join(modis_dir, '061', 'MOD03', '{0:%Y}', '{0:%j}'),
-                      os.path.join(modis_dir, '006', 'MOD14', '{0:%Y}', '{0:%j}'),
-                      'MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
-
-    files = fs.search(date_start, date_end)
-    print('MODIS/Terra: \n',files, '\n\n')
-
-    # MODIS/Aqua
-    fs = FileSelector(os.path.join(modis_dir, '061', 'MYD03', '{0:%Y}', '{0:%j}'),
-                      os.path.join(modis_dir, '006', 'MYD14', '{0:%Y}', '{0:%j}'),
-                      'MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
-
-    files = fs.search(date_start, date_end)
-    print('MODIS/Aqua: \n', files, '\n\n')
-
-    # VIIRS/NPP
-    fs = FileSelector(os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}'),
-                      os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}'),
-                      'VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc')
-
-    files = fs.search(date_start, date_end)
-    print('VIIRS/NPP: \n', files, '\n\n')
-
-    # VIIRS/JPSS1
-    fs = FileSelector(os.path.join(viirs_dir, 'Level1', 'VJ103IMG', '{0:%Y}', '{0:%j}'),
-                      os.path.join(viirs_dir, 'Level2', 'VJ114IMG', '{0:%Y}', '{0:%j}'),
-                      'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
-
-    files = fs.search(date_start, date_end)
-    print('VIIRS/JPSS1: \n', files, '\n\n')
 
 
 def _test_frp():
@@ -633,61 +592,59 @@ def _test_frp():
     grid_ = grid.Grid('d')
     
     # MODIS/Terra
-    fs = FileSelector(os.path.join(modis_dir, '061', 'MOD03', '{0:%Y}', '{0:%j}'),
-                      os.path.join(modis_dir, '006', 'MOD14', '{0:%Y}', '{0:%j}'),
-                      'MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
+    gp_dir = os.path.join(modis_dir, '061', 'MOD03', '{0:%Y}', '{0:%j}')
+    fp_dir = os.path.join(modis_dir, '006', 'MOD14', '{0:%Y}', '{0:%j}')
+    finder = PathFinder(gp_dir, fp_dir, 'MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
     
     fp_reader = fire_products.create('modis', 'terra', verbosity=10)
     gp_reader = geolocation_products.create('modis', 'terra', verbosity=10)
 
-    frp = GriddedFRP(grid_, fs, gp_reader, fp_reader)
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.modis-terra.nc4', timestamp=time, bootstrap=True)
+    frp.save(filename='qfed3-foo.frp.modis-terra.nc4', timestamp=time, bootstrap=True, qc=False)
 
     
     # MODIS/Aqua
-    fs = FileSelector(os.path.join(modis_dir, '061', 'MYD03', '{0:%Y}', '{0:%j}'),
-                      os.path.join(modis_dir, '006', 'MYD14', '{0:%Y}', '{0:%j}'),
-                      'MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
+    gp_dir = os.path.join(modis_dir, '061', 'MYD03', '{0:%Y}', '{0:%j}')
+    fp_dir = os.path.join(modis_dir, '006', 'MYD14', '{0:%Y}', '{0:%j}')
+    finder = PathFinder(gp_dir, fp_dir, 'MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
 
     fp_reader = fire_products.create('modis', 'aqua', verbosity=10)
     gp_reader = geolocation_products.create('modis', 'aqua', verbosity=10)
 
-    frp = GriddedFRP(grid_, fs, gp_reader, fp_reader)
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.modis-aqua.nc4', timestamp=time, bootstrap=True)
+    frp.save(filename='qfed3-foo.frp.modis-aqua.nc4', timestamp=time, bootstrap=True, qc=False)
     
 
     # VIIRS-NPP
-    fs = FileSelector(os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}'),
-                      os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}'),
-                      'VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc')
+    gp_dir = os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}')
+    fp_dir = os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}')
+    finder = PathFinder(gp_dir, fp_dir, 'VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc')
 
     fp_reader = fire_products.create('viirs', 'npp', verbosity=10)
     gp_reader = geolocation_products.create('viirs', 'npp', verbosity=10)
 
-    frp = GriddedFRP(grid_, fs, gp_reader, fp_reader)
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.viirs-npp.nc4', timestamp=time, bootstrap=True)
+    frp.save(filename='qfed3-foo.frp.viirs-npp.nc4', timestamp=time, bootstrap=True, qc=False)
 
 
     # VIIRS-JPSS1
-    fs = FileSelector(os.path.join(viirs_dir, 'Level1', 'VJ103IMG', '{0:%Y}', '{0:%j}'),
-                      os.path.join(viirs_dir, 'Level2', 'VJ114IMG', '{0:%Y}', '{0:%j}'),
-                      'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
+    gp_dir = os.path.join(viirs_dir, 'Level1', 'VJ103IMG', '{0:%Y}', '{0:%j}')
+    fp_dir = os.path.join(viirs_dir, 'Level2', 'VJ114IMG', '{0:%Y}', '{0:%j}')
+    finder = PathFinder(gp_dir, fp_dir, 'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
 
     fp_reader = fire_products.create('viirs', 'jpss-1', verbosity=10)
     gp_reader = geolocation_products.create('viirs', 'jpss-1', verbosity=10)
 
-    frp = GriddedFRP(grid_, fs, gp_reader, fp_reader)
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.viirs-jpss1.nc4', timestamp=time, bootstrap=True)
+    frp.save(filename='qfed3-foo.frp.viirs-jpss1.nc4', timestamp=time, bootstrap=True, qc=False)
 
 
 
 if __name__ == '__main__':
-
-    #_test_file_selector()
-
+    from qfed.pathfinder import PathFinder
     _test_frp()
 
