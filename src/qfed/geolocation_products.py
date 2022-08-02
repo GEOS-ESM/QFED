@@ -10,6 +10,9 @@ import numpy as np
 import netCDF4 as nc
 from pyhdf import SD
 
+from qfed.instruments import Instrument, Satellite
+
+
 if sys.version_info >= (3, 4):
     ABC = abc.ABC
 else:
@@ -142,18 +145,24 @@ def create(instrument, satellite, verbosity=0):
     Geolocation product reader factory.
     '''
 
-    name = instrument.lower() + '/' + satellite.lower()
-    if name in ('modis/terra', 'modis/aqua', 'modis/'):
+    if (instrument == Instrument.MODIS) \
+       and (satellite in (Satellite.AQUA, 
+                          Satellite.TERRA)):
         return MODIS(verbosity)
 
-    elif name in ('viirs/jpss-1', 'viirs/noaa-20'):
+    elif (instrument == Instrument.VIIRS) \
+         and (satellite in (Satellite.JPSS1, 
+                            Satellite.NOAA20)):
         return VIIRS_JPSS(verbosity)
 
-    elif name in ('viirs/npp', 'viirs/s-npp', 'viirs/suomi-npp'):
+    elif (instrument == Instrument.VIIRS) \
+         and (satellite in (Satellite.NPP, 
+                            Satellite.SNPP, 
+                            Satellite.SuomiNPP)):
         return VIIRS_NPP(verbosity)
 
     else:
-        msg = "Unrecognized instrument '{0:s}' and/or satellite '{1:s}'.".format(instrument, platform)
+        msg = "Unrecognized instrument '{0:s}' and/or satellite '{1:s}'.".format(instrument, satellite)
         raise ValueError(msg)
 
 
