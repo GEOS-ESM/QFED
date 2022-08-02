@@ -18,7 +18,10 @@ class Satellite(Enum):
     AQUA  = 'aqua'
 
     JPSS1 = 'jpss-1'
-    NPP   = 'npp'
+    NOAA20 = 'noaa-20'
+    NPP = 'npp'
+    SNPP = 's-npp'
+    SuomiNPP = 'suomi-npp'
 
 
 def modis_pixel_area(sample):
