@@ -66,18 +66,28 @@ class GriddedFRP():
 
 
     def _set_coordinates(self, geolocation_product_path):
-        self.lon, self.lat, self.valid, self.lon_range, self.lat_range = \
-                  self._gp_reader.get_coordinates(geolocation_product_path)
+        '''
+        Read longitude and latitudes and store them 
+        as private fields.
+        '''
+
+        self._lon, self._lat, self._valid_coordinates, self._lon_range, self._lat_range = \
+            self._gp_reader.get_coordinates(geolocation_product_path)
+
+        assert self._lon.shape == self._lat.shape
 
 
-    def _set_fire_mask(self): 
+    def _set_fire_mask(self, fire_product_path): 
+        '''
+        Read fire mask and algorithm QA and store them
+        as private fields.
+        '''
 
-        self._fire_mask = self._fp_reader.get_fire_mask(fp_path)
-        self._algorithm_qa = self._fp_reader.get_algorithm_qa(fp_path)
+        self._fire_mask = self._fp_reader.get_fire_mask(fire_product_path)
+        self._algorithm_qa = self._fp_reader.get_algorithm_qa(fire_product_path)
 
-        assert self.lon.shape == self.lat.shape == self._fire_mask.shape
+        assert self._fire_mask.shape == self._algorithm_qa.shape
   
-
 
     def _process(self, geolocation_dir, fire_product_dir, fire_product_file):
         '''
@@ -124,13 +134,10 @@ class GriddedFRP():
                 print('[i]    processing {0:s}'.format(fire_product_file))
 
 
-            self._fire_mask = self._fp_reader.get_fire_mask(fp_path)
-            self._algorithm_qa = self._fp_reader.get_algorithm_qa(fp_path)
-
             # non-fire
             self._process_areas(gp_path, fp_path)
 
-            # fires
+            # fires            
             self._process_fires(fp_path)
 
             # done
@@ -143,27 +150,25 @@ class GriddedFRP():
         Read and process NO-FIRE areas
         '''
 
-        lon, lat, valid, lon_range, lat_range = self._gp_reader.get_coordinates(geolocation_product_path)
+        self._set_coordinates(geolocation_product_path)
         
-        assert lon.shape == lat.shape == self._fire_mask.shape
-       
         i_water, i_land_nofire, i_land_cloud, i_water_cloud = self._fp_reader.get_pixel_classes(fire_product_path)
 
 
         # calculate pixel area
-        n_lines, n_samples = lon.shape
+        n_lines, n_samples = self._lon.shape
 
-        area = np.zeros_like(lon)
+        area = np.zeros_like(self._lon)
         # TODO: this follows the original MxD14 code, is it valid for VIIRS?
         area[:] = self._fp_reader.get_pixel_area(1-1+np.arange(n_samples))
 
         # non-fire land pixel
-        i = np.logical_and(i_land_nofire, valid)
+        i = np.logical_and(i_land_nofire, self._valid_coordinates)
 
         if np.any(i):
             # condensed 1D arrays of clear-land not burning pixels
-            lon_ = lon[i].ravel()
-            lat_ = lat[i].ravel()
+            lon_ = self._lon[i].ravel()
+            lat_ = self._lat[i].ravel()
             area_ = area[i].ravel()
 
             # bin areas of no-fires and sum
@@ -173,12 +178,12 @@ class GriddedFRP():
                 print('[i]    no NON-FIRE pixel for granule')
 
         # non-fire water or cloud over water (very likely a non-fire)
-        i = np.logical_and(np.logical_or(i_water_cloud, i_water), valid)
+        i = np.logical_and(np.logical_or(i_water_cloud, i_water), self._valid_coordinates)
 
         if np.any(i):
             # condensed 1D arrays of water pixels
-            lon_ = lon[i].ravel()
-            lat_ = lat[i].ravel()
+            lon_ = self._lon[i].ravel()
+            lat_ = self._lat[i].ravel()
             area_ = area[i].ravel()
 
             # bin areas of water and sum
@@ -189,12 +194,12 @@ class GriddedFRP():
 
 
         # cloud over land only
-        i = np.logical_and(i_land_cloud, valid)
+        i = np.logical_and(i_land_cloud, self._valid_coordinates)
 
         if np.any(i):
             # condensed 1D arrays of cloud pixels
-            lon_ = lon[i].ravel()
-            lat_ = lat[i].ravel()
+            lon_ = self._lon[i].ravel()
+            lat_ = self._lat[i].ravel()
             area_ = area[i].ravel()
 
             # bin areas of cloud and sum
@@ -309,7 +314,7 @@ class GriddedFRP():
         # land/water state - not used, TODO: remove 
         # self._lws = None
 
-        # fire mask and algotihm QA
+        # fire mask and algorithm QA
         self._fire_mask = None
         self._algorithm_qa = None
 
@@ -339,12 +344,12 @@ class GriddedFRP():
            if self.verbosity > 0:
                print('[i]    skipping QC procedures')
 
-       self._write_ana(filename=filename, date=timestamp, dir=dir['ana'], bootstrap=bootstrap, fill_value=fill_value)
+       self._save_as_netcdf4(filename=filename, date=timestamp, dir=dir['ana'], bootstrap=bootstrap, fill_value=fill_value)
     
 
-    def _write_ana(self, date=None, filename=None, dir='.', bootstrap=False, fill_value=1e15):
+    def _save_as_netcdf4(self, date=None, filename=None, dir='.', bootstrap=False, fill_value=1e15):
        """
-       Writes gridded Areas and FRP to file.
+       Writes gridded Areas and FRP to a NetCDF4 file.
        """
 
        nymd = 10000*date.year + 100*date.month + date.day
@@ -436,8 +441,8 @@ class GriddedFRP():
 
            # data
            f.variables['time'][:] = np.array((0,))
-           f.variables['lon' ][:]  = np.array(self.glon)
-           f.variables['lat' ][:]  = np.array(self.glat)
+           f.variables['lon' ][:] = np.array(self.glon)
+           f.variables['lat' ][:] = np.array(self.glat)
        else:
            raise NotImplementedError('Sequential FRP estimate is not implemented')
            # TODO: - filename should correspond to date + 24h in case of daily files
@@ -446,7 +451,7 @@ class GriddedFRP():
 
 
        # data
-       f.variables['land'  ][0,:,:]  = np.transpose(self.land)
+       f.variables['land'  ][0,:,:] = np.transpose(self.land)
        f.variables['water' ][0,:,:] = np.transpose(self.water)
        f.variables['cloud' ][0,:,:] = np.transpose(self.cloud)
        f.variables['frp_tf'][0,:,:] = np.transpose(self.frp[0,:,:])
