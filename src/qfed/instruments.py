@@ -77,7 +77,7 @@ def viirs_pixel_area(sample):
     in decreasing powers, are included in the code.
     '''
 
-    # reconstruct the pixel area data
+    # (re)construct VIIRS pixel area with a polynomial of degree 5
     _area = np.zeros(3200)
 
     interval = ((0, 1184), (1184, 1920), (1920, 3199))
