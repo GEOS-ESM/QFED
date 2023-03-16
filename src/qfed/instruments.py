@@ -26,9 +26,10 @@ class Satellite(Enum):
 
 def modis_pixel_area(sample):
     """
-    Compute pixel area given the sample number. Description is
-    given in 'MODIS Collection 5 Active Fire Product User's Guide Version 2.4',
-    Giglio, L., p. 44, 2010.
+    Compute pixel area given the sample number. 
+
+    Based on 'MODIS Collection 5 Active Fire Product 
+    User's Guide Version 2.4', Giglio, L., p. 44, 2010.
     """
 
     # parameters
@@ -41,12 +42,12 @@ def modis_pixel_area(sample):
     r  = Re + h
     q  = Re / r
 
-    cos_sa   = np.cos(sa)
-    sin_sa   = np.sin(sa)
-    sqrt_trm = np.sqrt(q*q - sin_sa*sin_sa)
+    cos_sa    = np.cos(sa)
+    sin_sa    = np.sin(sa)
+    sqrt_term = np.sqrt(q*q - sin_sa*sin_sa)
     
-    dS = s*Re * (cos_sa / sqrt_trm - 1)
-    dT = s*r  * (cos_sa - sqrt_trm)
+    dS = s * Re * (cos_sa / sqrt_term - 1)
+    dT = s * r  * (cos_sa - sqrt_term)
 
     area = dS * dT
 
