@@ -4,6 +4,7 @@ VIIRS and MODIS geolocation products.
 
 
 import sys
+import os
 import abc
 
 import numpy as np
@@ -90,7 +91,7 @@ class VIIRS_NPP(GeolocationProduct):
     lon_valid_range = (-180.0, 180.0)
     lat_valid_range = ( -90.0,  90.0)
 
-    def __read(self, file, variable):
+    def __read_hdf(self, file, variable):
         try:
             vnp03 = SD.SD(file)
         except SD.HDF4Error:
@@ -99,6 +100,29 @@ class VIIRS_NPP(GeolocationProduct):
 
         data = vnp03.select(variable).get()
         return data
+
+    def __read_nc(self, file, variable):
+        try:
+           vnp03 = nc.Dataset(file)
+        except IOError:
+           self.message_on_file_error(file)
+           return
+
+        data = vnp03.variables[variable]
+        return data[...]
+
+    def __read(self, file, variable, respect_file_extension=False):
+        reader = {'.hdf': self.__read_hdf,
+                  '.nc' : self.__read_nc,
+                  '.nc4': self.__read_nc}
+
+        if respect_file_extension:
+            _, file_extension = os.path.splitext(file)
+            read = reader[file_extension]
+        else:
+            read = self.__read_nc
+
+        return read(file, variable)
 
     def get_longitude(self, file):
         return self.__read(file, 'Longitude'), VIIRS_NPP.lon_valid_range
