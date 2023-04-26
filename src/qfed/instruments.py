@@ -19,6 +19,10 @@ class Satellite(Enum):
 
     JPSS1 = 'jpss-1'
     NOAA20 = 'noaa-20'
+
+    JPSS2  = 'jpss-2'
+    NOAA21 = 'noaa-21'
+
     NPP = 'npp'
     SNPP = 's-npp'
     SuomiNPP = 'suomi-npp'
