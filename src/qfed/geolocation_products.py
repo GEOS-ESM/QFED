@@ -169,24 +169,19 @@ def create(instrument, satellite, verbosity=0):
     Geolocation product reader factory.
     '''
 
-    if (instrument == Instrument.MODIS) \
-       and (satellite in (Satellite.AQUA, 
-                          Satellite.TERRA)):
+    if instrument == Instrument.MODIS and \
+       satellite in (Satellite.AQUA, Satellite.TERRA):
         return MODIS(verbosity)
 
-    elif (instrument == Instrument.VIIRS) \
-         and (satellite in (Satellite.JPSS1, 
-                            Satellite.NOAA20)):
+    if instrument == Instrument.VIIRS and \
+       satellite in (Satellite.JPSS1, Satellite.NOAA20):
         return VIIRS_JPSS(verbosity)
 
-    elif (instrument == Instrument.VIIRS) \
-         and (satellite in (Satellite.NPP, 
-                            Satellite.SNPP, 
-                            Satellite.SuomiNPP)):
+    if instrument == Instrument.VIIRS and \
+       satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
         return VIIRS_NPP(verbosity)
 
-    else:
-        msg = "Unrecognized instrument '{0:s}' and/or satellite '{1:s}'.".format(instrument, satellite)
-        raise ValueError(msg)
-
+    msg = ("Unrecognized satellite observing system platform: "
+           "{0:s} on board of {1:s}.".format(instrument, satellite))
+    raise ValueError(msg)
 
