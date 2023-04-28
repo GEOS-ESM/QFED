@@ -223,7 +223,8 @@ class MODIS(ActiveFireProduct):
 
 
     def get_geolocation_file(self, file):
-        # not a typo! both MOD14 and MYD14 have this global attribute
+        # NOTE: the attribute name 'MOD03 input file' is not a typo!!!  
+        # Both MOD14 and MYD14 have this global attribute
         tmp_path = self.dataset.get_attribute(file, 'MOD03 input file')
         result = os.path.basename(tmp_path)
 
