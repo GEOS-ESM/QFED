@@ -51,18 +51,24 @@ class GriddedFRP():
 
         # obtain the geolocation filename and construct full path to it
         gp_file = self._fp_reader.get_geolocation_file(fp_filepath)
-        gp_path_search = os.path.join(geolocation_dir, gp_file)
+
+        # handle multiple file extensions
+        gp_file = [gp_file] if isinstance(gp_file, str) else gp_file
+        gp_path_search = [os.path.join(geolocation_dir, f) for f in gp_file]
 
         if self.verbosity > 5:
             print(fp_filepath, '\n', gp_file)
 
-        _gp_path = glob(gp_path_search)
+        _gp_path = []
+        for path in gp_path_search:
+            _gp_path.extend(glob(path))
+
         if not _gp_path:
             gp_filepath = None
         else:
             gp_filepath = _gp_path[0]
 
-        return (gp_filepath, fp_filepath)
+        return (gp_filepath, fp_filepath, gp_file)
 
 
     def _set_coordinates(self, geolocation_product_path):
@@ -95,11 +101,11 @@ class GriddedFRP():
         '''
 
         # file paths to the geolocation and fire files
-        gp_path, fp_path = self._get_file_paths(geolocation_dir, fire_product_dir, fire_product_file)
+        gp_path, fp_path, gp_file = self._get_file_paths(geolocation_dir, fire_product_dir, fire_product_file)
 
         if gp_path is None:
             if self.verbosity > 0:
-                print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(gp_file, fire_product_file))
+                print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(str(gp_file), fire_product_file))
 
             # interrupt further processing of data associated with this granule
             return
@@ -533,14 +539,15 @@ def _test_frp():
 
 
     grid_ = grid.Grid('d')
-    
+   
+    '''
     # MODIS/Terra
     gp_dir = os.path.join(modis_dir, '061', 'MOD03', '{0:%Y}', '{0:%j}')
     fp_dir = os.path.join(modis_dir, '006', 'MOD14', '{0:%Y}', '{0:%j}')
     finder = PathFinder(gp_dir, fp_dir, 'MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
     
-    fp_reader = fire_products.create('modis', 'terra', verbosity=10)
-    gp_reader = geolocation_products.create('modis', 'terra', verbosity=10)
+    fp_reader = fire_products.create(Instrument.MODIS, Satellite.TERRA, verbosity=10)
+    gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.TERRA, verbosity=10)
 
     frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
@@ -552,42 +559,44 @@ def _test_frp():
     fp_dir = os.path.join(modis_dir, '006', 'MYD14', '{0:%Y}', '{0:%j}')
     finder = PathFinder(gp_dir, fp_dir, 'MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
 
-    fp_reader = fire_products.create('modis', 'aqua', verbosity=10)
-    gp_reader = geolocation_products.create('modis', 'aqua', verbosity=10)
+    fp_reader = fire_products.create(Instrument.MODIS, Satellite.AQUA, verbosity=10)
+    gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.AQUA, verbosity=10)
 
     frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
     frp.save(filename='qfed3-foo.frp.modis-aqua.nc4', timestamp=time, bootstrap=True, qc=False)
-    
+    '''
 
     # VIIRS-NPP
-    gp_dir = os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}')
+    #gp_dir = os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}')
+    gp_dir = os.path.join(viirs_dir, 'Level1', 'VNP03IMG.trimmed', '{0:%Y}', '{0:%j}')
     fp_dir = os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}')
     finder = PathFinder(gp_dir, fp_dir, 'VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc')
 
-    fp_reader = fire_products.create('viirs', 'npp', verbosity=10)
-    gp_reader = geolocation_products.create('viirs', 'npp', verbosity=10)
+    fp_reader = fire_products.create(Instrument.VIIRS, Satellite.NPP, verbosity=10)
+    gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.NPP, verbosity=10)
 
     frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
     frp.save(filename='qfed3-foo.frp.viirs-npp.nc4', timestamp=time, bootstrap=True, qc=False)
 
-
+    ''' 
     # VIIRS-JPSS1
     gp_dir = os.path.join(viirs_dir, 'Level1', 'VJ103IMG', '{0:%Y}', '{0:%j}')
     fp_dir = os.path.join(viirs_dir, 'Level2', 'VJ114IMG', '{0:%Y}', '{0:%j}')
     finder = PathFinder(gp_dir, fp_dir, 'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
 
-    fp_reader = fire_products.create('viirs', 'jpss-1', verbosity=10)
-    gp_reader = geolocation_products.create('viirs', 'jpss-1', verbosity=10)
+    fp_reader = fire_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
+    gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
 
     frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
     frp.grid(time_s, time_e)
     frp.save(filename='qfed3-foo.frp.viirs-jpss1.nc4', timestamp=time, bootstrap=True, qc=False)
-
+    '''
 
 
 if __name__ == '__main__':
     from qfed.pathfinder import PathFinder
+    from qfed.instruments import Instrument, Satellite
     _test_frp()
 

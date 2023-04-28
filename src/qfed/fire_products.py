@@ -3,8 +3,6 @@ VIIRS and MODIS fire products.
 '''
 
 
-
-
 import sys
 import os
 import re
@@ -15,7 +13,8 @@ import numpy as np
 from pyhdf import SD
 import netCDF4 as nc
 
-from . import instruments
+from qfed.instruments import Instrument, Satellite
+from qfed.instruments import modis_pixel_area, viirs_pixel_area
 
 
 if sys.version_info >= (3, 4):
@@ -229,7 +228,15 @@ class MODIS(ActiveFireProduct):
         result = os.path.basename(tmp_path)
 
         # unpack info from the geolocation filename
-        _p = re.compile('^(?P<product>M(O|Y)D03).A(?P<year>\d\d\d\d)(?P<doy>\d\d\d).(?P<hh>\d\d)(?P<mm>\d\d).(?P<version>\d\d\d).*.(?P<extension>(nc|hdf))')
+        _p = re.compile(('^(?P<product>M(O|Y)D03)'
+                         '.'
+                         'A(?P<year>\d\d\d\d)(?P<doy>\d\d\d)'
+                         '.'
+                         '(?P<hh>\d\d)(?P<mm>\d\d)'
+                         '.'
+                         '(?P<version>\d\d\d)'
+                         '.*.'
+                         '(?P<extension>(nc|hdf))'))
         _m = _p.match(result)
 
         product = _m.group('product')
@@ -238,11 +245,12 @@ class MODIS(ActiveFireProduct):
         hhmm = _m.group('hh') + _m.group('mm')
         version = _m.group('version')
         extension = _m.group('extension')
-        base = '{product:s}.A{year:s}{doy:s}.{hhmm:s}.{version:s}.*.{extension:s}'.format(product=product, year=year, doy=doy, hhmm=hhmm, version=version, extension=extension)
+        base = '{product:s}.A{year:s}{doy:s}.{hhmm:s}.{version:s}.*.{extension:s}'
 
-        result = base
+        result = base.format(product=product, year=year, doy=doy, hhmm=hhmm, 
+                             version=version, extension=extension)
         return result
-    
+ 
     def get_num_fire_pixels(self, file):
         return self.dataset.get_attribute(file, 'FirePix')
 
@@ -263,11 +271,11 @@ class MODIS(ActiveFireProduct):
 
     def get_fire_pixel_area(self, file):
         sample = self.get_fire_sample(file)
-        return instruments.modis_pixel_area(sample)
+        return modis_pixel_area(sample)
 
     def get_pixel_area(self, sample):
         # TODO: is this correct for MODIS?
-        return instruments.modis_pixel_area(1+sample)
+        return modis_pixel_area(1+sample)
 
     def get_fire_mask(self, file):
         return self.dataset.get_variable(file, 'fire mask')
@@ -343,10 +351,10 @@ class VIIRS(ActiveFireProduct):
 
     def get_fire_pixel_area(self, file):
         sample = self.get_fire_sample(file)
-        return instruments.viirs_pixel_area(sample)
+        return viirs_pixel_area(sample)
     
     def get_pixel_area(self, sample):
-        return instruments.viirs_pixel_area(sample)
+        return viirs_pixel_area(sample)
 
     def get_fire_mask(self, file):
         return self.dataset.get_variable(file, 'fire mask')
@@ -398,6 +406,14 @@ class VIIRS_NPP(VIIRS):
         tmp = result.split('.hdf')
         result = '{0:s}.hdf'.format(str(tmp[0]))
         
+        # extend the list of possible file extensions to handle: 
+        #    1) original HDF files and 
+        #    2) original HDF files that were compressed and 
+        #       as a result have different file extension, i.e. 'nc4'
+        file_extensions = ('.hdf', '.nc4', '.nc')
+        tmp = os.path.splitext(result)[0]
+        result = [tmp + extension for extension in file_extensions]
+
         return result
     
 
@@ -421,21 +437,23 @@ def create(instrument, satellite, verbosity=0):
     Active fire product factory.
     '''
 
-    name = instrument.lower() + '/' + satellite.lower()
-    if name in ('modis/', 'modis/terra', 'modis/aqua'):
+    if instrument == Instrument.MODIS and \
+       satellite in (Satellite.AQUA, Satellite.TERRA):
         dataset_engine = DatasetAccessEngine_HDF4(verbosity)
-        return MODIS(dataset_engine, verbosity)
+        return MODIS(dataset_engine, verbosity)   
 
-    elif name in ('viirs/jpss-1', 'viirs/noaa-20'): 
+    if instrument == Instrument.VIIRS and \
+       satellite in (Satellite.JPSS1, Satellite.NOAA20):
         dataset_engine = DatasetAccessEngine_NetCDF4(verbosity)
         return VIIRS_JPSS(dataset_engine, verbosity)
 
-    elif name in ('viirs/npp', 'viirs/s-npp', 'viirs/suomi-npp'):
+    if instrument == Instrument.VIIRS and \
+       satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
         dataset_engine = DatasetAccessEngine_NetCDF4(verbosity)
         return VIIRS_NPP(dataset_engine, verbosity)
 
-    else: 
-        msg = "Unrecognized instrument '{0:s}' and/or satellite '{1:s}'.".format(instrument, platform)
-        raise ValueError(msg)
+    msg = ("Unrecognized satellite observing system platform: "
+           "{0:s} on board of {1:s}.".format(instrument, satellite))
+    raise ValueError(msg)
 
 
