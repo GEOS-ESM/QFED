@@ -75,7 +75,7 @@ if __name__ == "__main__":
                           frp_dir  = './',
                           config   = 'config.yaml')
 
-    time = datetime(2020, 10, 26, 12)
+    time = datetime(2021, 2, 1, 12)
     time_window = timedelta(hours=24)
 
     time_s = time - 0.5*time_window
@@ -104,7 +104,7 @@ if __name__ == "__main__":
         gp_reader = geolocation_products.create(instrument, satellite, verbosity=args.verbose)
 
 
-        l3a = frp.GriddedFRP(grid_, fs, gp_reader, fp_reader)
+        l3a = frp.GriddedFRP(grid_, fs, gp_reader, fp_reader, verbosity=args.verbose)
         l3a.grid(time_s, time_e)
 
         filename = os.path.join(args.frp_dir, 'qfed3.frp.{0:s}-{1:s}.nc4'.format(instrument, satellite))
