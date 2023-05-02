@@ -134,7 +134,7 @@ class VIIRS_NPP(GeolocationProduct):
 
 class VIIRS_JPSS(GeolocationProduct):
     '''
-    VIIRS JPSS1 geolocation product (VJ103IMG) reader. 
+    VIIRS NPP and JPSS1 geolocation product (VNP03IMG, VJ103IMG) reader.
     '''
 
     def __read(self, file, variable):
