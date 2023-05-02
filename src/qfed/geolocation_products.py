@@ -85,7 +85,7 @@ class MODIS(GeolocationProduct):
 
 class VIIRS_NPP(GeolocationProduct):
     '''
-    VIIRS S-NPP geolocation product (NPP_IMFTS_L1) reader. 
+    VIIRS Suomi NPP geolocation product (NPP_IMFTS_L1) reader. 
     '''
 
     lon_valid_range = (-180.0, 180.0)
@@ -164,7 +164,7 @@ class VIIRS_JPSS(GeolocationProduct):
 
 
 
-def create(instrument, satellite, verbosity=0):
+def create(instrument, satellite, verbosity=0, NPPv1=False):
     '''
     Geolocation product reader factory.
     '''
@@ -179,7 +179,10 @@ def create(instrument, satellite, verbosity=0):
 
     if instrument == Instrument.VIIRS and \
        satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
-        return VIIRS_NPP(verbosity)
+        if NPPv1:
+            return VIIRS_NPP(verbosity)
+        else:
+            return VIIRS_JPSS(verbosity)
 
     msg = ("Unrecognized satellite observing system platform: "
            "{0:s} on board of {1:s}.".format(instrument, satellite))
