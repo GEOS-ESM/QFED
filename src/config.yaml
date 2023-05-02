@@ -1,26 +1,34 @@
 modis/terra:
-    geolocation: /discover/nobackup/dao_ops/intermediate/flk/modis/061/MOD03/
-    fires: 
+    geolocation:
+        - /discover/nobackup/dao_ops/intermediate/flk/modis/061/MOD03/
+        - MOD03.A{0:%Y%j}.{0:%H%M}.061.NRT.hdf
+    fires:
         - /discover/nobackup/dao_ops/intermediate/flk/modis/006/MOD14/
         - MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf
 
 
 modis/aqua:
-    geolocation: /discover/nobackup/dao_ops/intermediate/flk/modis/061/MYD03/
+    geolocation:
+        - /discover/nobackup/dao_ops/intermediate/flk/modis/061/MYD03/
+        - MOD03.A{0:%Y%j}.{0:%H%M}.061.NRT.hdf
     fires: 
         - /discover/nobackup/dao_ops/intermediate/flk/modis/006/MYD14/
         - MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf
 
 
 viirs/npp:
-    geolocation: /discover/nobackup/projects/eis_fire/data/VIIRS/Level1/NPP_IMFTS_L1/
+    geolocation: 
+        - /discover/nobackup/projects/eis_fire/data/VIIRS/Level1/NPP_IMFTS_L1/
+        - VNP03IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
     fires:
         - /discover/nobackup/projects/eis_fire/data/VIIRS/Level2/VNP14IMG
         - VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc
 
 
 viirs/jpss-1:
-    geolocation: /discover/nobackup/projects/eis_fire/data/VIIRS/Level1/VJ103IMG/
+    geolocation: 
+        - /discover/nobackup/projects/eis_fire/data/VIIRS/Level1/VJ103IMG/
+        - VJ103IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
     fires:
         - /discover/nobackup/projects/eis_fire/data/VIIRS/Level2/VJ114IMG/
         - VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
