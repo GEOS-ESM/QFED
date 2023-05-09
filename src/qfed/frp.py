@@ -2,8 +2,8 @@
 Gridded FRP products.
 '''
 
-
 import os
+import logging
 from datetime import datetime, timedelta
 from glob import glob
 
@@ -78,8 +78,7 @@ class GriddedFRP():
             gp_file = None
 
         if gp_file is None:
-            if self.verbosity > 0:
-                print('[w]    could not find the geolocation file {0:s} ...skipping {1:s}'.format(geolocation_product_file, fp_filename))
+            logging.warning(f"Could not find the geolocation file {geolocation_product_file} ...skipping {fp_filename}")
 
             # interrupt further processing of data associated with this granule
             return
@@ -88,8 +87,7 @@ class GriddedFRP():
         n_fires = self._fp_reader.get_num_fire_pixels(fire_product_file)
 
         if n_fires == 0:
-            if self.verbosity > 0:
-                print('[i]    no fires in {0:s} ...ignoring it'.format(fp_filename))
+            logging.info(f"Skipping {fp_filename} due to number of fires being zero.\n")
 
             # TODO: Interrupting the processing 'here' means that  
             #       none of the no-fire pixels (water, land, cloud, etc.)
@@ -110,8 +108,7 @@ class GriddedFRP():
             # interrupt further processing of data associated with this granule
             return
         else:
-            if self.verbosity > 0:
-                print('[i]    processing {0:s}'.format(fp_filename))
+            logging.info(f'Processing {fp_filename} with {n_fires} fires.')
 
 
             # non-fire
@@ -121,8 +118,7 @@ class GriddedFRP():
             self._process_fires(fire_product_file)
 
             # done
-            if self.verbosity > 1:
-                print('[i]    processed {0:s}'.format(fp_filename))
+            logging.info(f"Completed the processing of {fp_filename}.\n")
     
     
     def _process_areas(self, geolocation_product_file, fire_product_file):
@@ -151,11 +147,11 @@ class GriddedFRP():
             lat_ = self._lat[i].ravel()
             area_ = area[i].ravel()
 
+            logging.debug(f"The number of NON-FIRE pixels is {len(area_)}.")
+
             # bin areas of no-fires and sum
             self.land += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
-        else:
-            if self.verbosity > 1:
-                print('[i]    no NON-FIRE pixel for granule')
+        
 
         # non-fire water or cloud over water (very likely a non-fire)
         i = np.logical_and(np.logical_or(i_water_cloud, i_water), self._valid_coordinates)
@@ -166,11 +162,10 @@ class GriddedFRP():
             lat_ = self._lat[i].ravel()
             area_ = area[i].ravel()
 
+            logging.debug(f"The number of WATER pixels is {len(area_)}.")
+
             # bin areas of water and sum
             self.water += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
-        else:
-            if self.verbosity > 1:
-                print(' [i]    no WATER pixel for granule')
 
 
         # cloud over land only
@@ -182,11 +177,10 @@ class GriddedFRP():
             lat_ = self._lat[i].ravel()
             area_ = area[i].ravel()
 
+            logging.debug(f"The number of CLOUD pixels is {len(area_)}.")
+
             # bin areas of cloud and sum
             self.cloud += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
-        else:
-            if self.verbosity > 1:
-                print('[i]    no CLOUD pixel for granule')
 
 
     def _process_fires(self, fire_product_file):
@@ -222,14 +216,13 @@ class GriddedFRP():
 
             i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == QA_WATER]
             #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == 1]
+            logging.debug(f"Number of FIRE pixels over water is {len(i)}") 
             if len(i) > 0:
-                if self.verbosity > 0:
-                    print('       --> found %d FIRE pixel(s) over water' % len(i))
-
                 self.water += _binareas(fp_lon[i], fp_lat[i], fp_area[i], self.im, self.jm, grid_type=self.grid_type)
 
             i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (QA_COAST, QA_LAND)]
             #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (0, )]
+            logging.debug(f"Number of FIRE pixels over land/coast is {len(i)}")
             if len(i) > 0:
                 fp_lon = fp_lon[i]
                 fp_lat = fp_lat[i]
@@ -237,17 +230,13 @@ class GriddedFRP():
                 fp_line = fp_line[i]
                 fp_sample = fp_sample[i]
                 fp_area = fp_area[i] 
-            else:
-                if self.verbosity > 0:
-                    print('       --> no FIRE pixels over land/coast')
 
                 return
  
             n_fires = fp_frp.size
 
             if n_fires_initial != n_fires:
-                if self.verbosity > 0:
-                    print('       --> reduced the number of FIRE pixels from %d to %d' % (n_fires_initial, n_fires))
+                logging.debug(f"The number of FIRE pixels was reduced from {n_fires_initial} to {n_fires}")
             
 
         # bin area of fire pixels 
@@ -310,8 +299,7 @@ class GriddedFRP():
        """
 
        if timestamp is None:
-           if self.verbosity > 0:
-               print('[w]    did not find matching files, skipped writing an output file')
+           logging.warning("An output file is not written due to mismatched input file.")
            return
 
        if qc == True:
@@ -321,8 +309,7 @@ class GriddedFRP():
 
            pass
        else:
-           if self.verbosity > 0:
-               print('[i]    skipping QC procedures')
+           logging.info("Skipping modulation of FRP due to QC being disabled.")
 
        self._save_as_netcdf4(filename=filename, date=timestamp, dir=dir['ana'], bootstrap=bootstrap, fill_value=fill_value)
     
@@ -336,10 +323,7 @@ class GriddedFRP():
        nhms = 120000
 
        if bootstrap:
-           if self.verbosity > 0:
-               print('') 
-               print('[i]    bootstrapping FRP forecast!')
-               print('')
+           logging.info("Prior FRP are initialized to zero.")
 
            # create a file
            f = nc.Dataset(filename, 'w', format='NETCDF4')
@@ -447,8 +431,7 @@ class GriddedFRP():
 
        f.close()
 
-       if self.verbosity > 0:
-           print('[i]    wrote file {file:s}'.format(file=filename))
+       logging.info(f"Wrote file {filename}.\n\n")
 
 
 def _binareas(lon, lat, area, im, jm, grid_type='GEOS-5 A-Grid'):
@@ -580,5 +563,13 @@ def _test_frp():
 if __name__ == '__main__':
     from qfed.pathfinder import PathFinder
     from qfed.instruments import Instrument, Satellite
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s  %(levelname)-8s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        #filename='frp.log',
+     ) 
+
     _test_frp()
 

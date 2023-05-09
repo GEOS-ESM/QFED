@@ -3,6 +3,7 @@ Search for files in a time-templated directory structure.
 '''
 
 import os
+import logging
 from datetime import timedelta
 from glob import glob
 
@@ -35,8 +36,7 @@ class PathFinder():
                 self.fp_dir.format(t),
                 self.fp_filename.format(t))
 
-            if self.verbosity > 1:
-                print(path)
+            logging.debug(f"Searching for files matching {path}.")
 
             match = glob(path)
             if match:
@@ -46,10 +46,10 @@ class PathFinder():
                     self.gp_dir.format(t),
                     self.gp_filename.format(t))
 
-                result.append((gp_path, fp_path, t))
+                logging.debug(f"Found a match: ({t}, {gp_path}, {fp_path})")
 
-                if self.verbosity > 1:
-                    print('[i]    found: ', t, gp_path, fp_path)
+                result.append((gp_path, fp_path, t))
+                logging.info(f"Added ({gp_path}, {fp_path}) to queue for processing.") 
 
             t = t + timedelta(seconds=self.time_interval)
 

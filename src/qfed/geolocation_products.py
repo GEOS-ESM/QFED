@@ -6,6 +6,7 @@ VIIRS and MODIS geolocation products.
 import sys
 import os
 import abc
+import logging
 
 import numpy as np
 import netCDF4 as nc
@@ -43,8 +44,7 @@ class GeolocationProduct(ABC):
         return lon, lat, valid, lon_range, lat_range
 
     def message_on_file_error(self, file):
-        if self.verbosity > 0:
-            print('[w]    cannot open geo-location file <{0:s}>, ignoring granule'.format(file))
+        logging.warning(f"Cannot open the geolocation file <file> - excluding it.")
 
     @abc.abstractmethod
     def get_longitude(self):

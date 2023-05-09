@@ -5,9 +5,11 @@ VIIRS and MODIS fire products.
 
 import sys
 import os
+import logging
 import re
 import abc
 from enum import Enum
+
 
 import numpy as np
 from pyhdf import SD
@@ -48,8 +50,7 @@ class DatasetAccessEngine(ABC):
         self.verbosity = verbosity
 
     def message_on_file_error(self, file):
-        if self.verbosity > 0:
-            print('[w]    cannot open fire product file <{0:s}>, ignoring granule'.format(file))
+        logging.warning(f"Cannot open the fire product file <{file}> - excluding it.")
 
     @abc.abstractmethod
     def get_handle(self, file):
