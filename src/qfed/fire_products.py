@@ -25,25 +25,6 @@ else:
     ABC = abc.ABCMeta('ABC', (), {})
 
 
-class MODIS_FireMaskClass(Enum):
-    '''
-    ...
-    '''
-    WATER  = 3     # non-fire water pixel
-    CLOUD  = 4     # cloud (land or water)
-    NOFIRE = 5     # non-fire land pixel
-
-class MODIS_QA(Enum):
-    ''' 
-    MxD14 collection 6 algorithm quality assessment bits: 
-    land/water state (bits 0-1)
-    '''
-    WATER = 0
-    COAST = 1
-    LAND  = 2
-
-
-
 class DatasetAccessEngine(ABC):
 
     def __init__(self, verbosity=0):

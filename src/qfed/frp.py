@@ -110,7 +110,6 @@ class GriddedFRP():
         else:
             logging.info(f'Processing {fp_filename} with {n_fires} fires.')
 
-
             # non-fire
             self._process_areas(gp_file, fire_product_file)
 
@@ -280,12 +279,6 @@ class GriddedFRP():
         self.cloud = np.zeros((self.im, self.jm))
         self.frp   = np.zeros((len(BIOMES), self.im, self.jm))
 
-        # land/water state - not used, TODO: remove 
-        # self._lws = None
-
-        # fire mask and algorithm QA
-        self._fire_mask = None
-        self._algorithm_qa = None
 
         # search for files
         search = self._finder.find(date_start, date_end)
