@@ -269,9 +269,6 @@ class GriddedFRP():
         # self.grid_type = self._grid
         self.grid_type = 'GEOS-5 A-Grid'
 
-        # TODO: remove the hardcoded IGBP directory
-        self.IgbpDir = '/discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/'
-
 
         # gridded data accumulators
         self.land  = np.zeros((self.im, self.jm))
@@ -282,8 +279,9 @@ class GriddedFRP():
 
         # search for files
         search = self._finder.find(date_start, date_end)
-        for gp_file, fp_file, _ in search:
-            self._process(gp_file, fp_file)
+        for item in search:
+            self.IgbpDir = item.vegetation
+            self._process(item.geolocation, item.fire)
 
 
     def save(self, filename=None, timestamp=None, dir={'ana':'.', 'bkg':'.'}, qc=True, bootstrap=False, fill_value=1e15):
@@ -480,6 +478,7 @@ def _test_frp():
 
     modis_dir = '/discover/nobackup/dao_ops/intermediate/flk/modis'
     viirs_dir = '/discover/nobackup/projects/eis_fire/data/VIIRS'
+    igbp_dir  = '/discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/' 
 
     time = datetime(2020, 10, 26, 12)
     time_window = timedelta(hours=24)
@@ -492,27 +491,30 @@ def _test_frp():
    
     
     # MODIS/Terra
-    gp_dir = os.path.join(modis_dir, '061', 'MOD03', '{0:%Y}', '{0:%j}')
-    fp_dir = os.path.join(modis_dir, '006', 'MOD14', '{0:%Y}', '{0:%j}')
-    finder = PathFinder(gp_dir,'MOD03.A{0:%Y%j}.{0:%H%M}.061.NRT.hdf',
-                        fp_dir,'MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf',
-                        time_interval=300.0)
-    
+    gp_file = os.path.join(modis_dir, '061', 'MOD03', '{0:%Y}', '{0:%j}', 
+        'MOD03.A{0:%Y%j}.{0:%H%M}.061.NRT.hdf')
+    fp_file = os.path.join(modis_dir, '006', 'MOD14', '{0:%Y}', '{0:%j}',
+        'MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
+    vg_file = igbp_dir
+
+    finder = Finder(gp_file, fp_file, vg_file, time_interval=300.0)
     fp_reader = fire_products.create(Instrument.MODIS, Satellite.TERRA, verbosity=10)
     gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.TERRA, verbosity=10)
 
     frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
+
     frp.grid(time_s, time_e)
     frp.save(filename='qfed3-foo.frp.modis-terra.nc4', timestamp=time, bootstrap=True, qc=False)
 
      
     # MODIS/Aqua
-    gp_dir = os.path.join(modis_dir, '061', 'MYD03', '{0:%Y}', '{0:%j}')
-    fp_dir = os.path.join(modis_dir, '006', 'MYD14', '{0:%Y}', '{0:%j}')
-    finder = PathFinder(gp_dir, 'MYD03.A{0:%Y%j}.{0:%H%M}.061.NRT.hdf',
-                        fp_dir, 'MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf', 
-                        time_interval=300.0)
+    gp_file = os.path.join(modis_dir, '061', 'MYD03', '{0:%Y}', '{0:%j}',
+        'MYD03.A{0:%Y%j}.{0:%H%M}.061.NRT.hdf')
+    fp_file = os.path.join(modis_dir, '006', 'MYD14', '{0:%Y}', '{0:%j}',
+        'MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf')
+    vg_file = igbp_dir
 
+    finder = Finder(gp_file, fp_file, vg_file, time_interval=300.0)
     fp_reader = fire_products.create(Instrument.MODIS, Satellite.AQUA, verbosity=10)
     gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.AQUA, verbosity=10)
 
@@ -523,12 +525,13 @@ def _test_frp():
     
     # VIIRS-NPP
     #gp_dir = os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}')
-    gp_dir = os.path.join(viirs_dir, 'Level1', 'VNP03IMG.trimmed', '{0:%Y}', '{0:%j}')
-    fp_dir = os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}')
-    finder = PathFinder(gp_dir, 'VNP03IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc',
-                        fp_dir, 'VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc',
-                        time_interval=360.0)
+    gp_file = os.path.join(viirs_dir, 'Level1', 'VNP03IMG.trimmed', '{0:%Y}', '{0:%j}',
+        'VNP03IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
+    fp_file = os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}', 
+        'VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc')
+    vg_file = igbp_dir
 
+    finder = Finder(gp_file, fp_file, vg_file, time_interval=360.0)
     fp_reader = fire_products.create(Instrument.VIIRS, Satellite.NPP, verbosity=10)
     gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.NPP, verbosity=10)
 
@@ -538,12 +541,13 @@ def _test_frp():
 
 
     # VIIRS-JPSS1
-    gp_dir = os.path.join(viirs_dir, 'Level1', 'VJ103IMG.trimmed', '{0:%Y}', '{0:%j}')
-    fp_dir = os.path.join(viirs_dir, 'Level2', 'VJ114IMG', '{0:%Y}', '{0:%j}')
-    finder = PathFinder(gp_dir, 'VJ103IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc',
-                        fp_dir, 'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc',
-                        time_interval=360.0)
+    gp_file = os.path.join(viirs_dir, 'Level1', 'VJ103IMG.trimmed', '{0:%Y}', '{0:%j}',
+        'VJ103IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
+    fp_file = os.path.join(viirs_dir, 'Level2', 'VJ114IMG', '{0:%Y}', '{0:%j}',
+        'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
+    vg_file = igbp_dir
 
+    finder = PathFinder(gp_file, fp_file, vg_file, time_interval=360.0)
     fp_reader = fire_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
     gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
 
@@ -554,7 +558,7 @@ def _test_frp():
 
 
 if __name__ == '__main__':
-    from qfed.pathfinder import PathFinder
+    from qfed.inventory import Finder
     from qfed.instruments import Instrument, Satellite
 
     logging.basicConfig(
