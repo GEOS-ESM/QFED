@@ -78,9 +78,10 @@ class GriddedFRP():
             gp_file = None
 
         if gp_file is None:
-            logging.warning((f"Skipping file '{fp_filename}' because "
-                             f"the required geolocation file "
-                             f"'{geolocation_product_file}' was not found."))
+            logging.warning((
+                f"Skipping file '{fp_filename}' because "
+                f"the required geolocation file "
+                f"'{geolocation_product_file}' was not found."))
 
             # interrupt further processing of data associated with this granule
             return
@@ -217,13 +218,13 @@ class GriddedFRP():
 
             i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == QA_WATER]
             #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == 1]
-            logging.debug(f"The number of FIRE pixels over water is {len(i)}") 
+            logging.debug(f"The number of FIRE pixels over water is {len(i)}.") 
             if len(i) > 0:
                 self.water += _binareas(fp_lon[i], fp_lat[i], fp_area[i], self.im, self.jm, grid_type=self.grid_type)
 
             i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (QA_COAST, QA_LAND)]
             #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (0, )]
-            logging.debug(f"The number of FIRE pixels over land/coast is {len(i)}")
+            logging.debug(f"The number of FIRE pixels over land/coast is {len(i)}.")
             if len(i) > 0:
                 fp_lon = fp_lon[i]
                 fp_lat = fp_lat[i]
@@ -237,7 +238,7 @@ class GriddedFRP():
             n_fires = fp_frp.size
 
             if n_fires_initial != n_fires:
-                logging.debug(f"The number of FIRE pixels was reduced from {n_fires_initial} to {n_fires}")
+                logging.debug(f"The number of FIRE pixels was reduced from {n_fires_initial} to {n_fires}.")
             
 
         # bin area of fire pixels 

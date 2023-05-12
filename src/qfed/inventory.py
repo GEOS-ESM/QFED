@@ -50,9 +50,10 @@ class Finder():
         while t < t_end:
             search_path = self._fp_file.format(t)
             
-            logging.debug((f"Searching for fire product files " 
-                           f"matching pattern '{os.path.basename(search_path)}' "
-                           f"in directory '{os.path.dirname(search_path)}'."))
+            logging.debug((
+                f"Searching for fire product files " 
+                f"matching pattern '{os.path.basename(search_path)}' "
+                f"in directory '{os.path.dirname(search_path)}'."))
 
             match = glob(search_path)
             if match:
@@ -74,13 +75,15 @@ class Finder():
             t = t + timedelta(seconds=self._time_interval)
 
         if result:
-            logging.info((f"Search for input files completed. "
-                          f"{len(result)} fire product files were identified "
-                          f"and added to the processing queue.\n"))
+            logging.info((
+                f"Search for input files completed. "
+                f"{len(result)} fire product files were identified "
+                f"and added to the processing queue.\n"))
         else:
-            logging.warning((f"Search for input files completed. "
-                             f"However, no fire product files were identified "
-                             f"that meet the search criteria.\n")) 
+            logging.warning((
+                f"Search for input files completed. "
+                f"However, no fire product files were identified "
+                f"that meet the search criteria.\n")) 
 
         return result
 
