@@ -78,7 +78,9 @@ class GriddedFRP():
             gp_file = None
 
         if gp_file is None:
-            logging.warning(f"Could not find the geolocation file {geolocation_product_file} ...skipping {fp_filename}")
+            logging.warning((f"Skipping file '{fp_filename}' because "
+                             f"the required geolocation file "
+                             f"'{geolocation_product_file}' was not found."))
 
             # interrupt further processing of data associated with this granule
             return
@@ -87,7 +89,7 @@ class GriddedFRP():
         n_fires = self._fp_reader.get_num_fire_pixels(fire_product_file)
 
         if n_fires == 0:
-            logging.info(f"Skipping {fp_filename} due to number of fires being zero.\n")
+            logging.info(f"Skipping file '{fp_filename}' because it does not contain fires.\n")
 
             # TODO: Interrupting the processing 'here' means that  
             #       none of the no-fire pixels (water, land, cloud, etc.)
@@ -108,7 +110,7 @@ class GriddedFRP():
             # interrupt further processing of data associated with this granule
             return
         else:
-            logging.info(f'Processing {fp_filename} with {n_fires} fires.')
+            logging.info(f"Starting processing of file '{fp_filename}'.") 
 
             # non-fire
             self._process_areas(gp_file, fire_product_file)
@@ -117,7 +119,7 @@ class GriddedFRP():
             self._process_fires(fire_product_file)
 
             # done
-            logging.info(f"Completed the processing of {fp_filename}.\n")
+            logging.info(f"Successfully processed file '{fp_filename}'.\n")
     
     
     def _process_areas(self, geolocation_product_file, fire_product_file):
@@ -215,13 +217,13 @@ class GriddedFRP():
 
             i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == QA_WATER]
             #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] == 1]
-            logging.debug(f"Number of FIRE pixels over water is {len(i)}") 
+            logging.debug(f"The number of FIRE pixels over water is {len(i)}") 
             if len(i) > 0:
                 self.water += _binareas(fp_lon[i], fp_lat[i], fp_area[i], self.im, self.jm, grid_type=self.grid_type)
 
             i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (QA_COAST, QA_LAND)]
             #i = [n for n in range(n_fires_initial) if lws[fp_line[n],fp_sample[n]] in (0, )]
-            logging.debug(f"Number of FIRE pixels over land/coast is {len(i)}")
+            logging.debug(f"The number of FIRE pixels over land/coast is {len(i)}")
             if len(i) > 0:
                 fp_lon = fp_lon[i]
                 fp_lat = fp_lat[i]
@@ -547,7 +549,7 @@ def _test_frp():
         'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc')
     vg_file = igbp_dir
 
-    finder = PathFinder(gp_file, fp_file, vg_file, time_interval=360.0)
+    finder = Finder(gp_file, fp_file, vg_file, time_interval=360.0)
     fp_reader = fire_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
     gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
 

@@ -46,8 +46,10 @@ class Finder():
         t = t_start
         while t < t_end:
             search_path = self._fp_file.format(t)
-
-            logging.debug(f"Searching for files matching {search_path}.")
+            
+            logging.debug(("Searching for fire product files " 
+                           f"matching pattern '{os.path.basename(search_path)}' "
+                           f"in directory '{os.path.dirname(search_path)}'."))
 
             match = glob(search_path)
             if match:
