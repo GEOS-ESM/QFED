@@ -16,27 +16,29 @@ class test(unittest.TestCase):
         import numpy as np
     
         modis_dir = '/discover/nobackup/dao_ops/intermediate/flk/modis/061'
-        viirs_dir = '/discover/nobackup/projects/eis_fire/data/VIIRS/Level1'
+        viirs_dir = '/css/viirs/data/Level1'
     
-        instance = {(Instrument.MODIS, Satellite.TERRA)   : os.path.join(modis_dir, 'MOD03',        '2020', '300', 'MOD03.A2020300.1215.061.NRT.hdf'),
-                    (Instrument.MODIS, Satellite.AQUA)    : os.path.join(modis_dir, 'MYD03',        '2020', '300', 'MYD03.A2020300.1215.061.NRT.hdf'),
-                    (Instrument.VIIRS, Satellite.NPP)     : os.path.join(viirs_dir, 'NPP_IMFTS_L1', '2020', '300', 'NPP_IMFTS_L1.A2020300.1218.001.2020300185829.hdf'),
-                    (Instrument.VIIRS, Satellite.SNPP)    : os.path.join(viirs_dir, 'NPP_IMFTS_L1', '2020', '300', 'NPP_IMFTS_L1.A2020300.1218.001.2020300185829.hdf'),
-                    (Instrument.VIIRS, Satellite.SuomiNPP): os.path.join(viirs_dir, 'NPP_IMFTS_L1', '2020', '300', 'NPP_IMFTS_L1.A2020300.1218.001.2020300185829.hdf'),
-                    (Instrument.VIIRS, Satellite.JPSS1)   : os.path.join(viirs_dir, 'VJ103IMG',     '2020', '300', 'VJ103IMG.A2020300.1218.002.2020300180500.nc'),
-                    (Instrument.VIIRS, Satellite.NOAA20)  : os.path.join(viirs_dir, 'VJ103IMG',     '2020', '300', 'VJ103IMG.A2020300.1218.002.2020300180500.nc')}
+        queue = {
+            (Instrument.MODIS, Satellite.TERRA)   : os.path.join(modis_dir, 'MOD03',            '2020', '300', 'MOD03.A2020300.1215.061.NRT.hdf'),
+            (Instrument.MODIS, Satellite.AQUA)    : os.path.join(modis_dir, 'MYD03',            '2020', '300', 'MYD03.A2020300.1215.061.NRT.hdf'),
+            (Instrument.VIIRS, Satellite.NPP)     : os.path.join(viirs_dir, 'VNP03IMG.trimmed', '2020', '300', 'VNP03IMG.A2020300.1218.002.2021126045958.nc'),
+            (Instrument.VIIRS, Satellite.SNPP)    : os.path.join(viirs_dir, 'VNP03IMG.trimmed', '2020', '300', 'VNP03IMG.A2020300.1218.002.2021126045958.nc'),
+            (Instrument.VIIRS, Satellite.SuomiNPP): os.path.join(viirs_dir, 'VNP03IMG.trimmed', '2020', '300', 'VNP03IMG.A2020300.1218.002.2021126045958.nc'),
+            (Instrument.VIIRS, Satellite.JPSS1)   : os.path.join(viirs_dir, 'VJ103IMG.trimmed', '2020', '300', 'VJ103IMG.A2020300.1218.002.2020300180500.nc'),
+            (Instrument.VIIRS, Satellite.NOAA20)  : os.path.join(viirs_dir, 'VJ103IMG.trimmed', '2020', '300', 'VJ103IMG.A2020300.1218.002.2020300180500.nc')
+            }
     
-        for id, file in instance.items():
-            instrument, satellite = id
-            print('name: {0:s}/{1:s}'.format(instrument.value, satellite.value))
-            print('satellite: {0:s}'.format(satellite))
-            print('instrument: {0:s}'.format(instrument))
-            print('file: {0:s}'.format(os.path.basename(file)))
-    
-            reader = qfed.geolocation_products.create(instrument, satellite, verbosity=10)
+        for (instrument, satellite), file in queue.items():
+            print(f"{instrument=}")
+            print(f"{satellite=}")
+            print(f"file: {os.path.basename(file)}")
+            print(f"direcory: {os.path.dirname(file)}")
+
+            reader = qfed.geolocation_products.create(instrument, satellite)
+
             lon, lat, valid, lon_range, lat_range = reader.get_coordinates(file)
-            print(' lon: min={0:f}, max={1:f}, range={2:s}'.format(np.min(lon), np.max(lon), str(lon_range)))
-            print(' lat: min={0:f}, max={1:f}, range={2:s}'.format(np.min(lat), np.max(lat), str(lat_range)))
+            print(f" lon: min={np.min(lon)}, max={np.max(lon)}, range={lon_range}")
+            print(f" lat: min={np.min(lat)}, max={np.max(lat)}, range={lat_range}")
             print('')
 
 

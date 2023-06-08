@@ -13,7 +13,7 @@ class test(unittest.TestCase):
         '''
 
         modis_dir = '/discover/nobackup/dao_ops/intermediate/flk/modis'
-        viirs_dir = '/discover/nobackup/projects/eis_fire/data/VIIRS'
+        viirs_dir = '/css/viirs/data/'
         igbp_dir  = '/discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/'
     
         date_start = datetime(2020, 10, 26, 0)
@@ -42,7 +42,7 @@ class test(unittest.TestCase):
         print('MODIS/Aqua: \n', files, '\n\n')
 
         # VIIRS/NPP
-        files = Finder(
+        finder = Finder(
             os.path.join(viirs_dir, 'Level1', 'VNP03IMG.trimmed', '{0:%Y}', '{0:%j}', 
                 'VNP03IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc'),
             os.path.join(viirs_dir, 'Level2', 'VNP14IMG', '{0:%Y}', '{0:%j}',
@@ -54,7 +54,7 @@ class test(unittest.TestCase):
 
         # VIIRS/JPSS1
         finder = Finder(
-            os.path.join(viirs_dir, 'Level1', 'VJ103IMG', '{0:%Y}', '{0:%j}',
+            os.path.join(viirs_dir, 'Level1', 'VJ103IMG.trimmed', '{0:%Y}', '{0:%j}',
                 'VJ103IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc'),
             os.path.join(viirs_dir, 'Level2', 'VJ114IMG', '{0:%Y}', '{0:%j}',
                 'VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc'),
