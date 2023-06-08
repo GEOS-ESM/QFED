@@ -9,13 +9,11 @@ import logging
 from datetime import datetime, timedelta
 from glob import glob
 
-from qfed.instruments import Instrument, Satellite
-
 
 @dataclass
-class Item:
+class DataSource:
     '''
-    A container holding a date&time, and a group of files 
+    A container holding a date/time label, and a group of files 
     containing geolocation data, fire data and vegetation data.
     '''
     time: datetime
@@ -37,9 +35,8 @@ class Finder():
 
     def find(self, t_start, t_end):
         '''
-        Returns a list of Item-s. Each element contains a time label, a geolocation file, 
-        a fire product file, and a vegetation file. The list includes files with
-        observations in the time window specified by the two arguments.
+        Searches for files containing observations in the time 
+        window specified by the two arguments and returns a list[DataSources].
         '''
 
         logging.info(f"Starting search for input files containing data between {t_start} and {t_end}.")
@@ -57,11 +54,22 @@ class Finder():
 
             match = glob(search_path)
             if match:
-                fp_file = match[0]
+                if len(match) > 1:
+                    logging.warning((
+                        f"Found multiple files matching "
+                        f"pattern '{os.path.basename(search_path)}' "
+                        f"in directory '{os.path.dirname(search_path)}': "
+                        f"{match}."))
 
+                    logging.warning((
+                        f"Retaining file {match[0]}. The remaining files "
+                        f"{match[1:]} will not be included in the processing."))
+
+
+                fp_file = match[0]
                 gp_file = self._gp_file.format(t)
 
-                _item = Item(time=t, geolocation=gp_file, fire=fp_file,
+                _item = DataSource(time=t, geolocation=gp_file, fire=fp_file,
                     vegetation=self._vegetation_file)
                 
                 logging.debug(f"Found a match: {_item}.")
