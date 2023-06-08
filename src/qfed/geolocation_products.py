@@ -27,9 +27,6 @@ class GeolocationProduct(ABC):
     Abstract class for accessing Level 1 geolocation data.
     '''
      
-    def __init__(self, verbosity=0):
-        self.verbosity = verbosity
-
     def get_coordinates(self, file):
         '''
         Template method to read and return geolocation data.
@@ -44,7 +41,7 @@ class GeolocationProduct(ABC):
         return lon, lat, valid, lon_range, lat_range
 
     def message_on_file_error(self, file):
-        logging.warning(f"Cannot open the geolocation file <file> - excluding it.")
+        logging.warning(f"Cannot open the geolocation file '{file}' - excluding it.")
 
     @abc.abstractmethod
     def get_longitude(self):
@@ -164,25 +161,25 @@ class VIIRS_JPSS(GeolocationProduct):
 
 
 
-def create(instrument, satellite, verbosity=0, NPPv1=False):
+def create(instrument, satellite, NPPv1=False):
     '''
     Geolocation product reader factory.
     '''
 
     if instrument == Instrument.MODIS and \
        satellite in (Satellite.AQUA, Satellite.TERRA):
-        return MODIS(verbosity)
+        return MODIS()
 
     if instrument == Instrument.VIIRS and \
        satellite in (Satellite.JPSS1, Satellite.NOAA20):
-        return VIIRS_JPSS(verbosity)
+        return VIIRS_JPSS()
 
     if instrument == Instrument.VIIRS and \
        satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
         if NPPv1:
-            return VIIRS_NPP(verbosity)
+            return VIIRS_NPP()
         else:
-            return VIIRS_JPSS(verbosity)
+            return VIIRS_JPSS()
 
     msg = ("Unrecognized satellite observing system platform: "
            "{0:s} on board of {1:s}.".format(instrument, satellite))
