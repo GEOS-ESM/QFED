@@ -25,38 +25,38 @@ else:
 
 class DatasetAccessEngine(ABC):
 
-    def __init__(self, verbosity=0):
-        self.verbosity = verbosity
+    def __init__(self, msg="Could not open file <{file}> - ignoring it."):
+        self._msg = msg
 
-    def message_on_file_error(self, file):
-        logging.warning(f"Cannot open the fire product file <{file}> - excluding it.")
-
-    @abc.abstractmethod
-    def get_handle(self, file):
-        return
+    def _message_on_file_error(self, file):
+        logging.warning(self._msg.format(file=file))
 
     @abc.abstractmethod
     def get_variable(self, file, variable):
-        return
+        '''
+        Read variable from file.
+        '''
 
     @abc.abstractmethod
     def get_attribute(self, file, attribute):
-        return
+        '''
+        Reads attribute from file.
+        '''
 
 
 class DatasetAccessEngine_HDF4(DatasetAccessEngine):
 
-    def get_handle(self, file):
+    def _open(self, file):
         try:
             f = SD.SD(file)
         except SD.HDF4Error:
-            self.message_on_file_error(file)
+            self._message_on_file_error(file)
             f = None
 
         return f
 
     def get_variable(self, file, variable):
-        f = self.get_handle(file)
+        f = self._open(file)
         
         if f is not None:
             sds = f.select(variable)
@@ -70,7 +70,7 @@ class DatasetAccessEngine_HDF4(DatasetAccessEngine):
         return data
 
     def get_attribute(self, file, attribute):
-        f = self.get_handle(file)
+        f = self._open(file)
         
         if f is not None:
             attr = f.attributes()[attribute]
@@ -82,17 +82,17 @@ class DatasetAccessEngine_HDF4(DatasetAccessEngine):
 
 class DatasetAccessEngine_NetCDF4(DatasetAccessEngine):
 
-    def get_handle(self, file):
+    def _open(self, file):
         try:
            f = nc.Dataset(file)
         except IOError:
-           self.message_on_file_error(file)
+           self._message_on_file_error(file)
            f = None
 
         return f
 
     def get_variable(self, file, variable):
-        f = self.get_handle(file)
+        f = self._open(file)
 
         if f is not None:
             data = f.variables[variable][...]
@@ -102,7 +102,7 @@ class DatasetAccessEngine_NetCDF4(DatasetAccessEngine):
         return data
 
     def get_attribute(self, file, attribute):
-        f = self.get_handle(file)
+        f = self._open(file)
 
         if f is not None:
             attr = f.__dict__[attribute]
