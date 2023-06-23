@@ -18,7 +18,7 @@ from qfed import grid
 from qfed import instruments
 from qfed import geolocation_products
 from qfed import fire_products
-
+from qfed import classification_products
 
 
 # TODO: introduce fire types to include gas flares, 
@@ -33,36 +33,45 @@ class GriddedFRP():
     by aggregating data from multiple granules.
     '''
 
-    def __init__(self, grid, finder, geolocation_product_reader, fire_product_reader, verbosity=0):
+    def __init__(self, grid, finder, 
+                 geolocation_product_reader, 
+                 fire_product_reader, 
+                 classification_product_reader):
         self._grid = grid
         self._finder = finder
         self._gp_reader = geolocation_product_reader
         self._fp_reader = fire_product_reader
-        self.verbosity = verbosity
+        self._cp_reader = classification_product_reader
 
-    def _set_coordinates(self, geolocation_product_file):
+    def _get_coordinates(self, geolocation_product_file):
         '''
         Read longitude and latitudes and store them 
         as private fields.
         '''
+        (
+            self._lon, 
+            self._lat, 
+            self._valid_coordinates, 
+            self._lon_range, 
+            self._lat_range 
+        ) = self._gp_reader.get_coordinates(geolocation_product_file)
 
-        self._lon, self._lat, self._valid_coordinates, self._lon_range, self._lat_range = \
-            self._gp_reader.get_coordinates(geolocation_product_file)
-
-        assert self._lon.shape == self._lat.shape
-
-
-    def _set_fire_mask(self, fire_product_file):
+    def _get_pixels(self, classification_product_file, confidence=''):
         '''
         Read fire mask and algorithm QA and store them
         as private fields.
         '''
+        self._cp_reader.read(classification_product_file)
 
-        self._fire_mask = self._fp_reader.get_fire_mask(fire_product_file)
-        self._algorithm_qa = self._fp_reader.get_algorithm_qa(fire_product_file)
+        self._is_unclassified = self._cp_reader.get_unclassified()
+        self._is_cloud = self._cp_reader.get_cloud()
+        self._is_clear_sky = self._cp_reader.get_clear_sky()
 
-        assert self._fire_mask.shape == self._algorithm_qa.shape
-  
+        self._is_fire_low_confidence     = self._cp_reader.get_fire(confidence='low')
+        self._is_fire_nominal_confidence = self._cp_reader.get_fire(confidence='nominal')
+        self._is_fire_high_confidence    = self._cp_reader.get_fire(confidence='high')
+
+        self._area = self._cp_reader.get_area()
 
     def _process(self, geolocation_product_file, fire_product_file):
         '''
@@ -78,19 +87,27 @@ class GriddedFRP():
             gp_file = None
 
         if gp_file is None:
-            logging.warning((
+            msg = (
                 f"Skipping file '{fp_filename}' because "
                 f"the required geolocation file "
-                f"'{geolocation_product_file}' was not found."))
+                f"'{geolocation_product_file}' was not found."
+            )
+
+            logging.warning(msg)
 
             # interrupt further processing of data associated with this granule
             return
 
-        # read and bin data 
+        # read and bin data
         n_fires = self._fp_reader.get_num_fire_pixels(fire_product_file)
 
         if n_fires == 0:
-            logging.info(f"Skipping file '{fp_filename}' because it does not contain fires.\n")
+            msg = (
+                f"Skipping file '{fp_filename}' because "
+                f"it does not contain fires.\n"
+            )
+
+            logging.info(msg)
 
             # TODO: Interrupting the processing 'here' means that  
             #       none of the no-fire pixels (water, land, cloud, etc.)
@@ -110,84 +127,176 @@ class GriddedFRP():
 
             # interrupt further processing of data associated with this granule
             return
+        
+        logging.info(f"Starting processing of file '{fp_filename}'.")
+
+        self._process_non_fire(gp_file, fire_product_file)
+        self._process_fire(fire_product_file)
+        self._process_unobserved()
+
+        logging.info(f"Successfully processed file '{fp_filename}'.\n")
+
+
+    def _process_non_fire(self, geolocation_product_file, classification_product_file):
+        '''
+        Read and process NON-FIRE pixels.
+        '''
+        self._get_coordinates(geolocation_product_file)
+        self._get_pixels(classification_product_file)
+
+        self._process_clear_sky()
+        self._process_cloud()
+
+    def _process_clear_sky(self):
+        self._process_clear_sky_land()
+        self._process_clear_sky_coast()
+        self._process_clear_sky_water()
+        self._process_clear_sky_unknown()
+
+    def _process_cloud(self):
+        self._process_cloud_land()
+        self._process_cloud_coast()
+        self._process_cloud_water()
+        self._process_cloud_unknown()
+
+    
+    def _process_unobserved(self):
+        # TODO ...
+        pass
+
+    def _process_clear_sky_land(self):
+        '''
+        Process cloud-free land pixels that do not contain active fires.
+        '''
+        i = self._is_clear_sky['land'] & self._valid_coordinates
+
+        if np.any(i):
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            self.area_land += _binareas(lon, lat, area, self.im, self.jm, grid_type=self.grid_type)
+            logging.debug(f"Added {len(area)} of clear sky land-pixels to land area.")
         else:
-            logging.info(f"Starting processing of file '{fp_filename}'.") 
+            logging.debug(f"This granule does not contain (no fire) clear sky land-pixels.")
 
-            # non-fire
-            self._process_areas(gp_file, fire_product_file)
-
-            # fires            
-            self._process_fires(fire_product_file)
-
-            # done
-            logging.info(f"Successfully processed file '{fp_filename}'.\n")
-    
-    
-    def _process_areas(self, geolocation_product_file, fire_product_file):
+    def _process_clear_sky_coast(self):
         '''
-        Read and process NO-FIRE areas
+        Process cloud-free coast pixels that do not contain active fires.
+        Note that coast pixels are lumped with land pixels. 
         '''
+        i = self._is_clear_sky['coast'] & self._valid_coordinates
 
-        self._set_coordinates(geolocation_product_file)
+        if np.any(i):
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            self.area_land += _binareas(lon, lat, area, self.im, self.jm, grid_type=self.grid_type)
+            logging.debug(f"Added {len(area)} of clear sky coast-pixels to land area.")
+        else:
+            logging.debug(f"This granule does not contain (no fire) clear sky coast-pixels.")
+
+    def _process_clear_sky_water(self):
+        '''
+        Process cloud-free water pixels that do not contain active fires.
+        '''
+        i = self._is_clear_sky['water'] & self._valid_coordinates
         
-        i_water, i_land_nofire, i_land_cloud, i_water_cloud = self._fp_reader.get_pixel_classes(fire_product_file)
-
-
-        # calculate pixel area
-        n_lines, n_samples = self._lon.shape
-
-        area = np.zeros_like(self._lon)
-        # TODO: this follows the original MxD14 code, is it valid for VIIRS?
-        area[:] = self._fp_reader.get_pixel_area(1-1+np.arange(n_samples))
-
-        # non-fire land pixel
-        i = np.logical_and(i_land_nofire, self._valid_coordinates)
-
         if np.any(i):
-            # condensed 1D arrays of clear-land not burning pixels
-            lon_ = self._lon[i].ravel()
-            lat_ = self._lat[i].ravel()
-            area_ = area[i].ravel()
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            self.area_water += _binareas(lon, lat, area, self.im, self.jm, grid_type=self.grid_type)
+            logging.debug(f"Added {len(area)} of clear sky water-pixels to water area.") 
+        else:
+            logging.debug(f"This granule does not contain (no fire) clear sky water-pixels.")
 
-            logging.debug(f"The number of NON-FIRE pixels is {len(area_)}.")
-
-            # bin areas of no-fires and sum
-            self.land += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
-        
-
-        # non-fire water or cloud over water (very likely a non-fire)
-        i = np.logical_and(np.logical_or(i_water_cloud, i_water), self._valid_coordinates)
-
-        if np.any(i):
-            # condensed 1D arrays of water pixels
-            lon_ = self._lon[i].ravel()
-            lat_ = self._lat[i].ravel()
-            area_ = area[i].ravel()
-
-            logging.debug(f"The number of WATER pixels is {len(area_)}.")
-
-            # bin areas of water and sum
-            self.water += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
-
-
-        # cloud over land only
-        i = np.logical_and(i_land_cloud, self._valid_coordinates)
-
-        if np.any(i):
-            # condensed 1D arrays of cloud pixels
-            lon_ = self._lon[i].ravel()
-            lat_ = self._lat[i].ravel()
-            area_ = area[i].ravel()
-
-            logging.debug(f"The number of CLOUD pixels is {len(area_)}.")
-
-            # bin areas of cloud and sum
-            self.cloud += _binareas(lon_, lat_, area_, self.im, self.jm, grid_type=self.grid_type)
-
-
-    def _process_fires(self, fire_product_file):
+    def _process_clear_sky_unknown(self):
         '''
-        Read and process active fires
+        Process clear-sky unknown (as in not known if they are land or water) 
+        pixels that do not contain active fires.
+        '''
+        i = self._is_clear_sky.get('unknown', False) & self._valid_coordinates
+        
+        if np.any(i):
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            logging.critical(f"Found {len(area)} of clear sky unknown-pixels!? Excluding them!") 
+        else:
+            logging.debug(f"This granule does not contain (no fire) clear sky unknown-pixels.")
+
+    def _process_cloud_land(self):
+        '''
+        Process cloud land pixels that do not contain active fires.
+        '''
+        i = self._is_cloud['land'] & self._valid_coordinates
+
+        if np.any(i):
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            self.area_cloud += _binareas(lon, lat, area, self.im, self.jm, grid_type=self.grid_type)
+            logging.debug(f"Added {len(area)} of cloud land-pixels to cloud area.")
+        else:
+            logging.debug(f"This granule does not contain (no fire) cloud land-pixels.")
+
+    def _process_cloud_coast(self):
+        '''
+        Process cloud coast pixels that do not contain active fires.
+        Note that coast pixels are lumped with land pixels. 
+        '''
+        i = self._is_cloud['coast'] & self._valid_coordinates
+
+        if np.any(i):
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            self.area_cloud += _binareas(lon, lat, area, self.im, self.jm, grid_type=self.grid_type)
+            logging.debug(f"Added {len(area)} of cloud coast-pixels to cloud area.")
+        else:
+            logging.debug(f"This granule does not contain (no fire) cloud coast-pixels.")
+
+    def _process_cloud_water(self):
+        '''
+        Process cloud water pixels that do not contain active fires.
+        Note that we lump these with clear sky water pixels because
+        it is unlikely that water bodies, including those obscured by
+        cluds, contain fires. 
+        '''
+        i = self._is_cloud['water'] & self._valid_coordinates
+        
+        if np.any(i):
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            self.area_water += _binareas(lon, lat, area, self.im, self.jm, grid_type=self.grid_type)
+            logging.debug(f"Added {len(area)} of cloud water-pixels to water area.") 
+        else:
+            logging.debug(f"This granule does not contain (no fire) cloud water-pixels.")
+
+    def _process_cloud_unknown(self):
+        '''
+        Process cloud unknown (as in not known if they are land or water) 
+        pixels that do not contain active fires.
+        '''
+        i = self._is_cloud.get('unknown', False) & self._valid_coordinates
+        
+        if np.any(i):
+            lon = self._lon[i].ravel()
+            lat = self._lat[i].ravel()
+            area = self._area[i].ravel()
+            self.area_unknown += _binareas(lon, lat, area, self.im, self.jm, grid_type=self.grid_type)
+            logging.critical(f"Found {len(area)} of clear sky unknown-pixels!? ...Excluding said pixels!") 
+        else:
+            logging.debug(f"This granule does not contain (no fire) clear sky unknown-pixels.")
+
+
+
+
+
+    def _process_fire(self, fire_product_file):
+        '''
+        Process active fires.
         '''
 
         fp_lon = self._fp_reader.get_fire_longitude(fire_product_file)
@@ -242,7 +351,7 @@ class GriddedFRP():
             
 
         # bin area of fire pixels 
-        self.land += _binareas(fp_lon, fp_lat, fp_area, self.im, self.jm, grid_type=self.grid_type)
+        self.area_land += _binareas(fp_lon, fp_lat, fp_area, self.im, self.jm, grid_type=self.grid_type)
 
         # bin FRP for each fire type
         veg = _getSimpleVeg(fp_lon, fp_lat, self.IgbpDir)
@@ -272,15 +381,14 @@ class GriddedFRP():
         # self.grid_type = self._grid
         self.grid_type = 'GEOS-5 A-Grid'
 
-
         # gridded data accumulators
-        self.land  = np.zeros((self.im, self.jm))
-        self.water = np.zeros((self.im, self.jm))
-        self.cloud = np.zeros((self.im, self.jm))
-        self.frp   = np.zeros((len(BIOMES), self.im, self.jm))
+        self.area_land = np.zeros((self.im, self.jm))
+        self.area_water = np.zeros((self.im, self.jm))
+        self.area_cloud = np.zeros((self.im, self.jm))
+        self.area_unknown = np.zeros((self.im, self.jm))
+        self.frp = np.zeros((len(BIOMES), self.im, self.jm))
 
-
-        # search for files
+        # find the input files and process the data
         search = self._finder.find(date_start, date_end)
         for item in search:
             self.IgbpDir = item.vegetation
@@ -375,18 +483,19 @@ class GriddedFRP():
            v.begin_date = np.array(begin_date, dtype=np.int32)
            v.begin_time = np.array(begin_time, dtype=np.int32)
            
-           # long name and units  
-           v_meta_data = {'land'  : ('Observed Clear Land Area', 'km2'),
-                          'water' : ('Water Area', 'km2'),
-                          'cloud' : ('Obscured by Clouds Area', 'km2'),
-                          'frp_tf': ('Fire Radiative Power (Tropical Forests)', 'MW'),
-                          'frp_xf': ('Fire Radiative Power (Extra-tropical Forests)', 'MW'),
-                          'frp_sv': ('Fire Radiative Power (Savanna)', 'MW'),
-                          'frp_gl': ('Fire Radiative Power (Grasslands)', 'MW'),
-                          'fb_tf' : ('Background FRP Density (Tropical Forests)', 'MW km-2'),
-                          'fb_xf' : ('Background FRP Density (Extra-tropical Forests)', 'MW km-2'),
-                          'fb_sv' : ('Background FRP Density (Savanna)', 'MW km-2'),
-                          'fb_gl' : ('Background FRP Density (Grasslands)', 'MW km-2')}
+           # long name and units
+           v_meta_data = {
+               'land'   : ('Land area', 'km2'),
+               'water'  : ('Water Area', 'km2'),
+               'cloud'  : ('Obscured by Clouds Area', 'km2'),
+               'frp_tf' : ('Fire Radiative Power (Tropical Forests)', 'MW'),
+               'frp_xf' : ('Fire Radiative Power (Extra-tropical Forests)', 'MW'),
+               'frp_sv' : ('Fire Radiative Power (Savanna)', 'MW'),
+               'frp_gl' : ('Fire Radiative Power (Grasslands)', 'MW'),
+               'fb_tf'  : ('Background FRP Density (Tropical Forests)', 'MW km-2'),
+               'fb_xf'  : ('Background FRP Density (Extra-tropical Forests)', 'MW km-2'),
+               'fb_sv'  : ('Background FRP Density (Savanna)', 'MW km-2'),
+               'fb_gl'  : ('Background FRP Density (Grasslands)', 'MW km-2')}
 
            for _v, (_l, _u) in v_meta_data.items():
                v = f.variables[_v]
@@ -409,13 +518,13 @@ class GriddedFRP():
 
 
        # data
-       f.variables['land'  ][0,:,:] = np.transpose(self.land)
-       f.variables['water' ][0,:,:] = np.transpose(self.water)
-       f.variables['cloud' ][0,:,:] = np.transpose(self.cloud)
-       f.variables['frp_tf'][0,:,:] = np.transpose(self.frp[0,:,:])
-       f.variables['frp_xf'][0,:,:] = np.transpose(self.frp[1,:,:])
-       f.variables['frp_sv'][0,:,:] = np.transpose(self.frp[2,:,:])
-       f.variables['frp_gl'][0,:,:] = np.transpose(self.frp[3,:,:])
+       f.variables['land'   ][0,:,:] = np.transpose(self.area_land)
+       f.variables['water'  ][0,:,:] = np.transpose(self.area_water)
+       f.variables['cloud'  ][0,:,:] = np.transpose(self.area_cloud)
+       f.variables['frp_tf' ][0,:,:] = np.transpose(self.frp[0,:,:])
+       f.variables['frp_xf' ][0,:,:] = np.transpose(self.frp[1,:,:])
+       f.variables['frp_sv' ][0,:,:] = np.transpose(self.frp[2,:,:])
+       f.variables['frp_gl' ][0,:,:] = np.transpose(self.frp[3,:,:])
 
        if bootstrap:
            f.variables['fb_tf'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
@@ -480,7 +589,7 @@ def _getSimpleVeg(lon, lat, Path, nonVeg=None):
 def _test_frp():
 
     modis_dir = '/discover/nobackup/dao_ops/intermediate/flk/modis'
-    viirs_dir = '/discover/nobackup/projects/eis_fire/data/VIIRS'
+    viirs_dir = '/css/viirs/data/'
     igbp_dir  = '/discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/' 
 
     time = datetime(2020, 10, 26, 12)
@@ -501,13 +610,14 @@ def _test_frp():
     vg_file = igbp_dir
 
     finder = Finder(gp_file, fp_file, vg_file, time_interval=300.0)
-    fp_reader = fire_products.create(Instrument.MODIS, Satellite.TERRA, verbosity=10)
-    gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.TERRA, verbosity=10)
+    fp_reader = fire_products.create(Instrument.MODIS, Satellite.TERRA)
+    gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.TERRA)
+    cp_reader = classification_products.create(Instrument.MODIS, Satellite.TERRA)
 
-    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
 
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.modis-terra.nc4', timestamp=time, bootstrap=True, qc=False)
+    frp.save(filename='qfed3-foo.frp.modis-terra.cpr.nc4', timestamp=time, bootstrap=True, qc=False)
 
      
     # MODIS/Aqua
@@ -518,12 +628,14 @@ def _test_frp():
     vg_file = igbp_dir
 
     finder = Finder(gp_file, fp_file, vg_file, time_interval=300.0)
-    fp_reader = fire_products.create(Instrument.MODIS, Satellite.AQUA, verbosity=10)
-    gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.AQUA, verbosity=10)
+    fp_reader = fire_products.create(Instrument.MODIS, Satellite.AQUA)
+    gp_reader = geolocation_products.create(Instrument.MODIS, Satellite.AQUA)
+    cp_reader = classification_products.create(Instrument.MODIS, Satellite.TERRA)
 
-    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
+
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.modis-aqua.nc4', timestamp=time, bootstrap=True, qc=False)
+    frp.save(filename='qfed3-foo.frp.modis-aqua.cpr.nc4', timestamp=time, bootstrap=True, qc=False)
     
     
     # VIIRS-NPP
@@ -535,12 +647,13 @@ def _test_frp():
     vg_file = igbp_dir
 
     finder = Finder(gp_file, fp_file, vg_file, time_interval=360.0)
-    fp_reader = fire_products.create(Instrument.VIIRS, Satellite.NPP, verbosity=10)
-    gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.NPP, verbosity=10)
+    fp_reader = fire_products.create(Instrument.VIIRS, Satellite.NPP)
+    gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.NPP)
+    cp_reader = classification_products.create(Instrument.VIIRS, Satellite.NPP)
 
-    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.viirs-npp.nc4', timestamp=time, bootstrap=True, qc=False)
+    frp.save(filename='qfed3-foo.frp.viirs-npp.cpr.nc4', timestamp=time, bootstrap=True, qc=False)
 
 
     # VIIRS-JPSS1
@@ -551,12 +664,13 @@ def _test_frp():
     vg_file = igbp_dir
 
     finder = Finder(gp_file, fp_file, vg_file, time_interval=360.0)
-    fp_reader = fire_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
-    gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.JPSS1, verbosity=10)
+    fp_reader = fire_products.create(Instrument.VIIRS, Satellite.JPSS1)
+    gp_reader = geolocation_products.create(Instrument.VIIRS, Satellite.JPSS1)
+    cp_reader = classification_products.create(Instrument.VIIRS, Satellite.JPSS1)
 
-    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, verbosity=1)
+    frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
     frp.grid(time_s, time_e)
-    frp.save(filename='qfed3-foo.frp.viirs-jpss1.nc4', timestamp=time, bootstrap=True, qc=False)
+    frp.save(filename='qfed3-foo.frp.viirs-jpss1.cpr.nc4', timestamp=time, bootstrap=True, qc=False)
     
 
 
