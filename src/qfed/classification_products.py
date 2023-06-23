@@ -11,6 +11,7 @@ import numpy as np
 
 from qfed.utils import DatasetAccessEngine_HDF4, DatasetAccessEngine_NetCDF4 
 from qfed.instruments import Instrument, Satellite
+from qfed.instruments import modis_pixel_area, viirs_pixel_area
 
 
 if sys.version_info >= (3, 4):
@@ -72,6 +73,11 @@ class PixelClassifier(ABC):
         Fire pixels.
         '''
 
+    @abc.abstractmethod
+    def get_area(self):
+        '''
+        Pixel area.
+        '''
 
 class MODIS(PixelClassifier):
 
@@ -144,9 +150,9 @@ class MODIS(PixelClassifier):
 
     def _place(self, pixel):
         result = {}
-        result['land' ] = pixel[self._is_over_land() ]
-        result['coast'] = pixel[self._is_over_coast()]
-        result['water'] = pixel[self._is_over_water()]
+        result['land' ] = pixel & self._is_over_land()
+        result['coast'] = pixel & self._is_over_coast()
+        result['water'] = pixel & self._is_over_water()
         return result      
 
     def _info(self, class_name, result):
@@ -156,7 +162,7 @@ class MODIS(PixelClassifier):
         for surface in ('land', 'coast', 'water'):
             label = f"{class_name:>13}({surface:<5})"
             count = np.sum(result[surface])
-            logging.debug(f"{label:>18} : {np.any(result[surface])}, {count=}")
+            logging.debug(f"{label:>18} : {count = }")
 
     def get_not_processed(self):
         '''
@@ -236,7 +242,7 @@ class MODIS(PixelClassifier):
                self._get_fire_confidence_nominal() | \
                self._get_fire_confidence_high()
 
-    def get_fire(self, confidence='any'):
+    def get_fire(self, confidence=''):
         '''
         Fire pixels. Use the optional argument to select 
         fires with either low|nominal|high or any confidence.
@@ -245,6 +251,8 @@ class MODIS(PixelClassifier):
         select = {'low'    : self._get_fire_confidence_low,
                   'nominal': self._get_fire_confidence_nominal,
                   'high'   : self._get_fire_confidence_high,
+                  ''       : self._get_fire_all,
+                  'all'    : self._get_fire_all,
                   'any'    : self._get_fire_all,} 
        
         pixel = select[confidence]()
@@ -254,6 +262,17 @@ class MODIS(PixelClassifier):
         self._info('fire', result)
         return result
 
+    def get_area(self):
+        '''
+        Calculate pixel area.
+        '''
+        area = np.zeros_like(self._fire_mask)
+        n_lines, n_samples = area.shape
+        
+        # TODO: this follows the original MxD14 code
+        sample = 1 + np.arange(n_samples)
+        area[:] = modis_pixel_area(sample)
+        return area
 
 
 class VIIRS(PixelClassifier):
@@ -355,17 +374,17 @@ class VIIRS(PixelClassifier):
         not_residual_bowtie = self._is_fire_not_residual_bowtie()
  
         result = {}
-        result['land' ] = pixel[self._is_fire_over_land()  & not_residual_bowtie]
-        result['coast'] = pixel[self._is_fire_over_coast() & not_residual_bowtie]
-        result['water'] = pixel[self._is_fire_over_water() & not_residual_bowtie]
-        result['unknown'] = pixel[self._no_such_classification()]
+        result['land' ] = pixel & self._is_fire_over_land()  & not_residual_bowtie
+        result['coast'] = pixel & self._is_fire_over_coast() & not_residual_bowtie
+        result['water'] = pixel & self._is_fire_over_water() & not_residual_bowtie
+        result['unknown'] = pixel & self._no_such_classification()
         return result  
 
     def _place(self, pixel):
         result = {}
-        result['land' ] = pixel[self._no_such_classification()]
-        result['coast'] = pixel[self._no_such_classification()]
-        result['water'] = pixel[self._no_such_classification()]
+        result['land' ] = pixel & self._no_such_classification()
+        result['coast'] = pixel & self._no_such_classification()
+        result['water'] = pixel & self._no_such_classification()
         result['unknown'] = pixel
         return result  
 
@@ -376,7 +395,7 @@ class VIIRS(PixelClassifier):
         for surface in ('land', 'coast', 'water', 'unknown'):
             label = f"{class_name:>13}({surface:<7})"
             count = np.sum(result[surface])
-            logging.debug(f"{label:>18} : {np.any(result[surface])}, {count=}")
+            logging.debug(f"{label:>18} : {count = }")
 
     def get_not_processed(self):
         '''
@@ -418,8 +437,8 @@ class VIIRS(PixelClassifier):
         result['land' ] = self._fire_mask == VIIRS.NON_FIRE_LAND
         result['water'] = (self._fire_mask == VIIRS.NON_FIRE_WATER) | \
                           (self._fire_mask == VIIRS.SUN_GLINT)
-        result['coast'] = self._fire_mask[self._no_such_classification()]
-        result['unknown'] = self._fire_mask[self._no_such_classification()]
+        result['coast'] = self._fire_mask & self._no_such_classification()
+        result['unknown'] = self._fire_mask & self._no_such_classification()
 
         self._info('clear sky', result)
         return result
@@ -459,7 +478,7 @@ class VIIRS(PixelClassifier):
                self._get_fire_confidence_nominal() | \
                self._get_fire_confidence_high()
 
-    def get_fire(self, confidence='any'):
+    def get_fire(self, confidence=''):
         '''
         Fire pixels. Use the optional argument to select 
         fires with either low|nominal|high or any confidence.
@@ -468,6 +487,8 @@ class VIIRS(PixelClassifier):
         select = {'low'    : self._get_fire_confidence_low,
                   'nominal': self._get_fire_confidence_nominal,
                   'high'   : self._get_fire_confidence_high,
+                  ''       : self._get_fire_all,
+                  'all'    : self._get_fire_all,
                   'any'    : self._get_fire_all,} 
        
         pixel = select[confidence]()
@@ -475,12 +496,22 @@ class VIIRS(PixelClassifier):
 
         not_residual_bowtie = self._is_fire_not_residual_bowtie()
         pixel = pixel & not_residual_bowtie
-        logging.debug(f"fires({confidence} confidence) excluding bowtie = {np.sum(pixel)}")
+        logging.debug(f"fires({confidence} confidence) without residual bowtie = {np.sum(pixel)}")
 
         result = self._fire_place(pixel)
         self._info('fire', result)
         return result
 
+    def get_area(self):
+        '''
+        Calculate pixel area.
+        '''
+        area = np.zeros_like(self._fire_mask)
+        n_lines, n_samples = area.shape
+
+        sample = np.arange(n_samples)
+        area[:] = viirs_pixel_area(sample)
+        return area
 
     def __visualize(self): 
         import matplotlib.pyplot as plt
@@ -493,7 +524,6 @@ class VIIRS(PixelClassifier):
         data = (self._algorithm_qa >> 10 & 0b1) == 1
         plt.imsave('water.algorithm_qa.bit10.png', data, cmap='gray')#, norm=NoNorm())
      
-
 
 def create(instrument, satellite):
     '''
