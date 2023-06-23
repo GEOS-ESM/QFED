@@ -54,7 +54,7 @@ if __name__ == '__main__':
         level=logging.DEBUG,
         format="%(asctime)s  %(levelname)-8s  %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        #filename='frp.log',
+        #filename='classification.log',
      )
 
     unittest.main()
