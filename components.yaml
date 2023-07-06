@@ -22,6 +22,5 @@ ecbuild:
 GMAOpyobs:
   local: ./src/Shared/@GMAOpyobs
   remote: ../GMAOpyobs.git
-  hash: 7ad018f
-  develop: develop
+  tag: v1.0.4
 
