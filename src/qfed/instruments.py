@@ -33,7 +33,14 @@ def modis_pixel_area(sample):
     Compute pixel area given the sample number. 
 
     Based on 'MODIS Collection 5 Active Fire Product 
-    User's Guide Version 2.4', Giglio, L., p. 44, 2010.
+    User's Guide Version 2.4', Giglio, L., p. 44, 2010.,
+    and C. Ichoku and Y. J. Kaufman, 'A method to derive 
+    smoke emission rates from MODIS fire radiative energy 
+    measurements', IEEE Transactions on Geoscience and 
+    Remote Sensing, vol. 43, no. 11, 2005, 
+    doi:10.1109/TGRS.2005.857328.
+
+    Note that sample is zero-based.
     """
 
     # parameters
