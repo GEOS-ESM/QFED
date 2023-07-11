@@ -791,7 +791,7 @@ class MxD14_L3(object):
 #       Calculate pixel area
 #       --------------------
         Area = np.zeros((nLines,nSamples))
-        Area[:] = _pixar(1+np.arange(nSamples))
+        Area[:] = _pixar(np.arange(nSamples))
 
         # non-fire land pixel
         i = np.logical_and(fmask==NOFIRE, valid)
