@@ -691,14 +691,15 @@ class MxD14_L3(object):
 #           ---------------------------------------------------------------------------------------------
             n_fires_initial = frp.size
 
-            i = [n for n in range(n_fires_initial) if self.lws[fp_line[n],fp_sample[n]] == QA_WATER]
+            i = [n for n in range(n_fires_initial) if self.lws[fp_line[n],fp_sample[n]] in (QA_WATER, QA_COAST)]
             if len(i) > 0:
                 if self.verb > 1:
                     print("      --> found %d FIRE pixel(s) over water" % len(i))
 
                 self.gWater += _binareas(lon[i],lat[i],area[i],self.im,self.jm,grid_type=self.grid_type)
+                print(f"Added {len(area[i])} fire-pixels to water area.")
 
-            i = [n for n in range(n_fires_initial) if self.lws[fp_line[n],fp_sample[n]] in (QA_COAST,QA_LAND)]
+            i = [n for n in range(n_fires_initial) if self.lws[fp_line[n],fp_sample[n]] in (QA_LAND,)]
             if len(i) > 0:
                 lon = lon[i]
                 lat = lat[i]
@@ -708,7 +709,7 @@ class MxD14_L3(object):
                 area = area[i] 
             else:
                 if self.verb > 1:
-                    print("      --> no FIRE pixels over land/coast")
+                    print("      --> no FIRE pixels over land")
 
                 return
  
@@ -722,6 +723,7 @@ class MxD14_L3(object):
 #           Bin area of burning pixels
 #           --------------------------
             self.gLand += _binareas(lon,lat,area,self.im,self.jm,grid_type=self.grid_type)
+            print(f"Added {len(area)} fire-pixels to land area.")
 
 #           Bin FRP for each biome
 #           ----------------------
@@ -782,8 +784,8 @@ class MxD14_L3(object):
         qa = mxd14.select('algorithm QA').get()
         self.lws = np.bitwise_and(qa, 3)  # land/water state is stored in bits 0-1
 
-        i_water = np.logical_and(self.lws==QA_WATER, valid)
-        i_land  = np.logical_and(np.logical_or(self.lws==QA_COAST, self.lws==QA_LAND), valid)
+        i_water = np.logical_and(np.logical_or(self.lws==QA_WATER, self.lws==QA_COAST), valid)
+        i_land  = np.logical_and(self.lws==QA_LAND, valid)
 
 
 #       Calculate pixel area
@@ -805,10 +807,10 @@ class MxD14_L3(object):
 #           Bin areas of no-fires and sum
 #           -----------------------------
             self.gLand += _binareas(lon,lat,area,self.im,self.jm,grid_type=self.grid_type)
-
+            print(f"Added {len(area)} clear sky land-pixels to land area.")
         else:
             if self.verb > 1:
-                print("      --> no NOFIRE pixel for granule")
+                print("      --> no NOFIRE pixel in granule")
 
         # non-fire water or cloud over water
         i = np.logical_or(np.logical_and(fmask==WATER, valid), np.logical_and(np.logical_and(fmask==CLOUD, valid), i_water))
@@ -824,10 +826,10 @@ class MxD14_L3(object):
 #           Bin areas of water and sum
 #           --------------------------
             self.gWater += _binareas(lon,lat,area,self.im,self.jm,grid_type=self.grid_type)
-
+            print(f"Added {len(area)} clear sky|cloudy water-pixels to water area.")
         else:
             if self.verb > 1:
-                print("      --> no WATER pixel for granule")
+                print("      --> no WATER pixel in granule")
 
         # cloud over land only
         i = np.logical_and(np.logical_and(fmask==CLOUD, valid), i_land)
@@ -843,10 +845,10 @@ class MxD14_L3(object):
 #           Bin areas of cloud and sum
 #           --------------------------
             self.gCloud += _binareas(lon,lat,area,self.im,self.jm,grid_type=self.grid_type)
-
+            print(f"Added {len(area)} cloudy land-pixels to cloud area.")
         else:
             if self.verb > 1:
-                print("      --> no CLOUD pixel for granule")
+                print("      --> no CLOUD pixel in granule")
 
         return 0
     
