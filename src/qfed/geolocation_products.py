@@ -35,8 +35,8 @@ class GeolocationProduct(ABC):
         lon, lon_range = self.get_longitude(file)
         lat, lat_range = self.get_latitude(file)
 
-        valid = np.logical_and(np.logical_and(lon >= lon_range[0], lon <= lon_range[1]), 
-                               np.logical_and(lat >= lat_range[0], lat <= lat_range[1]))     
+        valid = (lon >= lon_range[0]) & (lon <= lon_range[1]) & \
+                (lat >= lat_range[0]) & (lat <= lat_range[1])
 
         return lon, lat, valid, lon_range, lat_range
 
