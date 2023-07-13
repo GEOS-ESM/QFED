@@ -27,6 +27,14 @@ class Satellite(Enum):
     SNPP = 's-npp'
     SuomiNPP = 'suomi-npp'
 
+# VIIRS SDR User Guide: The bow-tie effect leads to 
+# scan-to-scan overlap, which start to show visibly at 
+# scan angles greater than approximately 19 degrees. 
+# The size of overlap is more than 1 and 2 M-band pixels 
+# at scan angle greater than 31.72 and 44.86 degrees, 
+# respectively. 
+VIIRS_SCAN_OVERLAP_ANGLE = (19.00, 31.72, 44.86)
+
 
 def modis_pixel_area(sample):
     """
