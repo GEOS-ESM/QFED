@@ -62,13 +62,13 @@ class PixelClassifier(ABC):
         '''
 
     @abc.abstractmethod
-    def get_clear_sky(self):
+    def get_cloud_free(self):
         '''
-        Non-fire clear sky (cloud free) pixels.
+        Non-fire cloud-free pixels.
         '''
 
     @abc.abstractmethod
-    def get_fire(self, confidence='all'):
+    def get_fire(self, confidence=''):
         '''
         Fire pixels.
         '''
@@ -97,13 +97,8 @@ class MODIS(PixelClassifier):
     AQA_BITMASK_LWS = 0b11 # land-water state, bits 0-1
     AQA_WATER  = 0b00   # 0=water 
     AQA_COAST  = 0b01   # 1=coast
-    AQA_LAND   = 0b10   # 20=land
+    AQA_LAND   = 0b10   # 2=land
     AQA_UNUSED = 0b11   # 3=unused
-    
-    AQA_BITS_POTENTIAL_FIRE = 1 << 5 # 0b100000, bit 5
-    AQA_POTENTIAL_FIRE_TRUE = 1
-    AQA_POTENTIAL_FIRE_FALSE = 0
-
 
     def __init__(self, engine, mask=None):
         self._engine = engine
@@ -132,36 +127,57 @@ class MODIS(PixelClassifier):
         Land pixels.
         '''
         lws = self._get_land_water_state()
-        return (lws == MODIS.AQA_LAND)
+        result = (lws == MODIS.AQA_LAND)
+        #logging.debug(f"land : count = {np.sum(result)}")
+        return result
 
     def _is_over_coast(self):
         '''
         Coast pixels.
         '''
         lws = self._get_land_water_state()
-        return (lws == MODIS.AQA_COAST)
+        result = (lws == MODIS.AQA_COAST)
+        #logging.debug(f"coast: count = {np.sum(result)}")
+        return result
 
     def _is_over_water(self):
         '''
-        Non-fire water pixels.
+        Water pixels.
         '''
         lws = self._get_land_water_state()
-        return (lws == MODIS.AQA_WATER)
+        result = (lws == MODIS.AQA_WATER)
+        #logging.debug(f"water: count = {np.sum(result)}")
+        return result
 
     def _place(self, pixel):
+        '''
+        Categorizes pixels, represented by a boolean mask, 
+        as either land, coast or water.
+        '''
         result = {}
         result['land' ] = pixel & self._is_over_land()
         result['coast'] = pixel & self._is_over_coast()
         result['water'] = pixel & self._is_over_water()
-        return result      
+        return result
 
-    def _info(self, class_name, result):
+    def get_surface_type(self):
         '''
-        Helper method that shows debug info.
+        Categorizes pixels as either land, coast or water.
+        '''
+        result = {}
+        result['land' ] = self._is_over_land( )
+        result['coast'] = self._is_over_coast()
+        result['water'] = self._is_over_water()
+        return result
+
+    def _info(self, class_name, pixel):
+        '''
+        Helper method - shows the number of 
+        land|coast|water pixels.
         '''
         for surface in ('land', 'coast', 'water'):
             label = f"{class_name:>13}({surface:<5})"
-            count = np.sum(result[surface])
+            count = np.sum(pixel[surface])
             logging.debug(f"{label:>18} : {count = }")
 
     def get_not_processed(self):
@@ -172,72 +188,62 @@ class MODIS(PixelClassifier):
         pixel = (self._fire_mask == MODIS.NOT_PROCESSED_MISSING ) | \
                 (self._fire_mask == MODIS.NOT_PROCESSED_OBSOLETE) | \
                 (self._fire_mask == MODIS.NOT_PROCESSED_OTHER)
-
-        #potential_fire = np.bitwise_and(self._fire_mask, MODIS.AQA_BITS_POTENTIAL_FIRE)
-        #assert np.all(pixel[potential_fire==MODIS.AQA_POTENTIAL_FIRE_NO])
-
         result = self._place(pixel)
         self._info('not processed', result)
         return result
 
     def get_unclassified(self):
         '''
-        Pixels (land or water) that could not be definitively classified.
+        Pixels (land or water) that could not be definitively classified
+        as either cloud-free, cloud or fire.
         '''
         pixel = (self._fire_mask == MODIS.UNKNOWN)
-
         result = self._place(pixel)
         self._info('unclassified', result)
         return result
 
     def get_cloud(self):
         '''
-        Cloud pixels. Can occur either over land, coast or water.
+        Cloud pixels - either land, coast or water.
         '''
         pixel = (self._fire_mask == MODIS.CLOUD)
-
         result = self._place(pixel)
         self._info('cloud', result)
         return result
 
-    def get_clear_sky(self):
+    def get_cloud_free(self):
         '''
-        Non-fire clear sky pixels. Can occur either over land, coast or water.
+        Non-fire cloud-free pixels - either over land, coast or water.
         '''
         pixel = (self._fire_mask == MODIS.NON_FIRE_WATER) | \
                 (self._fire_mask == MODIS.NON_FIRE_LAND)
-
         result = self._place(pixel)
-        self._info('clear sky', result)
+        self._info('cloud-free', result)
         return result
 
     def _get_fire_confidence_low(self):
         '''
-        Fire pixels - low confidence.
-        Can occur either over land, coast or water.
+        Fire pixels - low confidence; either land, coast or water.
         '''
         return (self._fire_mask == MODIS.FIRE_LOW_CONFIDENCE)
 
     def _get_fire_confidence_nominal(self):
         '''
-        Fire pixels - nominal confidence.
-        Can occur either over land, coast or water.
-        ''' 
+        Fire pixels - nominal confidence; either land, coast or water.
+        '''
         return (self._fire_mask == MODIS.FIRE_NOMINAL_CONFIDENCE)
 
     def _get_fire_confidence_high(self):
         '''
-        Fire pixels - high confidence.
-        Can occur either over land, coast or water.
-        ''' 
+        Fire pixels - high confidence; either land, coast or water.
+        '''
         return (self._fire_mask == MODIS.FIRE_HIGH_CONFIDENCE)
 
     def _get_fire_all(self):
         '''
         Fire pixels - all fires regardless of the detection 
-        confidence.
-        Can occur either over land, coast or water.
-        ''' 
+        confidence; either land, coast or water.
+        '''
         return self._get_fire_confidence_low()     | \
                self._get_fire_confidence_nominal() | \
                self._get_fire_confidence_high()
@@ -246,15 +252,13 @@ class MODIS(PixelClassifier):
         '''
         Fire pixels. Use the optional argument to select 
         fires with either low|nominal|high or any confidence.
-        Can occur either over land, coast or water.
+        The default behavior is to select all pixels.
         '''
         select = {'low'    : self._get_fire_confidence_low,
                   'nominal': self._get_fire_confidence_nominal,
                   'high'   : self._get_fire_confidence_high,
-                  ''       : self._get_fire_all,
-                  'all'    : self._get_fire_all,
-                  'any'    : self._get_fire_all,} 
-       
+                  ''       : self._get_fire_all} 
+
         pixel = select[confidence]()
         logging.debug(f"fires({confidence} confidence) = {np.sum(pixel)}") 
 
@@ -266,11 +270,10 @@ class MODIS(PixelClassifier):
         '''
         Calculate pixel area.
         '''
-        area = np.zeros_like(self._fire_mask)
-        n_lines, n_samples = area.shape
-        
-        # TODO: this follows the original MxD14 code
-        sample = 1 + np.arange(n_samples)
+        area = np.zeros(self._fire_mask.shape)
+        n_lines, n_samples = self._fire_mask.shape
+
+        sample = np.arange(n_samples)
         area[:] = modis_pixel_area(sample)
         return area
 
@@ -315,11 +318,10 @@ class VIIRS(PixelClassifier):
     def _get_algorithm_qa(self):
         self._algorithm_qa = self._engine.get_variable(self._file, 'algorithm QA')
 
-
     def _no_such_classification(self):
         '''
-        A helper method to indicate that no such 
-        classification is possible. 
+        A helper method to indicate that classification
+        based on some feature is not possible.
         '''
         NO_SUCH_CLASS = False
         return NO_SUCH_CLASS
@@ -332,55 +334,58 @@ class VIIRS(PixelClassifier):
 
     def _is_fire_over_land(self):
         '''
-        Fire pixels over land.
+        Land fire pixels.
         '''
         lws = self._get_fire_land_water_state()
         return (lws == VIIRS.AQA_FIRE_PIXEL_OVER_WATER_FALSE)
 
     def _is_fire_over_water(self):
         '''
-        Fire pixels over water.
+        Water fire pixels.
         '''
         lws = self._get_fire_land_water_state()
         return (lws == VIIRS.AQA_FIRE_PIXEL_OVER_WATER_TRUE)
 
     def _is_fire_over_coast(self):
         '''
-        Coast FIRE pixels.
+        Coast fire pixels.
 
         VIIRS classification product provides 
-        only water|land state, i.e. it is not 
-        possible identify coast pixels.  
-
-        This method always returns FALSE.
+        either water or land state. It is not 
+        possible to obtain this information 
+        from the product, so this method always 
+        returns FALSE.
         '''
         return self._no_such_classification() 
 
     def _is_fire_residual_bowtie(self):
         '''
-        Residual bow-tie FIRE pixels.
+        Fire pixels identified as residual bow-tie data.
+
+        These pixels should be excluded to avoid 
+        double-counting of redunant FRP.
         '''
         bit = _get_bit(self._algorithm_qa, VIIRS.AQA_BIT_RESIDUAL_BOWTIE_PIXEL)
         return (bit == VIIRS.AQA_RESIDUAL_BOWTIE_PIXEL_TRUE)
 
     def _is_fire_not_residual_bowtie(self):
         '''
-        Residual bow-tie FIRE pixels.
+        Fire pixels that are not identified as bow-tie data.
         '''
         bit = _get_bit(self._algorithm_qa, VIIRS.AQA_BIT_RESIDUAL_BOWTIE_PIXEL)
         return (bit == VIIRS.AQA_RESIDUAL_BOWTIE_PIXEL_FALSE)
 
     def _fire_place(self, pixel):
-        not_residual_bowtie = self._is_fire_not_residual_bowtie()
+        not_residual_bowtie = pixel & self._is_fire_not_residual_bowtie()
  
         result = {}
-        result['land' ] = pixel & self._is_fire_over_land()  & not_residual_bowtie
-        result['coast'] = pixel & self._is_fire_over_coast() & not_residual_bowtie
-        result['water'] = pixel & self._is_fire_over_water() & not_residual_bowtie
-        result['unknown'] = pixel & self._no_such_classification()
+        result['land' ] = self._is_fire_over_land()  & not_residual_bowtie
+        result['coast'] = self._is_fire_over_coast() & not_residual_bowtie
+        result['water'] = self._is_fire_over_water() & not_residual_bowtie
+        result['unknown'] = self._no_such_classification() & not_residual_bowtie
         return result  
 
-    def _place(self, pixel):
+    def _place_as_unknown(self, pixel):
         result = {}
         result['land' ] = pixel & self._no_such_classification()
         result['coast'] = pixel & self._no_such_classification()
@@ -388,13 +393,14 @@ class VIIRS(PixelClassifier):
         result['unknown'] = pixel
         return result  
 
-    def _info(self, class_name, result):
+    def _info(self, class_name, pixel):
         '''
-        Helper method that shows debug info.
+        Helper method - shows the number of 
+        land|coast|water|unknown pixels.
         '''
         for surface in ('land', 'coast', 'water', 'unknown'):
             label = f"{class_name:>13}({surface:<7})"
-            count = np.sum(result[surface])
+            count = np.sum(pixel[surface])
             logging.debug(f"{label:>18} : {count = }")
 
     def get_not_processed(self):
@@ -402,45 +408,66 @@ class VIIRS(PixelClassifier):
         Pixels that could not be processed due to missing or 
         poor quality input data.
         '''
-
         pixel = self._fire_mask == VIIRS.NOT_PROCESSED
-        result = self._place(pixel)
+        self._place_as_unknown(pixel)
         self._info('not processed', result) 
         return result
 
     def get_unclassified(self):
         '''
-        Pixels (land or water) that could not be definitively classified.
+        Pixels that could not be definitively classified.
+
+        There is no information to determine whether 
+        they are land or water pixels, so they are assigned 
+        unknown surface type.
         '''
         pixel = (self._fire_mask == VIIRS.UNCLASSIFIED)
-
-        result = self._place(pixel)
+        result = self._place_as_unknown(pixel)
         self._info('unclassified', result)
         return result
- 
+
+    def get_sunglint(self):
+        '''
+        Pixels that affected by Sun glint.
+
+        There is no information to determine whether 
+        they are land or water pixels, so they are assigned 
+        unknown surface type. 
+
+        Lumping Sun glint pixels with water pixels would be 
+        incorrect as they can be over land. 
+        According to the AFP User Guide, Sun glint pixels are 
+        processed although the algorithm performance is normally 
+        reduced.
+        '''
+        pixel = (self._fire_mask == VIIRS.SUN_GLINT)
+        result = self._place_as_unknown(pixel)
+        self._info('unclassified', result)
+        return result
+
     def get_cloud(self):
         '''
-        Cloud pixels. Can occur either over land, coast or water.
+        Cloud pixels. 
+
+        There is no information to determine whether 
+        they are land or water, so their surface  
+        classification is set to 'unknown'.
         '''
         pixel = (self._fire_mask == VIIRS.CLOUD)
-
-        result = self._place(pixel)
+        result = self._place_as_unknown(pixel)
         self._info('cloud', result)
         return result
 
-    def get_clear_sky(self):
+    def get_cloud_free(self):
         '''
-        Non-fire clear sky pixels. Can occur either over land, coast or water.
+        Non-fire cloud-free pixels. Can occur either over land, coast or water.
         '''
         result = {}
-
         result['land' ] = self._fire_mask == VIIRS.NON_FIRE_LAND
-        result['water'] = (self._fire_mask == VIIRS.NON_FIRE_WATER) | \
-                          (self._fire_mask == VIIRS.SUN_GLINT)
-        result['coast'] = self._fire_mask & self._no_such_classification()
-        result['unknown'] = self._fire_mask & self._no_such_classification()
-
-        self._info('clear sky', result)
+        result['water'] = self._fire_mask == VIIRS.NON_FIRE_WATER
+        result['coast'  ] = (self._fire_mask >= 0) & self._no_such_classification()
+        result['unknown'] = (self._fire_mask >= 0) & self._no_such_classification()
+        self._info('cloud-free', result)
         return result
 
     def _get_fire_confidence_low(self):
@@ -478,7 +505,7 @@ class VIIRS(PixelClassifier):
                self._get_fire_confidence_nominal() | \
                self._get_fire_confidence_high()
 
-    def get_fire(self, confidence=''):
+    def get_fire(self, confidence='', exclude_residual_bowtie=True):
         '''
         Fire pixels. Use the optional argument to select 
         fires with either low|nominal|high or any confidence.
@@ -487,16 +514,28 @@ class VIIRS(PixelClassifier):
         select = {'low'    : self._get_fire_confidence_low,
                   'nominal': self._get_fire_confidence_nominal,
                   'high'   : self._get_fire_confidence_high,
-                  ''       : self._get_fire_all,
-                  'all'    : self._get_fire_all,
-                  'any'    : self._get_fire_all,} 
-       
-        pixel = select[confidence]()
-        logging.debug(f"fires({confidence} confidence) = {np.sum(pixel)}")
+                  ''       : self._get_fire_all}
 
-        not_residual_bowtie = self._is_fire_not_residual_bowtie()
-        pixel = pixel & not_residual_bowtie
-        logging.debug(f"fires({confidence} confidence) without residual bowtie = {np.sum(pixel)}")
+        pixel = select[confidence]()
+        n_fire_pixels_initial = np.sum(pixel)
+        logging.debug(f"fires({confidence} confidence) = {n_fire_pixels_initial}")
+
+        if exclude_residual_bowtie:
+            pixel = pixel & self._is_fire_not_residual_bowtie()
+            n_fire_pixels_not_residual_bowtie = np.sum(pixel)
+            n_fire_pixels_residual_bowtie = n_fire_pixels_initial - n_fire_pixels_not_residual_bowtie
+
+            msg = (
+                f"fires({confidence} confidence) identified as "
+                f"residual bowtie = {n_fire_pixels_residual_bowtie}"
+            ) 
+            logging.debug(msg)
+
+            msg = (
+                f"fires({confidence} confidence) that are "
+                f"not residual bowtie = {n_fire_pixels_not_residual_bowtie}"
+            )
+            logging.debug(msg)
 
         result = self._fire_place(pixel)
         self._info('fire', result)
@@ -506,8 +545,8 @@ class VIIRS(PixelClassifier):
         '''
         Calculate pixel area.
         '''
-        area = np.zeros_like(self._fire_mask)
-        n_lines, n_samples = area.shape
+        area = np.zeros(self._fire_mask.shape)
+        n_lines, n_samples = self._fire_mask.shape
 
         sample = np.arange(n_samples)
         area[:] = viirs_pixel_area(sample)
