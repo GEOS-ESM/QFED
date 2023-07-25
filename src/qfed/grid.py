@@ -10,8 +10,20 @@ import numpy as np
 
 @unique
 class GridType(Enum):
-    LATLON = 'lat/lon'
+    LATLON_GEOS = 'lat/lon (GEOS)'
+    LATLON_3600x1800 = 'lat/lon (3600x1800)'
     CUBEDSPHERE = 'cubed sphere'
+
+
+_REFINE_FACTOR = {
+    'a':  1, 
+    'b':  2, 
+    'c':  4, 
+    'd':  8, 
+    'e': 16, 
+    'f': 32, 
+    '0.1x0.1'  : None,
+    '3600x1800': None, }
 
 
 class Grid:
@@ -33,21 +45,19 @@ class Grid:
            'c180' produces approx.  0.5x0.5  grid
            'c360' produces approx. 0.25x0.25 grid 
         -- or
-           '0.1x0.1' produces       0.1x0.1  grid
+           '0.1x0.1'   produces     0.1x0.1  grid
+           '3600x1800' produces     0.1x0.1  grid
         '''
+        self._set_spec(alias)
+        self._set_coordinates()
 
-        self.__parse(alias)
-        self.__set()
-
-
-    def __parse(self, alias):
+    def _set_spec(self, alias):
         '''
-        Map name alias to either a lat/lon refine factor or 
-        a cubed-sphere spec.
+        Map alias to either a lat/lon grid spec or 
+        a cubed-sphere grid spec.
         '''
-
         if isinstance(alias, int):
-            # undocumented feature: can take refine factor as input
+            # feature: can take refine factor as input
             refine = alias
             is_cubed_sphere = False
         else:
@@ -57,76 +67,68 @@ class Grid:
                refine = None
                is_cubed_sphere = True
            else:
-               _factor = {'a':  1, 
-                          'b':  2, 
-                          'c':  4, 
-                          'd':  8, 
-                          'e': 16, 
-                          'f': 32, 
-                          '0.1x0.1': None}
-               refine = _factor[alias]
+               refine = _REFINE_FACTOR[alias]
                is_cubed_sphere = False
         
-        self.__alias = alias
-        self.__refine = refine
-        self.__is_cubed_sphere = is_cubed_sphere
+        self._alias = alias
+        self._refine = refine
+        self._is_cubed_sphere = is_cubed_sphere
 
-
-    def __set(self):
-        if self.__is_cubed_sphere:
-            # Cubed Sphere grid
-            self.__set_cubed_sphere()
+    def _set_coordinates(self):
+        '''
+        Sets coordinates as per the grid spec. 
+        '''
+        if self._is_cubed_sphere:
+            self._set_cubed_sphere()
         else:
-            if self.__refine is not None:
-                # GEOS lat/lon grid 
-                self.__set_latlon()
+            if self._refine is not None:
+                self._set_latlon()
             else:
-                # 0.1x0.1 lat/lon grid
-                self.__set_01x01()
+                self._set_PE_DE(3600, 1800)
 
-
-    def __set_cubed_sphere(self):
+    def _set_cubed_sphere(self):
+        '''
+        Sets 'dummy' coordinates of a cubed sphere grid.
+        '''
         self.type = GridType.CUBEDSPHERE
 
-        im = int(self.__alias[1:])
+        im = int(self._alias[1:])
         jm = 6*im
-        self.__glon = np.arange(im)
-        self.__glat = np.arange(jm)
+        self._glon = np.arange(im)
+        self._glat = np.arange(jm)
 
+    def _set_latlon(self):
+        '''
+        Sets coordinates of a GEOS lon/lat grid.
+        '''
+        self.type = GridType.LATLON_GEOS
 
-    def __set_latlon(self):
-        self.type = GridType.LATLON
-
-        dx = 5.0 / self.__refine
-        dy = 4.0 / self.__refine
+        dx = 5.0 / self._refine
+        dy = 4.0 / self._refine
         im = int(360.0 / dx)
         jm = int(180.0 / dy + 1)
 
-        self.__glon = np.linspace(-180.0, 180.0, im, endpoint=False)
-        self.__glat = np.linspace( -90.0,  90.0, jm)
+        self._glon = np.linspace(-180.0, 180.0, im, endpoint=False)
+        self._glat = np.linspace( -90.0,  90.0, jm)
 
-
-    def __set_01x01(self):
-        self.type = GridType.LATLON
-
-        im = 3600
-        jm = 1800
+    def _set_PE_DE(self, im=3600, jm=1800):
+        '''
+        Sets coordinates of a PE-DE lon/lat grid.
+        '''
+        self.type = GridType.LATLON_3600x1800
 
         d_lon = 360.0 / im
         d_lat = 180.0 / jm
 
-        self.__glon = np.linspace(-180.0 + d_lon/2, 180.0 - d_lon/2, im)
-        self.__glat = np.linspace( -90.0 + d_lat/2,  90.0 - d_lat/2, jm)
-
+        self._glon = np.linspace(-180.0 + d_lon/2, 180.0 - d_lon/2, im)
+        self._glat = np.linspace( -90.0 + d_lat/2,  90.0 - d_lat/2, jm)
 
     def dimensions(self):
-        return {'x': len(self.__glon), 'y': len(self.__glat)}
-
+        return {'x': len(self._glon), 'y': len(self._glat)}
 
     def lon(self):
-        return self.__glon
-
+        return self._glon
 
     def lat(self):
-        return self.__glat
+        return self._glat
 
