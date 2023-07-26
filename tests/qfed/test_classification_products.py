@@ -1,7 +1,6 @@
 import unittest
 
 import os
-import sys
 import logging
 
 from qfed.instruments import Instrument, Satellite
