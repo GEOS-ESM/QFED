@@ -39,11 +39,11 @@ class test(unittest.TestCase):
             reader.get_not_processed()
             reader.get_unclassified()
             reader.get_cloud()
-            reader.get_clear_sky()
+            reader.get_cloud_free()
             reader.get_fire(confidence='low')
             reader.get_fire(confidence='nominal')
             reader.get_fire(confidence='high')
-            reader.get_fire(confidence='any')
+            reader.get_fire(confidence='non-zero')
             print()
             print()
 

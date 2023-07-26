@@ -7,7 +7,7 @@ import logging
 import abc
 
 import numpy as np
-
+import netCDF4 as nc
 
 from qfed.utils import DatasetAccessEngine_HDF4, DatasetAccessEngine_NetCDF4 
 from qfed.instruments import Instrument, Satellite
@@ -254,10 +254,11 @@ class MODIS(PixelClassifier):
         fires with either low|nominal|high or any confidence.
         The default behavior is to select all pixels.
         '''
-        select = {'low'    : self._get_fire_confidence_low,
-                  'nominal': self._get_fire_confidence_nominal,
-                  'high'   : self._get_fire_confidence_high,
-                  ''       : self._get_fire_all} 
+        select = {'low'     : self._get_fire_confidence_low,
+                  'nominal' : self._get_fire_confidence_nominal,
+                  'high'    : self._get_fire_confidence_high,
+                  ''        : self._get_fire_all,
+                  'non-zero': self._get_fire_all} 
 
         pixel = select[confidence]()
         logging.debug(f"fires({confidence} confidence) = {np.sum(pixel)}") 
@@ -302,10 +303,16 @@ class VIIRS(PixelClassifier):
     AQA_RESIDUAL_BOWTIE_PIXEL_FALSE = 0
 
 
-    def __init__(self, engine, mask=None):
+    def __init__(self, engine, watermask=None, mask=None):
         self._engine = engine
         #TODO: implement selective processing using a mask
         self._mask = mask
+
+
+        ##f = nc.Dataset('watermask.nc', 'r')
+        ##self._aux_watermask = f.variables['watermsk'][...]
+        ##print(f.variables['']
+
 
     def read(self, file):
         self._file = file
@@ -409,7 +416,7 @@ class VIIRS(PixelClassifier):
         poor quality input data.
         '''
         pixel = self._fire_mask == VIIRS.NOT_PROCESSED
-        self._place_as_unknown(pixel)
+        result = self._place_as_unknown(pixel)
         self._info('not processed', result) 
         return result
 
@@ -511,10 +518,11 @@ class VIIRS(PixelClassifier):
         fires with either low|nominal|high or any confidence.
         Can occur either over land, coast or water.
         '''
-        select = {'low'    : self._get_fire_confidence_low,
-                  'nominal': self._get_fire_confidence_nominal,
-                  'high'   : self._get_fire_confidence_high,
-                  ''       : self._get_fire_all}
+        select = {'low'     : self._get_fire_confidence_low,
+                  'nominal' : self._get_fire_confidence_nominal,
+                  'high'    : self._get_fire_confidence_high,
+                  ''        : self._get_fire_all,
+                  'non-zero': self._get_fire_all}
 
         pixel = select[confidence]()
         n_fire_pixels_initial = np.sum(pixel)
