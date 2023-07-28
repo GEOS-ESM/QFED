@@ -282,7 +282,7 @@ class GriddedFRP():
         #assert np.allclose(lat, self._lat[line, sample])
         #assert np.allclose(area, self._area[line, sample])
 
-        logging.debug("Processing areas with fire.")
+        logging.debug("Processing areas with fires.")
         self._process_fire_water(lon, lat, line, sample, frp, area)
         self._process_fire_coast(lon, lat, line, sample, frp, area)
         self._process_fire_land(lon, lat, line, sample, frp, area)
@@ -540,7 +540,7 @@ class GriddedFRP():
 
        f.close()
 
-       logging.info(f"Wrote file {filename}.\n\n")
+       logging.info(f"Successfully saved gridded FRP and areas to file '{filename}'.\n\n")
 
 
 def _binareas(lon, lat, area, im, jm, grid_type):
