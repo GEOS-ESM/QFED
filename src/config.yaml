@@ -5,7 +5,7 @@ modis/terra:
     fires:
         - /discover/nobackup/dao_ops/intermediate/flk/modis/006/MOD14/
         - MOD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf
-
+    frp: qfed.frp.mod.{0:%Y%m%d}.{0:%H%M}.0300.nc4
 
 modis/aqua:
     geolocation:
@@ -14,7 +14,7 @@ modis/aqua:
     fires: 
         - /discover/nobackup/dao_ops/intermediate/flk/modis/006/MYD14/
         - MYD14.A{0:%Y%j}.{0:%H%M}.006.*.hdf
-
+    frp: qfed.frp.myd.{0:%Y%m%d}.{0:%H%M}.0300.nc4
 
 viirs/npp:
     geolocation: 
@@ -23,7 +23,7 @@ viirs/npp:
     fires:
         - /css/viirs/data/Level2/VNP14IMG/
         - VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc
-
+    frp: qfed.frp.vnp.{0:%Y%m%d}.{0:%H%M}.0300.nc4
 
 viirs/jpss-1:
     geolocation: 
@@ -32,7 +32,7 @@ viirs/jpss-1:
     fires:
         - /css/viirs/data/Level2/VJ114IMG/
         - VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
-
+    frp: qfed.frp.vj1.{0:%Y%m%d}.{0:%H%M}.0300.nc4
 
 igbp: /discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/
 
