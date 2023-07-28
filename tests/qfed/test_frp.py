@@ -107,6 +107,6 @@ if __name__ == '__main__':
         format="%(asctime)s  %(levelname)-8s  %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         #filename='frp.log',
-     )
+    )
 
     unittest.main()
