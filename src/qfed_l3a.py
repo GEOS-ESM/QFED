@@ -25,7 +25,6 @@ def parse_arguments(default):
     '''
     Parse command line options
     '''
-
     parser = argparse.ArgumentParser(
         prog='QFED', 
         description='Creates QFED Level 3a files')
@@ -34,7 +33,7 @@ def parse_arguments(default):
         dest='config', default=default['config'],
         help='config file (default={0:s})'.format(default['config']))
 
-    parser.add_argument('-o', '--output', 
+    parser.add_argument('-o', '--output-dir', 
         dest='output_dir', default=default['output_dir'],
         help='directory for output files (default={0:s})'.format(default['output_dir']))
 
@@ -46,6 +45,11 @@ def parse_arguments(default):
         dest='resolution', default=default['resolution'],
         help='horizontal resolution (default={0:s})'.format(default['resolution']))
 
+    parser.add_argument('-l', '--log', 
+        dest='log_level', default=default['log_level'], 
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], 
+        help='logging level (default={0:s})'.format(default['log_level']))
+    
     args = parser.parse_args()
 
     return args
@@ -79,6 +83,7 @@ if __name__ == "__main__":
         products   = 'modis/aqua,modis/terra,viirs/npp,viirs/jpss-1',
         resolution = 'e',
         output_dir = './',
+        log_level  = 'INFO',
         config     = 'config.yaml'
     )
 
@@ -98,6 +103,8 @@ if __name__ == "__main__":
 
     args = parse_arguments(defaults)
     config = read_config(args.config)
+
+    logging.getLogger().setLevel(args.log_level)
 
     display_banner()
 
