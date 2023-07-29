@@ -367,15 +367,15 @@ class GriddedFRP():
             return
 
         # bin FRP from fires in each of the considered biomes
-        veg = _getSimpleVeg(lon[i], lat[i], self.IgbpDir)
+        veg = _getSimpleVeg(lon[i], lat[i], self._igbp_dir)
         for b, fire_biome in enumerate(BIOMES):
             j = (b == (veg-1))
             self.frp[b,:,:] += _binareas(lon[i][j], lat[i][j], frp[i][j], self.im, self.jm, self.grid_type)
 
 
-    def grid(self, date_start, date_end):
+    def ingest(self, date_start, date_end):
         '''
-        Grid FRP.
+        Ingests and grids input data.
         '''
 
         self.im = self._grid.dimensions()['x']
@@ -393,10 +393,10 @@ class GriddedFRP():
         self.frp = np.zeros((len(BIOMES), self.im, self.jm))
 
         # find the input files and process the data
-        search = self._finder.find(date_start, date_end)
-        for item in search:
-            self.IgbpDir = item.vegetation
-            self._process(item.geolocation, item.fire)
+        input_data = self._finder.find(date_start, date_end)
+        for i in input_data:
+            self._igbp_dir = i.vegetation
+            self._process(i.geolocation, i.fire)
 
 
     def save(self, filename=None, timestamp=None, dir={'ana':'.', 'bkg':'.'}, qc=True, bootstrap=False, fill_value=1e15):
