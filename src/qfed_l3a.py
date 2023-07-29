@@ -39,8 +39,8 @@ def parse_arguments(default):
 
     parser.add_argument('-p', '--products', 
         dest='products', default=default['products'],
-        help='list of fire products (default={0:s})'.format(default['products']))
-    
+        help='list of active fire products (default={0:s})'.format(default['products']))
+
     parser.add_argument('-r', '--resolution', 
         dest='resolution', default=default['resolution'],
         help='horizontal resolution (default={0:s})'.format(default['resolution']))
@@ -108,14 +108,14 @@ if __name__ == "__main__":
 
     display_banner()
 
+    output_grid = grid.Grid(args.resolution)
     products = args.products.split(',')
 
     for p in products:
         instrument, satellite = p.split('/')
         platform = Instrument(instrument), Satellite(satellite)
 
-        output_grid = grid.Grid(args.resolution)
-
+        # input files
         gp_dir, gp_template = config[p]['geolocation']
         fp_dir, fp_template = config[p]['fires']
         vg_dir = config['igbp']
@@ -123,17 +123,18 @@ if __name__ == "__main__":
         gp_file = os.path.join(gp_dir, '{0:%Y}', '{0:%j}', gp_template)
         fp_file = os.path.join(fp_dir, '{0:%Y}', '{0:%j}', fp_template)
 
-        finder = Finder(gp_file, fp_file, vg_dir)
+        # output file
+        output_template = config[p]['frp']
+        output_file = os.path.join(args.output_dir, output_template.format(time))
 
+        # product readers
+        finder = Finder(gp_file, fp_file, vg_dir)
         gp_reader = geolocation_products.create(*platform)
         fp_reader = fire_products.create(*platform)
         cp_reader = classification_products.create(*platform)
 
-        l3a = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
-
-        l3a.grid(time_s, time_e)
-
-        output_template = config[p]['frp']
-        output_file = os.path.join(args.output_dir, output_template.format(time))
-        l3a.save(filename=output_file, timestamp=time, bootstrap=True, qc=False, fill_value=1e20)
+        # generate gridded FRP and areas
+        frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
+        frp.ingest(time_s, time_e)
+        frp.save(filename=output_file, timestamp=time, bootstrap=True, qc=False, fill_value=1e20)
 
