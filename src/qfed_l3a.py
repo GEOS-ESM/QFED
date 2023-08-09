@@ -2,7 +2,7 @@
 
 
 """
-  A Python script to create QFED Level 3a files.
+A script that creates QFED Level 3A files.
 """
 
 import os
@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 import yaml
 import argparse
 
-from qfed import version
 from qfed import grid
 from qfed import geolocation_products
 from qfed import classification_products
@@ -19,6 +18,7 @@ from qfed import fire_products
 from qfed.inventory import Finder
 from qfed.instruments import Instrument, Satellite
 from qfed.frp import GriddedFRP
+from qfed.version import version
 
 
 def parse_arguments(default):
@@ -27,28 +27,44 @@ def parse_arguments(default):
     '''
     parser = argparse.ArgumentParser(
         prog='QFED', 
-        description='Creates QFED Level 3a files')
+        description='Creates QFED Level 3A files',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('-c', '--config', 
-        dest='config', default=default['config'],
-        help='config file (default={0:s})'.format(default['config']))
+    parser.add_argument(
+        '-v', '--version',
+        action='version',
+        version=f'%(prog)s {version()}')
 
-    parser.add_argument('-o', '--output-dir', 
-        dest='output_dir', default=default['output_dir'],
-        help='directory for output files (default={0:s})'.format(default['output_dir']))
+    parser.add_argument(
+        '-c', '--config',
+        dest='config',
+        default=default['config'],
+        help='config file')
 
-    parser.add_argument('-p', '--products', 
-        dest='products', default=default['products'],
-        help='list of active fire products (default={0:s})'.format(default['products']))
+    parser.add_argument(
+        '-o', '--output-dir',
+        dest='output_dir',
+        default=default['output_dir'],
+        help='directory for output files')
 
-    parser.add_argument('-r', '--resolution', 
-        dest='resolution', default=default['resolution'],
-        help='horizontal resolution (default={0:s})'.format(default['resolution']))
+    parser.add_argument(
+        '-p', '--products', 
+        dest='products', 
+        default=default['products'],
+        help='list of active fire products')
 
-    parser.add_argument('-l', '--log', 
-        dest='log_level', default=default['log_level'], 
+    parser.add_argument(
+        '-r', '--resolution', 
+        dest='resolution', 
+        default=default['resolution'],
+        help='horizontal resolution')
+
+    parser.add_argument(
+        '-l', '--log', 
+        dest='log_level', 
+        default=default['log_level'], 
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], 
-        help='logging level (default={0:s})'.format(default['log_level']))
+        help='logging level')
     
     args = parser.parse_args()
 
@@ -71,8 +87,9 @@ def read_config(config):
 
 def display_banner():
     logging.info('')
-    logging.info('QFED Level 3A Processing')
-    logging.info('------------------------')
+    logging.info(f'QFED {version()}')
+    logging.info('')
+    logging.info('QFED Level 3A - Gridded FRP')
     logging.info('')
 
 
