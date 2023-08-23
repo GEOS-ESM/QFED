@@ -67,7 +67,7 @@ class GriddedFRP():
         self._is_cloud = self._cp_reader.get_cloud()
         self._is_cloud_free = self._cp_reader.get_cloud_free()
 
-        # TODO: not used, remove 
+        # TODO: not used, remove
         #surface = self._cp_reader.get_surface_type()
         #self.__is_water = surface['water']
         #self.__is_coast = surface['coast']
@@ -400,147 +400,146 @@ class GriddedFRP():
 
 
     def save(self, filename=None, timestamp=None, dir={'ana':'.', 'bkg':'.'}, qc=True, bootstrap=False, fill_value=1e15):
-       """
-       Writes gridded Areas and FRP to file.
-       """
+        """
+        Writes gridded Areas and FRP to file.
+        """
 
-       if timestamp is None:
-           logging.warning("An output file is not written due to mismatched input file.")
-           return
+        if timestamp is None:
+            logging.warning("An output file is not written due to mismatched input file.")
+            return
 
-       if qc == True:
-           raise NotImplementedError('QA is not implemented.')
-           # TODO           
-           #self.qualityControl()
+        if qc == True:
+            raise NotImplementedError('QA is not implemented.')
+            # TODO
+            #self.qualityControl()
 
-           pass
-       else:
-           logging.info("Skipping modulation of FRP due to QC being disabled.")
+            pass
+        else:
+            logging.info("Skipping modulation of FRP due to QC being disabled.")
 
-       self._save_as_netcdf4(filename=filename, date=timestamp, dir=dir['ana'], bootstrap=bootstrap, fill_value=fill_value)
+        self._save_as_netcdf4(filename=filename, date=timestamp, dir=dir['ana'], bootstrap=bootstrap, fill_value=fill_value)
     
 
     def _save_as_netcdf4(self, date=None, filename=None, dir='.', bootstrap=False, fill_value=1e15):
-       """
-       Writes gridded Areas and FRP to a NetCDF4 file.
-       """
+        """
+        Writes gridded Areas and FRP to a NetCDF4 file.
+        """
 
-       nymd = 10000*date.year + 100*date.month + date.day
-       nhms = 120000
+        nymd = 10000*date.year + 100*date.month + date.day
+        nhms = 120000
 
-       if bootstrap:
-           logging.info("Prior FRP are initialized to zero.")
+        if bootstrap:
+            logging.info("Prior FRP are initialized to zero.")
 
-           # create a file
-           f = nc.Dataset(filename, 'w', format='NETCDF4')
+            # create a file
+            f = nc.Dataset(filename, 'w', format='NETCDF4')
 
-           # global attributes
-           f.Conventions = 'COARDS'
-           f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
-           f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=version.__version__)
-           f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
-           f.Version     = str(version.__version__)
-           f.Processed   = str(datetime.now())
-           f.History     = '' 
+            # global attributes
+            f.Conventions = 'COARDS'
+            f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
+            f.Title       = 'QFED Gridded FRP (Level-3A, v{0:s}'.format(version())
+            f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+            f.Version     = version()
+            f.Processed   = str(datetime.now())
+            f.History     = ''
 
-           # dimensions
-           f.createDimension('lon', len(self.glon))
-           f.createDimension('lat', len(self.glat))
-           f.createDimension('time', None)
+            # dimensions
+            f.createDimension('lon', len(self.glon))
+            f.createDimension('lat', len(self.glat))
+            f.createDimension('time', None)
  
-           # variables
-           f.createVariable('lon',  'f8', ('lon'))
-           f.createVariable('lat',  'f8', ('lat'))
-           f.createVariable('time', 'i4', ('time'))
+            # variables
+            f.createVariable('lon',  'f8', ('lon'))
+            f.createVariable('lat',  'f8', ('lat'))
+            f.createVariable('time', 'i4', ('time'))
 
-           for v in ('land', 'water', 'cloud', 'unknown'):
-               f.createVariable(v, 'f4', ('time', 'lat', 'lon'), 
-                                fill_value=fill_value, zlib=False)
+            for v in ('land', 'water', 'cloud', 'unknown'):
+                f.createVariable(v, 'f4', ('time', 'lat', 'lon'),
+                        fill_value=fill_value, zlib=False)
 
-           for v in ('frp_tf', 'frp_xf', 'frp_sv', 'frp_gl'): 
-               f.createVariable(v, 'f4', ('time', 'lat', 'lon'), 
-                                fill_value=fill_value, zlib=False)
+            for v in ('frp_tf', 'frp_xf', 'frp_sv', 'frp_gl'):
+                f.createVariable(v, 'f4', ('time', 'lat', 'lon'),
+                        fill_value=fill_value, zlib=False)
 
-           for v in ('fb_tf', 'fb_xf', 'fb_sv', 'fb_gl'):
-               f.createVariable(v,  'f4', ('time', 'lat', 'lon'), 
-                                fill_value=fill_value, zlib=False)
+            for v in ('fb_tf', 'fb_xf', 'fb_sv', 'fb_gl'):
+                f.createVariable(v,  'f4', ('time', 'lat', 'lon'),
+                        fill_value=fill_value, zlib=False)
+
+            # variables attributes
+            v = f.variables['lon']
+            v.long_name     = 'longitude'
+            v.standard_name = 'longitude'
+            v.units         = 'degrees_east'
+            v.comment       = 'center_of_cell'
+
+            v = f.variables['lat']
+            v.long_name     = 'latitude'
+            v.standard_name = 'latitude'
+            v.units         = 'degrees_north'
+            v.comment       = 'center_of_cell'
+
+            v = f.variables['time']
+            begin_date   = int(date.strftime('%Y%m%d'))
+            begin_time   = int(date.strftime('%H%M%S'))
+            v.long_name  = 'time'
+            v.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(date)
+            v.begin_date = np.array(begin_date, dtype=np.int32)
+            v.begin_time = np.array(begin_time, dtype=np.int32)
+
+            # long name and units
+            v_meta_data = {
+                'land'   : ('Area of cloud-free land pixels', 'km2'),
+                'water'  : ('Area of water pixels', 'km2'),
+                'cloud'  : ('Area of cloud pixels over land', 'km2'),
+                'unknown': ('Area of cloud pixels', 'km2'),
+                'frp_tf' : ('Fire Radiative Power (Tropical Forests)', 'MW'),
+                'frp_xf' : ('Fire Radiative Power (Extra-tropical Forests)', 'MW'),
+                'frp_sv' : ('Fire Radiative Power (Savanna)', 'MW'),
+                'frp_gl' : ('Fire Radiative Power (Grasslands)', 'MW'),
+                'fb_tf'  : ('Background FRP Density (Tropical Forests)', 'MW km-2'),
+                'fb_xf'  : ('Background FRP Density (Extra-tropical Forests)', 'MW km-2'),
+                'fb_sv'  : ('Background FRP Density (Savanna)', 'MW km-2'),
+                'fb_gl'  : ('Background FRP Density (Grasslands)', 'MW km-2')}
+
+            for _v, (_l, _u) in v_meta_data.items():
+                v = f.variables[_v]
+                v.long_name = _l
+                v.units = _u
+                v.missing_value = np.array(fill_value, np.float32)
+                v.fmissing_value = np.array(fill_value, np.float32)
+                v.vmin = np.array(fill_value, np.float32)
+                v.vmax = np.array(fill_value, np.float32)
+
+            # data
+            f.variables['time'][:] = np.array((0,))
+            f.variables['lon' ][:] = np.array(self.glon)
+            f.variables['lat' ][:] = np.array(self.glat)
+        else:
+            raise NotImplementedError('Sequential FRP estimate is not implemented')
+            # TODO: - filename should correspond to date + 24h in case of daily files
+            #       - will need new approach to generlize for arbitrary time periods/steps
+            f = nc.Dataset(filename, 'r+', format='NETCDF4')
 
 
-           # variables attributes
-           v = f.variables['lon']
-           v.long_name     = 'longitude'
-           v.standard_name = 'longitude'
-           v.units         = 'degrees_east'
-           v.comment       = 'center_of_cell'
+        # data
+        f.variables['land'   ][0,:,:] = np.transpose(self.area_land)
+        f.variables['water'  ][0,:,:] = np.transpose(self.area_water)
+        f.variables['cloud'  ][0,:,:] = np.transpose(self.area_cloud)
+        f.variables['unknown'][0,:,:] = np.transpose(self.area_unknown)
+        f.variables['frp_tf' ][0,:,:] = np.transpose(self.frp[0,:,:])
+        f.variables['frp_xf' ][0,:,:] = np.transpose(self.frp[1,:,:])
+        f.variables['frp_sv' ][0,:,:] = np.transpose(self.frp[2,:,:])
+        f.variables['frp_gl' ][0,:,:] = np.transpose(self.frp[3,:,:])
 
-           v = f.variables['lat']
-           v.long_name     = 'latitude'
-           v.standard_name = 'latitude'
-           v.units         = 'degrees_north'
-           v.comment       = 'center_of_cell'
+        if bootstrap:
+            f.variables['fb_tf'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
+            f.variables['fb_xf'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
+            f.variables['fb_sv'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
+            f.variables['fb_gl'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
 
-           v = f.variables['time']
-           begin_date   = int(date.strftime('%Y%m%d'))
-           begin_time   = int(date.strftime('%H%M%S'))
-           v.long_name  = 'time'
-           v.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(date)
-           v.begin_date = np.array(begin_date, dtype=np.int32)
-           v.begin_time = np.array(begin_time, dtype=np.int32)
-           
-           # long name and units
-           v_meta_data = {
-               'land'   : ('Area of cloud-free land pixels', 'km2'),
-               'water'  : ('Area of water pixels', 'km2'),
-               'cloud'  : ('Area of cloud pixels over land', 'km2'),
-               'unknown': ('Area of cloud pixels', 'km2'),
-               'frp_tf' : ('Fire Radiative Power (Tropical Forests)', 'MW'),
-               'frp_xf' : ('Fire Radiative Power (Extra-tropical Forests)', 'MW'),
-               'frp_sv' : ('Fire Radiative Power (Savanna)', 'MW'),
-               'frp_gl' : ('Fire Radiative Power (Grasslands)', 'MW'),
-               'fb_tf'  : ('Background FRP Density (Tropical Forests)', 'MW km-2'),
-               'fb_xf'  : ('Background FRP Density (Extra-tropical Forests)', 'MW km-2'),
-               'fb_sv'  : ('Background FRP Density (Savanna)', 'MW km-2'),
-               'fb_gl'  : ('Background FRP Density (Grasslands)', 'MW km-2')}
+        f.close()
 
-           for _v, (_l, _u) in v_meta_data.items():
-               v = f.variables[_v]
-               v.long_name = _l
-               v.units = _u
-               v.missing_value = np.array(fill_value, np.float32)
-               v.fmissing_value = np.array(fill_value, np.float32)
-               v.vmin = np.array(fill_value, np.float32)
-               v.vmax = np.array(fill_value, np.float32)
-
-           # data
-           f.variables['time'][:] = np.array((0,))
-           f.variables['lon' ][:] = np.array(self.glon)
-           f.variables['lat' ][:] = np.array(self.glat)
-       else:
-           raise NotImplementedError('Sequential FRP estimate is not implemented')
-           # TODO: - filename should correspond to date + 24h in case of daily files
-           #       - will need new approach to generlize for arbitrary time periods/steps   
-           f = nc.Dataset(filename, 'r+', format='NETCDF4')
-
-
-       # data
-       f.variables['land'   ][0,:,:] = np.transpose(self.area_land)
-       f.variables['water'  ][0,:,:] = np.transpose(self.area_water)
-       f.variables['cloud'  ][0,:,:] = np.transpose(self.area_cloud)
-       f.variables['unknown'][0,:,:] = np.transpose(self.area_unknown)
-       f.variables['frp_tf' ][0,:,:] = np.transpose(self.frp[0,:,:])
-       f.variables['frp_xf' ][0,:,:] = np.transpose(self.frp[1,:,:])
-       f.variables['frp_sv' ][0,:,:] = np.transpose(self.frp[2,:,:])
-       f.variables['frp_gl' ][0,:,:] = np.transpose(self.frp[3,:,:])
-
-       if bootstrap:
-           f.variables['fb_tf'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-           f.variables['fb_xf'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-           f.variables['fb_sv'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-           f.variables['fb_gl'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-
-       f.close()
-
-       logging.info(f"Successfully saved gridded FRP and areas to file '{filename}'.\n\n")
+        logging.info(f"Successfully saved gridded FRP and areas to file '{filename}'.\n\n")
 
 
 def _binareas(lon, lat, area, im, jm, grid_type):
