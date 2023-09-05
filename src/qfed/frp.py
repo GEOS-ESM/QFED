@@ -10,22 +10,16 @@ from glob import glob
 import numpy as np
 import netCDF4 as nc
 
-from pyobs import IGBP_
 from binObs_ import binareas, binareasnr
 
-from qfed import version
 from qfed import grid
 from qfed import instruments
 from qfed import geolocation_products
 from qfed import fire_products
 from qfed import classification_products
-
-
-# TODO: introduce fire types to include gas flares, 
-#       burning of crop residue, placeholder for peat fires
-BIOMES = ('tf', 'xt', 'sv', 'gl')
-
-
+from qfed import vegetation
+from qfed import fire
+from qfed import VERSION
 
 class GriddedFRP():
     '''
@@ -367,15 +361,16 @@ class GriddedFRP():
             return
 
         # bin FRP from fires in each of the considered biomes
-        veg = _getSimpleVeg(lon[i], lat[i], self._igbp_dir)
-        for b, fire_biome in enumerate(BIOMES):
-            j = (b == (veg-1))
-            self.frp[b,:,:] += _binareas(lon[i][j], lat[i][j], frp[i][j], self.im, self.jm, self.grid_type)
+        vegetation_category = vegetation.get_category(lon[i], lat[i], self._igbp_dir)
+
+        for bb in fire.BIOMASS_BURNING:
+            j = vegetation_category[bb.vegetation]
+            self.frp[bb][:,:] += _binareas(lon[i][j], lat[i][j], frp[i][j], self.im, self.jm, self.grid_type)
 
 
     def ingest(self, date_start, date_end):
         '''
-        Ingests and grids input data.
+        Ingests input data.
         '''
 
         self.im = self._grid.dimensions()['x']
@@ -390,7 +385,8 @@ class GriddedFRP():
         self.area_water = np.zeros((self.im, self.jm))
         self.area_cloud = np.zeros((self.im, self.jm))
         self.area_unknown = np.zeros((self.im, self.jm))
-        self.frp = np.zeros((len(BIOMES), self.im, self.jm))
+        
+        self.frp = {bb:np.zeros((self.im, self.jm)) for bb in fire.BIOMASS_BURNING}
 
         # find the input files and process the data
         input_data = self._finder.find(date_start, date_end)
@@ -399,7 +395,15 @@ class GriddedFRP():
             self._process(i.geolocation, i.fire)
 
 
-    def save(self, filename=None, timestamp=None, dir={'ana':'.', 'bkg':'.'}, qc=True, bootstrap=False, fill_value=1e15):
+    def save(
+            self,
+            filename=None,
+            timestamp=None,
+            satellite='',
+            dir={'ana':'.', 'bkg':'.'},
+            qc=True,
+            bootstrap=False,
+            fill_value=1e15):
         """
         Writes gridded Areas and FRP to file.
         """
@@ -436,23 +440,26 @@ class GriddedFRP():
 
             # global attributes
             f.Conventions = 'COARDS'
-            f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
-            f.Title       = 'QFED Gridded FRP (Level-3A, v{0:s}'.format(version())
-            f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
-            f.Version     = version()
-            f.Processed   = str(datetime.now())
-            f.History     = ''
+            f.institution = 'NASA/GSFC, Global Modeling and Assimilation Office'
+            f.title       = 'QFED Gridded FRP (Level-3A, v{0:s}'.format(VERSION)
+            f.contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+            f.version     = VERSION
+            f.source      = 'TODO' 
+            f.processed   = str(datetime.now())
+            f.history     = ''
+            f.platform    = 'TODO: modis/aqua'
 
             # dimensions
             f.createDimension('lon', len(self.glon))
             f.createDimension('lat', len(self.glat))
             f.createDimension('time', None)
  
-            # variables
+            # coordinate variables
             f.createVariable('lon',  'f8', ('lon'))
             f.createVariable('lat',  'f8', ('lat'))
             f.createVariable('time', 'i4', ('time'))
 
+            # data variables
             for v in ('land', 'water', 'cloud', 'unknown'):
                 f.createVariable(v, 'f4', ('time', 'lat', 'lon'),
                         fill_value=fill_value, zlib=False)
@@ -479,12 +486,13 @@ class GriddedFRP():
             v.comment       = 'center_of_cell'
 
             v = f.variables['time']
-            begin_date   = int(date.strftime('%Y%m%d'))
-            begin_time   = int(date.strftime('%H%M%S'))
-            v.long_name  = 'time'
-            v.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(date)
-            v.begin_date = np.array(begin_date, dtype=np.int32)
-            v.begin_time = np.array(begin_time, dtype=np.int32)
+            begin_date      = int(date.strftime('%Y%m%d'))
+            begin_time      = int(date.strftime('%H%M%S'))
+            v.long_name     = 'time'
+            v.standard_name = 'time'
+            v.units         = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(date)
+            v.begin_date    = np.array(begin_date, dtype=np.int32)
+            v.begin_time    = np.array(begin_time, dtype=np.int32)
 
             # long name and units
             v_meta_data = {
@@ -526,16 +534,15 @@ class GriddedFRP():
         f.variables['water'  ][0,:,:] = np.transpose(self.area_water)
         f.variables['cloud'  ][0,:,:] = np.transpose(self.area_cloud)
         f.variables['unknown'][0,:,:] = np.transpose(self.area_unknown)
-        f.variables['frp_tf' ][0,:,:] = np.transpose(self.frp[0,:,:])
-        f.variables['frp_xf' ][0,:,:] = np.transpose(self.frp[1,:,:])
-        f.variables['frp_sv' ][0,:,:] = np.transpose(self.frp[2,:,:])
-        f.variables['frp_gl' ][0,:,:] = np.transpose(self.frp[3,:,:])
+
+        for bb, frp in self.frp.items():
+            biome = bb.type.value
+            f.variables[f'frp_{biome}'][0,:,:] = np.transpose(frp)
 
         if bootstrap:
-            f.variables['fb_tf'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-            f.variables['fb_xf'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-            f.variables['fb_sv'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
-            f.variables['fb_gl'][0,:,:] = np.zeros_like(np.transpose(self.frp[0,:,:]))
+            for bb, frp in self.frp.items():
+                biome = bb.type.value
+                f.variables[f'fb_{biome}'][0,:,:] = np.zeros_like(np.transpose(frp))
 
         f.close()
 
@@ -561,27 +568,4 @@ def _binareas(lon, lat, area, im, jm, grid_type):
 
     return result
 
-
-def _getSimpleVeg(lon, lat, Path, nonVeg=None):
-    """
-    Helper method - aggregates IGBP vegetation classes 
-    into a reduced set of vegetation types:
-
-         1  Tropical Forest        = IGBP:  1, 30S < lat < 30N
-         2  Extra-tropical Forests = IGBP:  1, 2(lat <=30S or lat >= 30N),
-                                            3, 4, 5
-         3  cerrado/woody savanna  = IGBP:  6 thru  9
-         4  Grassland/cropland     = IGBP: 10 thru 17
-    """
-
-    nobs = lon.shape[0]
-    veg = IGBP_.getsimpleveg(lon, lat, Path+'/IGBP', nobs) # Fortran
-
-    # substitute non vegetation (water, snow/ice) data with 
-    # another type, e.g. GRASSLAND by default
-    if nonVeg != None:
-        i = (veg == -15) | (veg == -17)
-        veg[i] = nonVeg # could be one of the biomes, i.e., 1, 2, 3 or 4
-
-    return veg
 
