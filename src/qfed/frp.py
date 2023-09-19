@@ -454,8 +454,6 @@ class GriddedFRP:
         """
         Writes gridded Areas and FRP to a NetCDF4 file.
         """
-        nymd = 10000 * date.year + 100 * date.month + date.day
-        nhms = 120000
 
         if bootstrap:
             logging.info("Prior FRP are initialized to zero.")
@@ -514,11 +512,11 @@ class GriddedFRP:
             v.comment = 'center_of_cell'
 
             v = f.variables['time']
-            begin_date = int(date.strftime('%Y%m%d'))
-            begin_time = int(date.strftime('%H%M%S'))
+            begin_date = int(f'{date:%Y%m%d}')
+            begin_time = int(f'{date:%H%M%S}')
             v.long_name = 'time'
             v.standard_name = 'time'
-            v.units = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(date)
+            v.units = f'minutes since {date:%Y-%m-%d %H:%M:%S}'
             v.begin_date = np.array(begin_date, dtype=np.int32)
             v.begin_time = np.array(begin_time, dtype=np.int32)
 
