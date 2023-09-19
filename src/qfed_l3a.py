@@ -101,11 +101,11 @@ def display_banner(version):
     logging.info('')
     logging.info(f'QFED {version}')
     logging.info('')
-    logging.info('QFED Level 3A - Gridded FRP')
+    logging.info('QFED Level 3A - Gridded FRP and Areas')
     logging.info('')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     defaults = dict(
         products='modis/aqua,modis/terra,viirs/npp,viirs/jpss-1',
@@ -132,7 +132,6 @@ if __name__ == "__main__":
     config = read_config(args.config)
 
     logging.getLogger().setLevel(args.log_level)
-
     display_banner(VERSION)
 
     output_grid = grid.Grid(args.resolution)
