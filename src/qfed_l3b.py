@@ -1,74 +1,92 @@
 #!/usr/bin/env python3
 
-
 """
-  A Python script to create QFED Level 3b files.
+A script that creates QFED Level 3B files.
 """
 
 import os
-import warnings
+import logging
 import argparse
+import yaml
 from datetime import datetime, timedelta
 from glob import glob
 
 import numpy as np
 import netCDF4 as nc
 
-from qfed.version import __version__
+from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
+from qfed import fire
+from qfed import VERSION
 
-Sat = { 'MOD14': 'MODIS_TERRA', 'MYD14': 'MODIS_AQUA' }
 
+def parse_arguments(default, version):
+    """
+    Parse command line arguments.
+    """
+    parser = argparse.ArgumentParser(
+        prog='qfed_l3b.py',
+        description='Creates QFED Level 3B files',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
 
+    parser.add_argument(
+        '-v',
+        '--version',
+        action='version',
+        version=f'QFED {version} (%(prog)s)',
+    )
 
-def parse_arguments(default_values):
-    '''
-    Parse command line arguments
-    '''
+    parser.add_argument(
+        '-c',
+        '--config',
+        dest='config',
+        default=default['config'],
+        help='config file',
+    )
 
-    parser = argparse.ArgumentParser(prog='QFED', description='Creates QFED Level 3b files')
+    parser.add_argument(
+        '-p',
+        '--products',
+        dest='products',
+        default=default['products'],
+        help='list of active fire products',
+    )
 
-    parser.add_argument('-V', '--version', action='version', 
-                        version='%(prog)s {version:s}'.format(version=__version__))
+    parser.add_argument(
+        '-u',
+        '--uncompressed',
+        action='store_true',
+        help='do not compress output files (default=False)',
+    )
 
-    parser.add_argument('-i', '--input', dest='level3a_dir', 
-                        default=default_values['level3a_dir'],
-                        help='directory for input FRP files (default=%s)'\
-                            %default_values['level3a_dir'])
+    parser.add_argument(
+        '-n',
+        '--ndays',
+        dest='ndays',
+        type=int,
+        default=default['fill_days'],
+        help='Number of days to fill in',
+    )
 
-    parser.add_argument('-o', '--output', dest='level3b_dir', 
-                        default=default_values['level3b_dir'],
-                        help='directory for output emissions files (default=%s)'\
-                            %default_values['level3b_dir'])
+    parser.add_argument(
+        '-l',
+        '--log',
+        dest='log_level',
+        default=default['log_level'],
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='logging level',
+    )
 
-    parser.add_argument('-p', '--products', dest='products', 
-                        default=default_values['products'],
-                        help='list of MODIS fire products (default=%s)'\
-                            %default_values['products'])
-    
-    parser.add_argument('-x', '--expid', dest='expid', 
-                        default=default_values['expid'],
-                        help='experiment id (default=%s)'\
-                            %default_values['expid'])
+    parser.add_argument(
+        'year',
+        type=int,
+        help="year specified in 'yyyy' format",
+    )
 
-    parser.add_argument('-u', '--uncompressed',
-                        action='store_true', 
-                        help='do not compress output files (default=False)')
-
-    parser.add_argument('-n', '--ndays', dest='ndays', type=int, 
-                        default=default_values['fill_days'],
-                        help='Number of days to fill in (default=%d)'\
-                            %default_values['fill_days'])
-
-    parser.add_argument('-v', '--verbose',
-                        action='count', default=0, help='verbose')
-
-    parser.add_argument('year', type=int, 
-                        help="year specified in 'yyyy' format")
-
-    parser.add_argument('doy', nargs='+', type=int,
-                        help='single DOY, or start and end DOYs')
-
+    parser.add_argument(
+        'doy', nargs='+', type=int, help='single DOY, or start and end DOYs'
+    )
 
     args = parser.parse_args()
 
@@ -87,101 +105,161 @@ def parse_arguments(default_values):
     return args
 
 
-def display_banner():
-    print('')
-    print('QFED Level 3B Processing')
-    print('------------------------')
-    print('')
+def read_config(config):
+    """
+    Parses the QFED config file into a dictionary.
+    """
+    with open(config) as file:
+        try:
+            data = yaml.safe_load(file)
+        except yaml.YAMLError as exc:
+            data = None
+            logging.critical(exc)
+
+    return data
 
 
-
-if __name__ == "__main__":
-
-    default_values = dict(expid       = 'qfed2',
-                          level3a_dir = '/nobackup/2/MODIS/Level3',
-                          level3b_dir = '/nobackup/2/MODIS/Level3',
-                          products    = 'MOD14,MYD14',
-                          fill_days   = 1)
-
-    args = parse_arguments(default_values)
-
-    if args.verbose > 0:
-        display_banner()
+def display_banner(version):
+    logging.info('')
+    logging.info(f'QFED {version}')
+    logging.info('')
+    logging.info('QFED Level 3B - Gridded Emissions')
+    logging.info('')
 
 
-    Products = args.products.split(',')
+if __name__ == '__main__':
 
-#   Grid FRP and observed area
-#   --------------------------
-    for doy in range(args.doy[0], args.doy[1] + 1):
+    defaults = dict(
+        products='modis/aqua,modis/terra,viirs/npp,viirs/jpss-1',
+        fill_days=1,
+        log_level='INFO',
+        config='config.yaml',
+    )
 
-        d = datetime(args.year,1,1) + timedelta(days=(doy - 1)) + timedelta(hours=12)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s  %(levelname)-8s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        # filename='qfed_l3a.log',
+    )
 
-#       Read input FRP and Area for each satellite
-#       ------------------------------------------
-        FRP, Land, Water, Cloud, F = ( {}, {}, {}, {}, {} )
-        for MxD14 in Products:
+    args = parse_arguments(defaults, VERSION)
+    config = read_config(args.config)
 
-            sat = Sat[MxD14]
+    logging.getLogger().setLevel(args.log_level)
+    display_banner(VERSION)
 
-#           Open input file
-#           ---------------
-            l3a_dir  = os.path.join(args.level3a_dir, MxD14, 'Y%04d'%d.year, 'M%02d'%d.month)
-            l3a_file = '%s_%s.frp.???.%04d%02d%02d.nc4'%(args.expid, MxD14, d.year, d.month, d.day)
-            
-            pat = os.path.join(l3a_dir, l3a_file)
+    products = args.products.replace(' ', '').split(',')
 
-            try:
-                ifn = glob(pat)[0]
-                f = nc.Dataset(ifn, 'r')
-            except:
-                print("[x] cannot find/read input FRP file for %s, ignoring it"%d)
+    doy_s = args.doy[0]
+    doy_e = args.doy[1] + 1
+
+    for doy in range(doy_s, doy_e):
+
+        d = datetime(args.year, 1, 1) + timedelta(days=(doy - 1)) + timedelta(hours=12)
+
+        frp = {}
+        area = {}
+        frp_density = {}
+
+        for p in products:
+            instrument, satellite = p.split('/')
+            platform = Instrument(instrument), Satellite(satellite)
+
+            # TODO
+            l3a_dir = './validation/v3.0.0-geos-esm/FRP/'
+            l3a_filename = config[p]['frp'].format(d)
+
+            search_path = os.path.join(l3a_dir, l3a_filename)
+
+            logging.debug(
+                (
+                    f"Searching for QFED L3A file "
+                    f"matching pattern '{os.path.basename(search_path)}' "
+                    f"in directory '{os.path.dirname(search_path)}'."
+                )
+            )
+
+            match = glob(search_path)
+            if match:
+                if len(match) > 1:
+                    logging.warning(
+                        (
+                            f"Found multiple files matching "
+                            f"pattern '{os.path.basename(search_path)}' "
+                            f"in directory '{os.path.dirname(search_path)}': "
+                            f"{match}."
+                        )
+                    )
+
+                    logging.warning(
+                        (
+                            f"Retaining file {match[0]}. The remaining files "
+                            f"{match[1:]} will not be included in the processing."
+                        )
+                    )
+            else:
+                logging.warning(
+                    (
+                        f"Did not find QFED L3A file '{search_path}'. "
+                        f"This file will not be included in the processing."
+                    )
+                )
+
                 continue
 
-            if args.verbose > 0:
-                print("[] Reading ", ifn) 
+            l3a_file = match[0]
 
-            Land[sat]  = np.transpose(f.variables['land' ][0,:,:])
-            Water[sat] = np.transpose(f.variables['water'][0,:,:])
-            Cloud[sat] = np.transpose(f.variables['cloud'][0,:,:])
-            
-            FRP[sat] = [ np.transpose(f.variables['frp_tf'][0,:,:]),
-                         np.transpose(f.variables['frp_xf'][0,:,:]),
-                         np.transpose(f.variables['frp_sv'][0,:,:]),
-                         np.transpose(f.variables['frp_gl'][0,:,:]) ]
+            logging.info(f"Reading QFED L3A file '{os.path.basename(l3a_file)}'.")
+            f = nc.Dataset(l3a_file, 'r')
 
-            F[sat]   = [ np.transpose(f.variables['fb_tf'][0,:,:]),
-                         np.transpose(f.variables['fb_xf'][0,:,:]),
-                         np.transpose(f.variables['fb_sv'][0,:,:]),
-                         np.transpose(f.variables['fb_gl'][0,:,:]) ]
+            area[platform] = {
+                v: np.transpose(f.variables[v][0, :, :])
+                for v in ('land', 'water', 'cloud', 'unknown')
+            }
 
-            col = ifn.split('/')[-1].split('.')[2] # collection
+            frp[platform] = {
+                bb: np.transpose(f.variables[f'frp_{bb.type.value}'][0, :, :])
+                for bb in fire.BIOMASS_BURNING
+            }
 
-#       FRP density forecast files
-#       --------------------------
-        d_ = d + timedelta(days=1)
-        forecast_files = {}
-        for MxD14 in Products:
-            sat = Sat[MxD14]
- 
-            if sat in list(FRP.keys()):
-                l3a_dir  = os.path.join(args.level3a_dir, MxD14, 'Y%04d'%d_.year, 'M%02d'%d_.month)
-                l3a_file = '%s_%s.frp.%s.%04d%02d%02d.nc4'%(args.expid, MxD14, col, d_.year, d_.month, d_.day)
-            
-                forecast_files[sat] = os.path.join(l3a_dir, l3a_file)
+            #print('*****', frp)
 
+            frp_density[platform] = {
+                bb: np.transpose(f.variables[f'fb_{bb.type.value}'][0, :, :])
+                for bb in fire.BIOMASS_BURNING
+            }
 
-#       Create the top level directory for output files
-#       -----------------------------------------------
-        dir = os.path.join(args.level3b_dir, 'QFED')
-        rc = os.system("/bin/mkdir -p %s"%dir)
-        if rc:
-            raise IOError('cannot create output directory')
+        # TODO: FRP density forecast files
+        d_fcst = d + timedelta(days=1)
+        l3a_fcst_files = {}
+        for p in products:
+            instrument, satellite = p.split('/')
+            platform = Instrument(instrument), Satellite(satellite)
 
-#       Write output file
-#       -----------------
-        E = Emissions(d, FRP, F, Land, Water, Cloud, Verb=(args.verbose > 0))
-        E.calculate()
-        E.write(dir=dir, forecast=forecast_files, expid=args.expid, col=col, ndays=args.ndays, 
-                uncompressed=args.uncompressed)
-        
+            l3a_fcst_dir = './validation/v3.0.0-geos-esm/FRP/'
+            l3a_fcst_filename = config[p]['frp'].format(d_fcst)
+
+            search_path = os.path.join(l3a_fcst_dir, l3a_fcst_filename)
+            match = glob(search_path)
+
+            if match:
+                l3a_fcst_files[p] = match[0]
+            else:
+                l3a_fcst_files[p] = None
+
+        # output
+        output_dir = config['emissions'][0]
+        output_template = config['emissions'][1]
+        output_file = os.path.join(output_dir, output_template.format(d))
+        os.makedirs(output_dir, exist_ok=True)
+
+        emissions = Emissions(d, frp, frp_density, area)
+        emissions.calculate()
+        emissions.save(
+            filename=output_file,
+            dir=output_dir,
+            forecast=l3a_fcst_files,
+            ndays=args.ndays,
+            uncompressed=args.uncompressed,
+        )

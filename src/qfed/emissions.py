@@ -1,36 +1,25 @@
 """
-  Calculate emissions from Fire Radiative Flux (FRP/Area).
+Calculate emissions from Fire Radiative Flux (FRP/Area).
 """
 
 
-import warnings
-warnings.simplefilter('ignore',DeprecationWarning)
-
 import os
+import logging
 from datetime import date, datetime, timedelta
 
 import numpy as np
 import netCDF4 as nc
 
-from qfed.version import __version__, __tag__
-
-
-
-#                  -------------------
-#                  Internal Parameters
-#                  -------------------
-
-# Fire emission flux density [kg/s/m^2]
-#
-#     f_s = S_f(sat) * (FRP/A) * Alpha * B_f(s)
-#
+from qfed import grid
+from qfed.instruments import Instrument, Satellite
+from qfed import VERSION
 
 # Biome-dependent Emission Factors
 # (From Andreae & Merlet 2001)
 # Units: g(species) / kg(dry mater)
 # --------------------------------
-B_f  = {}   
-eB_f = {} # errors
+B_f  = {} # overal average
+eB_f = {} # natural variation
 
 #                Tropical  Extratrop.    
 #                 Forests     Forests   Savanna  Grasslands
@@ -82,7 +71,7 @@ eB_f['CH4']  = (    2.00,       1.90,     0.90,        0.90  )
 alpha = np.array([0.96450253,1.09728882,1.12014982,1.22951496,1.21702972])
 for s in B_f.keys():
     B_f[s] = list(np.array(B_f[s]) * alpha[1:])
-    
+
 # Combustion rate constant
 # (ECMWF Tech Memo 596)
 # It could be biome-dependent in case we want to tinker
@@ -90,34 +79,42 @@ for s in B_f.keys():
 # -----------------------------------------------------
 Alpha = 1.37e-6 # kg(dry mater)/J
 A_f = {}
-#                             Tropical  Extratrop.    
-#                             Forests     Forests    Savanna  Grasslands
-#                             --------  ----------   -------  ----------
-A_f['CO2']  = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['CO']   = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['SO2']  = Alpha * np.array(( 2.500,     4.500,     1.800,       1.800 ))
-A_f['OC']   = Alpha * np.array(( 2.500,     4.500,     1.800,       1.800 ))
-A_f['BC']   = Alpha * np.array(( 2.500,     4.500,     1.800,       1.800 ))
-A_f['NH3']  = Alpha * np.array(( 2.500,     4.500,     1.800,       1.800 ))
-A_f['PM25'] = Alpha * np.array(( 2.500,     4.500,     1.800,       1.800 ))
-A_f['TPM']  = Alpha * np.array(( 2.500,     4.500,     1.800,       1.800 ))
-A_f['NO']   = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['MEK']  = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['C3H6'] = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['C2H6'] = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['C3H8'] = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['ALK4'] = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['ALD2'] = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['CH2O'] = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['ACET'] = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
-A_f['CH4']  = Alpha * np.array(( 1.000,     1.000,     1.000,       1.000 ))
+
+#                          Tropical  Extratrop.   
+#                          Forests      Forests  Savanna  Grasslands
+#                          --------  ----------  -------  ----------
+enhance_gas     = np.array(( 1.0,          1.0,     1.0,      1.0 ))
+enhance_aerosol = np.array(( 2.5,          4.5,     1.8,      1.8 ))
+A_f['SO2']  = Alpha * enhance_aerosol
+A_f['OC']   = Alpha * enhance_aerosol
+A_f['BC']   = Alpha * enhance_aerosol
+A_f['NH3']  = Alpha * enhance_aerosol
+A_f['PM25'] = Alpha * enhance_aerosol
+A_f['TPM']  = Alpha * enhance_aerosol
+A_f['CO2']  = Alpha * enhance_gas
+A_f['CO']   = Alpha * enhance_gas
+A_f['NO']   = Alpha * enhance_gas
+A_f['MEK']  = Alpha * enhance_gas
+A_f['C3H6'] = Alpha * enhance_gas
+A_f['C2H6'] = Alpha * enhance_gas
+A_f['C3H8'] = Alpha * enhance_gas
+A_f['ALK4'] = Alpha * enhance_gas
+A_f['ALD2'] = Alpha * enhance_gas
+A_f['CH2O'] = Alpha * enhance_gas
+A_f['ACET'] = Alpha * enhance_gas
+A_f['CH4']  = Alpha * enhance_gas
 
 
-# Satellite Fudge Factor
-# ----------------------
+# Satellite Factors
+# -----------------
 S_f = {}
 S_f['MODIS_TERRA'] = 1.385 * alpha[0] # C6 scaling based on C5 above
 S_f['MODIS_AQUA' ] = 0.473
+
+S_f[(Instrument.MODIS, Satellite.TERRA)] = S_f['MODIS_TERRA']
+S_f[(Instrument.MODIS, Satellite.AQUA) ] = S_f['MODIS_AQUA' ]
+S_f[(Instrument.VIIRS, Satellite.JPSS1)] = 1.0
+S_f[(Instrument.VIIRS, Satellite.NPP)  ] = 1.0
 
 #                     Tropical  Extratrop.    
 #                      Forests     Forests   Savanna  Grasslands
@@ -128,20 +125,19 @@ S_f['MODIS_AQUA' ] = 0.473
 
 
 
-class Emissions(object):
+class Emissions():
     """
-    Class for computing emissions from pre-gridded FRP
-    estimates.
+    Class for computing biomass burning emissions 
+    from gridded FRP and .
     """
 
-#---
-    def __init__(self, date, FRP, F, Land, Water, Cloud, biomes='default', Verb=0):
+    def __init__(self, time, FRP, F, area):
         """
-        Initializes an Emission object. On input,
+        Initializes an Emission object. 
 
-          date  ---   date object
+          timestamp  ---   datetime object
 
-          FRP   ---   Dictionary keyed by satellite name
+          FRP   ---   Dictionary keyed by 'instrument/satellite'
                       with each element containing a
                       tuple with gridded Fire Radiative Power
                       (MW); each tuple element corresponds to a
@@ -157,120 +153,62 @@ class Emissions(object):
                       
                       F['MODIS_TERRA'] = (f_tf,f_xf,f_sv,f_gl)
         
-          Land  ---   Dictionary keyed by satellite name
+          Area  ---   Dictionary keyed by satellite name
                       with each element containing a
                       observed clear-land area [km2] for each gridbox
-          
-          Water ---   Dictionary keyed by satellite name
-                      with each element containing a
-                      water area [km2] for each gridbox
-
-          Cloud ---   Dictionary keyed by satellite name
-                      with each element containing a
-                      cloud area [km2] for each gridbox            
         """
 
-#       Save relevant information
-#       -------------------------
-        self.Land  = Land
-        self.Water = Water
-        self.Cloud = Cloud
-        self.FRP   = FRP
-        self.F     = F
-        self.Sat   = list(Land.keys())
-        self.date  = date
-        self.verb  = Verb
+        self.area  = area
+        self.area_land  = {k:area[k]['land' ] for k in area.keys()}
+        self.area_water = {k:area[k]['water'] for k in area.keys()}
+        self.area_cloud = {k:area[k]['cloud'] for k in area.keys()}
+        self.area_unknown = {k:area[k].get('unknown', 0.0) for k in area.keys()}
+        self.FRP = FRP
+        self.F = F
+        self.time = time
 
+        self.platform = list(FRP.keys())
+        self.biomass_burning = list(FRP[self.platform[0]].keys())
 
-#       Filter missing data
-#       -------------------
-        eps = 1.0e-2
-        FillValue=1.0e20
-        
-        missing = []
-        for sat in self.Sat:
-            m = Land[sat][:,:]  > (1 - eps)*FillValue
-            m = np.logical_or(m, Water[sat][:,:] > (1 - eps)*FillValue)
-            m = np.logical_or(m, Cloud[sat][:,:] > (1 - eps)*FillValue)
+        self.set_grid()
 
-            n_biomes = len(FRP[sat])
-            for b in range(n_biomes):
-                m = np.logical_or(m, FRP[sat][b][:,:] > (1 - eps)*FillValue)
+    def set_grid(self):
+        """
+        Sets the grid.
+        """
+        #TODO: should use the grid module
+        self.im, self.jm = self.area_land[self.platform[0]].shape
 
-            if np.any(m): 
-                print('[w] Detected missing area or FRP values in %s QFED/L3A file on %s' % (sat, self.date))
-           
-            Land[sat][m]  = 0.0
-            Water[sat][m] = 0.0 
-            Cloud[sat][m] = 0.0
-            for b in range(n_biomes):
-                FRP[sat][b][m] = 0.0
-
-            if np.all(m):
-                missing.append(True)
-            else:
-                missing.append(False)
-
-        assert not np.all(missing), '[x] No valid L3A input data. Please persist emissions from the last known good date.'
-                
-
-#       Biomes
-#       -----------
-        if biomes == 'default':
-            self.biomes = ('Tropical Forest', 'Extratropical Forests', 'Savanna', 'Grassland')
-        else:
-            self.biomes = biomes[:]
-
-
-#       Record grid
-#       -----------
-        self.im, self.jm = Land[self.Sat[0]].shape
         if (5*self.im - 8*(self.jm - 1)) == 0:
-            self.lon  = np.linspace(-180.,180.,self.im,endpoint=False)
-            self.lat  = np.linspace(-90.,90.,self.jm)
+            self.lon  = np.linspace(-180.0, 180.0, self.im, endpoint=False)
+            self.lat  = np.linspace(-90.0, 90.0, self.jm)
         else:
             d_lon = 360.0 / self.im
             d_lat = 180.0 / self.jm
             self.lon = np.linspace(-180+d_lon/2, 180-d_lon/2, self.im)
             self.lat = np.linspace( -90+d_lat/2,  90-d_lat/2, self.jm)
 
-#---
-    def calculate(self, Species='all', method='default'):
-    
+    def calculate(self, species=B_f.keys(), method='default'):
         """
         Calculate emissions for each species using built-in
         emission coefficients and fudge factors.
 
-        The default list of species is: 
-        Species = ('CO', 'CO2','SO2','OC','BC','NH3','PM25','NO','MEK', 
-                   'C3H6','C2H6','C3H8','ALK4','ALD2','CH2O','ACET','CH4')
-
-        The default method for computing the emissions is:
-            method = 'sequential-zero' 
+        The default method for computing the emissions is
+        'sequential-zero'.
         """
-
-
-        if (Species == 'all') or (Species == 'default'):
-            species = ('CO'  , 'CO2' , 'SO2' , 'OC'  , 'BC'  , 'NH3' , 
-                       'PM25', 'NO'  , 'MEK' , 'C3H6', 'C2H6', 'C3H8', 
-                       'ALK4', 'ALD2', 'CH2O', 'ACET', 'CH4')
-        else:
-            species = Species[:]
-
-
         # factor needed to convert B_f from [g/kg] to [kg/kg]
         units_factor = 1e-3
-
-        n_biomes = len(self.biomes)
 
         A_l = np.zeros((self.im, self.jm))
         A_w = np.zeros((self.im, self.jm))
         A_c = np.zeros((self.im, self.jm))
+        A_u = np.zeros((self.im, self.jm))
 
-        for sat in self.Sat:
-            A_l += self.Land[sat]
-            A_w += self.Water[sat]
-            A_c += self.Cloud[sat]
+        for p in self.platform:
+            A_l += self.area_land[p]
+            A_w += self.area_water[p]
+            A_c += self.area_cloud[p]
+            A_u += self.area_unknown[p]
 
         A_o = A_l + A_w
 
@@ -280,21 +218,23 @@ class Emissions(object):
         E = {}
         E_= {}
         for s in species:
-            E[s]  = np.zeros((n_biomes, self.im, self.jm))
-            E_[s] = np.zeros((n_biomes, self.im, self.jm))
+            E[s]  = {bb:np.zeros((self.im, self.jm)) for bb in self.biomass_burning}
+            E_[s] = {bb:np.zeros((self.im, self.jm)) for bb in self.biomass_burning}
 
-            for sat in self.Sat:
-                FRP = self.FRP[sat]
-                F   = self.F[sat]
-                A_  = self.Cloud[sat]
+            for p in self.platform:
+                FRP = self.FRP[p]
+                F   = self.F[p]
+                A_  = self.area_cloud[p]
 
-                for b in range(n_biomes):
-                    E[s][b,:,:]  += units_factor * A_f[s][b] * S_f[sat] * B_f[s][b] * FRP[b]
-                    E_[s][b,:,:] += units_factor * A_f[s][b] * S_f[sat] * B_f[s][b] * F[b] * A_
-           
-            for b in range(n_biomes):
-                E_b  = E[s][b,:,:]
-                E_b_ = E_[s][b,:,:]
+                for bb in self.biomass_burning:
+                    # TODO: A_f and B_f should be also dict.
+                    ib = ('tf', 'xf', 'sv', 'gl').index(bb.type.value)
+                    E[s][bb][:,:]  += units_factor * A_f[s][ib] * S_f[p] * B_f[s][ib] * FRP[bb]
+                    E_[s][bb][:,:] += units_factor * A_f[s][ib] * S_f[p] * B_f[s][ib] * F[bb] * A_
+
+            for bb in self.biomass_burning:
+                E_b  = E[s][bb][:,:]
+                E_b_ = E_[s][bb][:,:]
 
                 if (method == 'default') or (method == 'sequential'):
                     E_b[j] = ( (E_b[j]  / (A_o[j] + A_c[j])) * (1 + A_c[j] / (A_l[j] + A_c[j])) +
@@ -313,35 +253,21 @@ class Emissions(object):
                     E_b[i] = E_b[i] / A_o[i]
                    
 
-#       Save Forecast dictionary
-#       ------------------------
-        dt  = 1.0    # days
-        tau = 3.0    # days
-
-        for sat in self.Sat:
-            for b in range(n_biomes):
-                s = species[0]
-
-                self.F[sat][b][:,:] = (E[s][b,:,:] / (units_factor * A_f[s][b] * S_f[sat] * B_f[s][b])) * np.exp(-dt/tau)
-                self.F[sat][b][j] = self.F[sat][b][j] * ((A_o[j] + A_c[j]) / (A_l[j] + A_c[j]))
-
-#       Save Emission dictionary
-#       ------------------------
-        self.Species = species
-        self.Emissions = E
+        self.estimate = E
 
 
-#---
     def total(self, specie):
         """
-        Calculates the emissions from all biomes.
+        Calculates total emissions from fires in all biomes.
         """
+        result = np.zeros((self.im, self.jm))
+        for bb in self.biomass_burning:
+            result += self.estimate[specie][bb][:,:]
 
-        return np.sum(self.Emissions[specie][:,:,:], axis=0)
+        return result
 
 
-#---
-    def _write_ana(self, filename=None, dir='.', expid='qfed2', col='sfc', tag=None, fill_value=1e15):
+    def _save_ana(self, dir, filename, fill_value=1e15):
        """
        Writes gridded emissions. You must call method
        calculate() first. Optional input parameters:
@@ -352,64 +278,34 @@ class Emissions(object):
                          qfed2.emis_co.sfc.20030205.nc4
        dir       ---  optional directory name, only used
                       when *filename* is omitted
-       expid     ---  optional experiment id, only used
-                      when *filename* is omitted
-       col       ---  collection
-       tag       ---  tag name, by default it will be set to
-                      the QFED CVS tag name as part of the 
-                      installation procedure
-       
        """
        
 
-#      Create directory for output file
-#      --------------------------------
-       dir = os.path.join(dir, 'Y%04d'%self.date.year, 'M%02d'%self.date.month)
-       rc = os.system("/bin/mkdir -p %s"%dir)
-       if rc:
-           raise IOError('cannot create output directory')
-
-
-       nymd = 10000*self.date.year + 100*self.date.month + self.date.day
+       nymd = 22220101#10000*self.date.year + 100*self.date.month + self.date.day
        nhms = 120000
 
 #      Loop over species
 #      -----------------
-       vname_ = ( 'biomass', 'biomass_tf', 'biomass_xf', 'biomass_sv', 'biomass_gl' )
-
-       filename_ = filename
-       self.filename = {}
-       for s in self.Species:
-
-           if filename_ is None:
-               filename = dir+'/%s.emis_%s.%s.%d.nc4'\
-                          %(expid,s.lower(),col,nymd)
-               vname = vname_ 
-           else:
-               vname = [ '%s_%s' % (s.lower(), name) for name in vname_]
-
-           vtitle = [ '%s Biomass Emissions' % s, 
-                      '%s Biomass Emissions from Tropical Forests' % s, 
-                      '%s Biomass Emissions from Extratropical Forests' % s,
-                      '%s Biomass Emissions from Savanna' % s,
-                      '%s Biomass Emissions from Grasslands' % s ]
-                      
-           vunits = [ 'kg s-1 m-2', 'kg s-1 m-2', 'kg s-1 m-2', 'kg s-1 m-2', 'kg s-1 m-2' ]
-
-           self.filename[s] = filename
+       
+       self.file = {}
+       for s in self.estimate.keys():
+           file = os.path.join(dir, f'qfed.emis_{s.lower()}.{nymd}.nc4')
+           self.file[s] = file
 
 #          Create new file or overwrite existing file
 #          ------------------------------------------
-           f = nc.Dataset(filename, 'w', format='NETCDF4')
+           f = nc.Dataset(file, 'w', format='NETCDF4')
     
            # global attributes
            f.Conventions = 'COARDS'
-           f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
-           f.Title       = 'QFED Level3b v{version:s} Gridded Emissions'.format(version=__version__)
-           f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
-           f.Version     = str(__version__)
-           f.Processed   = str(datetime.now())
-           f.History     = '' 
+           f.institution = 'NASA/GSFC, Global Modeling and Assimilation Office'
+           f.title       = 'QFED Gridded Emissions (Level-3B, v{0:s})'.format(VERSION)
+           f.contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+           f.version     = VERSION
+           f.source      = 'TODO'
+           f.processed   = str(datetime.now())
+           f.history     = ''
+           f.platform    = 'TODO'
 
            # dimensions
            f.createDimension('lon', len(self.lon))
@@ -417,269 +313,72 @@ class Emissions(object):
            f.createDimension('time', None)
  
            # variables
-           v_lon    = f.createVariable('lon',  'f8', ('lon'))
-           v_lat    = f.createVariable('lat',  'f8', ('lat'))
-           v_time   = f.createVariable('time', 'i4', ('time'))
+           f.createVariable('lon',  'f8', ('lon'))
+           f.createVariable('lat',  'f8', ('lat'))
+           f.createVariable('time', 'i4', ('time'))
 
-           v_biomass    = f.createVariable('biomass',    'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_biomass_tf = f.createVariable('biomass_tf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_biomass_xf = f.createVariable('biomass_xf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_biomass_sv = f.createVariable('biomass_sv', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_biomass_gl = f.createVariable('biomass_gl', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+           for v in ('biomass', 'biomass_tf', 'biomass_xf', 'biomass_sv', 'biomass_gl'):
+               f.createVariable(v, 'f4', ('time', 'lat', 'lon'), 
+                                fill_value=fill_value, zlib=False)
 
-            # variables attributes
-           v_lon.long_name         = 'longitude'
-           v_lon.standard_name     = 'longitude'
-           v_lon.units             = 'degrees_east'
-           v_lon.comment           = 'center_of_cell'
-
-           v_lat.long_name         = 'latitude'
-           v_lat.standard_name     = 'latitude'
-           v_lat.units             = 'degrees_north'
-           v_lat.comment           = 'center_of_cell'
-
-           begin_date        = int(self.date.strftime('%Y%m%d'))
-           begin_time        = int(self.date.strftime('%H%M%S'))
-           v_time.long_name  = 'time'
-           v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.date)
-           v_time.begin_date = np.array(begin_date, dtype=np.int32)
-           v_time.begin_time = np.array(begin_time, dtype=np.int32)
-           v_time.time_increment = np.array(240000, dtype=np.int32)
-
-           v_biomass.long_name = vtitle[0]
-           v_biomass.units = 'kg s-1 m-2'
-           v_biomass.missing_value = np.array(fill_value, np.float32)
-           v_biomass.fmissing_value = np.array(fill_value, np.float32)
-           v_biomass.vmin = np.array(fill_value, np.float32)
-           v_biomass.vmax = np.array(fill_value, np.float32)
-           
-           v_biomass_tf.long_name = vtitle[1]
-           v_biomass_tf.units = 'kg s-1 m-2'
-           v_biomass_tf.missing_value = np.array(fill_value, np.float32)
-           v_biomass_tf.fmissing_value = np.array(fill_value, np.float32)
-           v_biomass_tf.vmin = np.array(fill_value, np.float32)
-           v_biomass_tf.vmax = np.array(fill_value, np.float32)
-
-           v_biomass_xf.long_name = vtitle[2]
-           v_biomass_xf.units = 'kg s-1 m-2'
-           v_biomass_xf.missing_value = np.array(fill_value, np.float32)
-           v_biomass_xf.fmissing_value = np.array(fill_value, np.float32)
-           v_biomass_xf.vmin = np.array(fill_value, np.float32)
-           v_biomass_xf.vmax = np.array(fill_value, np.float32)
-
-           v_biomass_sv.long_name = vtitle[3]
-           v_biomass_sv.units = 'kg s-1 m-2'
-           v_biomass_sv.missing_value = np.array(fill_value, np.float32)
-           v_biomass_sv.fmissing_value = np.array(fill_value, np.float32)
-           v_biomass_sv.vmin = np.array(fill_value, np.float32)
-           v_biomass_sv.vmax = np.array(fill_value, np.float32)
-
-           v_biomass_gl.long_name = vtitle[4]
-           v_biomass_gl.units = 'kg s-1 m-2'
-           v_biomass_gl.missing_value = np.array(fill_value, np.float32)
-           v_biomass_gl.fmissing_value = np.array(fill_value, np.float32)
-           v_biomass_gl.vmin = np.array(fill_value, np.float32)
-           v_biomass_gl.vmax = np.array(fill_value, np.float32)
-
-           
-           # data
-           v_time[:] = np.array((0,))
-           v_lon[:]  = np.array(self.lon)
-           v_lat[:]  = np.array(self.lat)
-
-           v_biomass[0,:,:]    = np.transpose(self.total(s)[:,:])
-           v_biomass_tf[0,:,:] = np.transpose(self.Emissions[s][0,:,:])
-           v_biomass_xf[0,:,:] = np.transpose(self.Emissions[s][1,:,:])
-           v_biomass_sv[0,:,:] = np.transpose(self.Emissions[s][2,:,:])
-           v_biomass_gl[0,:,:] = np.transpose(self.Emissions[s][3,:,:])
-
-           f.close()
-
-           if self.verb >=1:
-               print("[w] Wrote file "+filename)
-
-
-#---
-    def _write_fcs(self, forecast, fill_value=1.0e15):
-       """
-       Writes gridded emissions. You must call method
-       calculate() first. Input parameter(s):
-
-       forecast        ---  L3a file names
-       forecast_fields ---  Variable names of FRP density forecast
-       """
-     
-       _date = self.date + timedelta(days=1)
-       nymd = 10000*_date.year + 100*_date.month + _date.day
-       nhms = 120000
-
-       for sat in self.Sat:
-
-           # create a file
-           _filename = forecast[sat]
-
-           f = nc.Dataset(_filename, 'w', format='NETCDF4')
-        
-           # global attributes
-           f.Conventions = 'COARDS'
-           f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
-           f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__)
-           f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
-           f.Version     = str(__version__)
-           f.Processed   = str(datetime.now())
-           f.History     = '' 
-    
-           # dimensions
-           f.createDimension('lon', len(self.lon))
-           f.createDimension('lat', len(self.lat))
-           f.createDimension('time', None)
-     
-           # variables
-           v_lon    = f.createVariable('lon',  'f8', ('lon'))
-           v_lat    = f.createVariable('lat',  'f8', ('lat'))
-           v_time   = f.createVariable('time', 'i4', ('time'))
-    
-           v_land   = f.createVariable('land',   'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_water  = f.createVariable('water',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_cloud  = f.createVariable('cloud',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-    
-           v_frp_tf = f.createVariable('frp_tf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_frp_xf = f.createVariable('frp_xf', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_frp_sv = f.createVariable('frp_sv', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_frp_gl = f.createVariable('frp_gl', 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           
-           v_fb_tf  = f.createVariable('fb_tf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_fb_xf  = f.createVariable('fb_xf',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_fb_sv  = f.createVariable('fb_sv',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-           v_fb_gl  = f.createVariable('fb_gl',  'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
-    
-    
            # variables attributes
-           v_lon.long_name         = 'longitude'
-           v_lon.standard_name     = 'longitude'
-           v_lon.units             = 'degrees_east'
-           v_lon.comment           = 'center_of_cell'
-    
-           v_lat.long_name         = 'latitude'
-           v_lat.standard_name     = 'latitude'
-           v_lat.units             = 'degrees_north'
-           v_lat.comment           = 'center_of_cell'
-    
-           begin_date        = int(_date.strftime('%Y%m%d'))
-           begin_time        = int(_date.strftime('%H%M%S'))
-           v_time.long_name  = 'time'
-           v_time.units      = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(_date)
-           v_time.begin_date = np.array(begin_date, dtype=np.int32)
-           v_time.begin_time = np.array(begin_time, dtype=np.int32)
-           v_time.time_increment = np.array(240000, dtype=np.int32)
-    
-           v_land.long_name = "Observed Clear Land Area"
-           v_land.units = "km2"
-           v_land.missing_value = np.array(fill_value, np.float32)
-           v_land.fmissing_value = np.array(fill_value, np.float32)
-           v_land.vmin = np.array(fill_value, np.float32)
-           v_land.vmax = np.array(fill_value, np.float32)
-           
-           v_water.long_name = "Water Area"
-           v_water.units = "km2"
-           v_water.missing_value = np.array(fill_value, np.float32)
-           v_water.fmissing_value = np.array(fill_value, np.float32)
-           v_water.vmin = np.array(fill_value, np.float32)
-           v_water.vmax = np.array(fill_value, np.float32)
-           
-           v_cloud.long_name = "Obscured by Clouds Area"
-           v_cloud.units = "km2"
-           v_cloud.missing_value = np.array(fill_value, np.float32)
-           v_cloud.fmissing_value = np.array(fill_value, np.float32)
-           v_cloud.vmin = np.array(fill_value, np.float32)
-           v_cloud.vmax = np.array(fill_value, np.float32)
-           
-           v_frp_tf.long_name = "Fire Radiative Power (Tropical Forests)"
-           v_frp_tf.units = "MW"
-           v_frp_tf.missing_value = np.array(fill_value, np.float32)
-           v_frp_tf.fmissing_value = np.array(fill_value, np.float32)
-           v_frp_tf.vmin = np.array(fill_value, np.float32)
-           v_frp_tf.vmax = np.array(fill_value, np.float32)
-           
-           v_frp_xf.long_name = "Fire Radiative Power (Extra-tropical Forests)"
-           v_frp_xf.units = "MW"
-           v_frp_xf.missing_value = np.array(fill_value, np.float32)
-           v_frp_xf.fmissing_value = np.array(fill_value, np.float32)
-           v_frp_xf.vmin = np.array(fill_value, np.float32)
-           v_frp_xf.vmax = np.array(fill_value, np.float32)
-           
-           v_frp_sv.long_name = "Fire Radiative Power (Savanna)"
-           v_frp_sv.units = "MW"
-           v_frp_sv.missing_value = np.array(fill_value, np.float32)
-           v_frp_sv.fmissing_value = np.array(fill_value, np.float32)
-           v_frp_sv.vmin = np.array(fill_value, np.float32)
-           v_frp_sv.vmax = np.array(fill_value, np.float32)
-           
-           v_frp_gl.long_name = "Fire Radiative Power (Grasslands)"
-           v_frp_gl.units = "MW"
-           v_frp_gl.missing_value = np.array(fill_value, np.float32)
-           v_frp_gl.fmissing_value = np.array(fill_value, np.float32)
-           v_frp_gl.vmin = np.array(fill_value, np.float32)
-           v_frp_gl.vmax = np.array(fill_value, np.float32)
-           
-           v_fb_tf.long_name = "Background FRP Density (Tropical Forests)"
-           v_fb_tf.units = "MW km-2"
-           v_fb_tf.missing_value = np.array(fill_value, np.float32)
-           v_fb_tf.fmissing_value = np.array(fill_value, np.float32)
-           v_fb_tf.vmin = np.array(fill_value, np.float32)
-           v_fb_tf.vmax = np.array(fill_value, np.float32)
-           
-           v_fb_xf.long_name = "Background FRP Density (Extra-tropical Forests)"
-           v_fb_xf.units = "MW km-2"
-           v_fb_xf.missing_value = np.array(fill_value, np.float32)
-           v_fb_xf.fmissing_value = np.array(fill_value, np.float32)
-           v_fb_xf.vmin = np.array(fill_value, np.float32)
-           v_fb_xf.vmax = np.array(fill_value, np.float32)
-           
-           v_fb_sv.long_name = "Background FRP Density (Savanna)"
-           v_fb_sv.units = "MW km-2"
-           v_fb_sv.missing_value = np.array(fill_value, np.float32)
-           v_fb_sv.fmissing_value = np.array(fill_value, np.float32)
-           v_fb_sv.vmin = np.array(fill_value, np.float32)
-           v_fb_sv.vmax = np.array(fill_value, np.float32)
-           
-           v_fb_gl.long_name = "Background FRP Density (Grasslands)"
-           v_fb_gl.units = "MW km-2"
-           v_fb_gl.missing_value = np.array(fill_value, np.float32)
-           v_fb_gl.fmissing_value = np.array(fill_value, np.float32)
-           v_fb_gl.vmin = np.array(fill_value, np.float32)
-           v_fb_gl.vmax = np.array(fill_value, np.float32)
-    
+           v = f.variables['lon']
+           v.long_name     = 'longitude'
+           v.standard_name = 'longitude'
+           v.units         = 'degrees_east'
+           v.comment       = 'center_of_cell'
+
+           v = f.variables['lat']
+           v.long_name     = 'latitude'
+           v.standard_name = 'latitude'
+           v.units         = 'degrees_north'
+           v.comment       = 'center_of_cell'
+
+           v = f.variables['time']
+           begin_date      = int(self.time.strftime('%Y%m%d'))
+           begin_time      = int(self.time.strftime('%H%M%S'))
+           v.long_name     = 'time'
+           v.standard_name = 'latitude'
+           v.units         = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.time)
+           v.begin_date    = np.array(begin_date, dtype=np.int32)
+           v.begin_time    = np.array(begin_time, dtype=np.int32)
+
+           # long name and units
+           v_meta_data = {
+               'biomass'   : (f'{s} Biomass Emissions', 'kg s-1 m-2'),
+               'biomass_tf': (f'{s} Biomass Emissions from Tropical Forests', 'kg s-1 m-2'),
+               'biomass_xf': (f'{s} Biomass Emissions from Extratropical Forests', 'kg s-1 m-2'),
+               'biomass_sv': (f'{s} Biomass Emissions from Savanna', 'kg s-1 m-2'),
+               'biomass_gl': (f'{s} Biomass Emissions from Grasslands', 'kg s-1 m-2')}
+
+           for _v, (_l, _u) in v_meta_data.items():
+               v = f.variables[_v]
+               v.long_name = _l
+               v.units = _u
+               v.missing_value = np.array(fill_value, np.float32)
+               v.fmissing_value = np.array(fill_value, np.float32)
+               v.vmin = np.array(fill_value, np.float32)
+               v.vmax = np.array(fill_value, np.float32)
+
            # data
-           v_time[:] = np.array((0,))
-           v_lon[:]  = np.array(self.lon)
-           v_lat[:]  = np.array(self.lat)
-    
-           missing = np.full(np.transpose(self.F[sat][0]).shape, fill_value)
-    
-           v_land[0,:,:]   = missing[:,:] 
-           v_water[0,:,:]  = missing[:,:]
-           v_cloud[0,:,:]  = missing[:,:]
-           v_frp_tf[0,:,:] = missing[:,:]
-           v_frp_xf[0,:,:] = missing[:,:]
-           v_frp_sv[0,:,:] = missing[:,:]
-           v_frp_gl[0,:,:] = missing[:,:]
+           f.variables['time'][:] = np.array((0,))
+           f.variables['lon' ][:] = np.array(self.lon)
+           f.variables['lat' ][:] = np.array(self.lat)
 
-           v_fb_tf[0,:,:]  = np.transpose(self.F[sat][0])
-           v_fb_xf[0,:,:]  = np.transpose(self.F[sat][1])
-           v_fb_sv[0,:,:]  = np.transpose(self.F[sat][2])
-           v_fb_gl[0,:,:]  = np.transpose(self.F[sat][3])
-          
+
+           f.variables['biomass'   ][0,:,:] = np.transpose(self.total(s)[:,:])
+
+           for bb in self.biomass_burning:
+               v = f.variables[f'biomass_{bb.type.value}']
+               v[0,:,:] = np.transpose(self.estimate[s][bb][:,:])
+
            f.close()
-    
-           if self.verb >=1:
-               print('[w] Wrote file {file:s}'.format(file=_filename))
+
+           logging.info(f"Successfully saved gridded emissions to file {filename}")
 
 
-
-#---
-    def write(self, filename=None, dir='.', forecast=None, expid='qfed2', col='sfc', 
-                    tag=None, ndays=1, uncompressed=False):
+    def save(self, filename=None, dir='.', forecast=None, expid='qfed2',  
+                    ndays=1, uncompressed=False):
        """
        Writes gridded emissions that can persist for a number of days. You must 
        call method calculate() first. Optional input parameters:
@@ -692,10 +391,6 @@ class Emissions(object):
                           when *filename* is omitted
        expid         ---  optional experiment id, only used
                           when *filename* is omitted
-       col           ---  collection
-       tag           ---  tag name, by default it will be set to
-                          the QFED CVS tag name as part of the 
-                          installation procedure
        ndays         ---  persist emissions for a number of days
        uncompressed  ---  use n4zip to compress gridded output file
        
@@ -703,13 +398,14 @@ class Emissions(object):
 
 #      Write out the emission files
 #      ----------------------------
-       self._write_fcs(forecast, fill_value=1.0e20)
+       # TODO:
+       # self._write_fcs(forecast, fill_value=1.0e20)
 
        for n in range(ndays):
 
 #          Write out the emission files
 #          ----------------------------
-           self._write_ana(filename=filename,dir=dir,expid=expid,col=col,tag=tag,fill_value=1e20)
+           self._save_ana(dir, filename, fill_value=1e20)
 
 #          Compress the files by default
 #          -----------------------------
@@ -721,7 +417,7 @@ class Emissions(object):
 
 #          Increment date by one day
 #          ---------------------------------
-           self.date = self.date + timedelta(days=1)
+           self.date = self.time + timedelta(days=1)
 
 #..............................................................
 
