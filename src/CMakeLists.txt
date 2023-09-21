@@ -12,6 +12,6 @@ install (
   )
 
 install (
-  FILES config.yaml
+  FILES config.yaml emission_factors.yaml
   DESTINATION etc
   )

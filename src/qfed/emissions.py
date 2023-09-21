@@ -5,6 +5,7 @@ Calculate emissions from Fire Radiative Flux (FRP/Area).
 
 import os
 import logging
+import yaml
 from datetime import date, datetime, timedelta
 
 import numpy as np
@@ -14,63 +15,10 @@ from qfed import grid
 from qfed.instruments import Instrument, Satellite
 from qfed import VERSION
 
-# Biome-dependent Emission Factors
-# (From Andreae & Merlet 2001)
-# Units: g(species) / kg(dry mater)
-# --------------------------------
-B_f  = {} # overal average
-eB_f = {} # natural variation
-
-#                Tropical  Extratrop.    
-#                 Forests     Forests   Savanna  Grasslands
-#                --------  ----------   -------  ----------
-B_f['CO2']  = (  1580.00,    1569.00,  1613.00,     1613.00  )
-B_f['CO']   = (   104.00,     107.00,    65.00,       65.00  )
-B_f['SO2']  = (     0.57,       1.00,     0.35,        0.35  )
-B_f['OC']   = (     5.20,       9.14,     3.40,        3.40  )
-B_f['BC']   = (     0.66,       0.56,     0.48,        0.48  )
-B_f['NH3']  = (     1.30,       1.40,     1.05,        1.05  )
-B_f['PM25'] = (     9.10,      13.00,     5.40,        5.40  )
-B_f['TPM']  = (     8.50,      17.60,     8.30,        8.30  ) # note that TPM < PM2.5 for Tropical Forests
-B_f['NO']   = (     1.60,       3.00,     3.90,        3.90  ) # NOx as NO
-B_f['MEK']  = (     0.43,       0.45,     0.26,        0.26  ) # Methyl Ethyl Ketone
-B_f['C3H6'] = (     0.55,       0.59,     0.26,        0.26  ) # Propene/Propylene
-B_f['C2H6'] = (     1.20,       0.60,     0.32,        0.32  ) # Ethane
-B_f['C3H8'] = (     0.15,       0.25,     0.09,        0.09  ) # Propane
-B_f['ALK4'] = (     0.056,      0.091,    0.025,       0.025 ) # C4,5 alkanes (C4H10): n-butane + i-butane
-B_f['ALD2'] = (     0.65,       0.50,     0.50,        0.50  ) # Acetaldehyde (C2H4O)
-B_f['CH2O'] = (     1.40,       2.20,     0.26,        0.26  ) # Formaldehyde (HCHO)
-B_f['ACET'] = (     0.62,       0.56,     0.43,        0.43  ) # Acetone (C3H6O)
-B_f['CH4']  = (     6.80,       4.70,     2.30,        2.30  ) # Methene (CH4)
-
-
-#                Tropical  Extratrop.    
-#                 Forests     Forests   Savanna  Grasslands
-#                --------  ----------   -------  ----------
-eB_f['CO2']  = (   90.00,     131.00,    95.00,       95.00  )
-eB_f['CO']   = (   20.00,      37.00,    20.00,       20.00  )
-eB_f['SO2']  = (    0.23,       0.23,     0.16,        0.16  )
-eB_f['OC']   = (    1.50,       0.55,     1.40,        1.40  )
-eB_f['BC']   = (    0.31,       0.19,     0.18,        0.18  )
-eB_f['NH3']  = (    0.80,       0.80,     0.45,        0.45  )
-eB_f['PM25'] = (    1.50,       7.00,     1.50,        1.50  )
-eB_f['TPM']  = (    2.00,       6.40,     3.20,        3.20  )
-eB_f['NO']   = (    0.70,       1.40,     2.40,        2.40  )
-eB_f['MEK']  = (    0.22,       0.28,     0.13,        0.13  )
-eB_f['C3H6'] = (    0.25,       0.16,     0.14,        0.14  )
-eB_f['C2H6'] = (    0.70,       0.15,     0.16,        0.16  )
-eB_f['C3H8'] = (    0.10,       0.11,     0.03,        0.03  )
-eB_f['ALK4'] = (    0.03,       0.05,     0.09,        0.09  )
-eB_f['ALD2'] = (    0.32,       0.02,     0.39,        0.39  )
-eB_f['CH2O'] = (    0.70,       0.50,     0.44,        0.44  )
-eB_f['ACET'] = (    0.31,       0.04,     0.18,        0.18  )
-eB_f['CH4']  = (    2.00,       1.90,     0.90,        0.90  )
 
 # Scaling of C6 based on C5 (based on OC tuning)
 # ----------------------------------------------
-alpha = np.array([0.96450253,1.09728882,1.12014982,1.22951496,1.21702972])
-for s in B_f.keys():
-    B_f[s] = list(np.array(B_f[s]) * alpha[1:])
+alpha = np.array([0.96450253, 1.09728882, 1.12014982, 1.22951496, 1.21702972])
 
 # Combustion rate constant
 # (ECMWF Tech Memo 596)
@@ -85,6 +33,10 @@ A_f = {}
 #                          --------  ----------  -------  ----------
 enhance_gas     = np.array(( 1.0,          1.0,     1.0,      1.0 ))
 enhance_aerosol = np.array(( 2.5,          4.5,     1.8,      1.8 ))
+
+enhance_gas = enhance_gas * alpha[1:]
+enhance_aerosol = enhance_aerosol * alpha[1:]
+
 A_f['SO2']  = Alpha * enhance_aerosol
 A_f['OC']   = Alpha * enhance_aerosol
 A_f['BC']   = Alpha * enhance_aerosol
@@ -125,13 +77,24 @@ S_f[(Instrument.VIIRS, Satellite.NPP)  ] = 1.0
 
 
 
+def read_emission_factors(file):
+    with open(file) as f:
+        try:
+            data = yaml.safe_load(f)
+        except yaml.YAMLError as exc:
+            data = None
+            logging.critical(exc)
+
+    return data['emission_factors']
+
+
 class Emissions():
     """
     Class for computing biomass burning emissions 
     from gridded FRP and .
     """
 
-    def __init__(self, time, FRP, F, area):
+    def __init__(self, time, FRP, F, area, emission_factors_file):
         """
         Initializes an Emission object. 
 
@@ -172,6 +135,9 @@ class Emissions():
 
         self.set_grid()
 
+        self.emission_factors_file = emission_factors_file
+        self._ef = read_emission_factors(emission_factors_file)
+
     def set_grid(self):
         """
         Sets the grid.
@@ -188,7 +154,11 @@ class Emissions():
             self.lon = np.linspace(-180+d_lon/2, 180-d_lon/2, self.im)
             self.lat = np.linspace( -90+d_lat/2,  90-d_lat/2, self.jm)
 
-    def calculate(self, species=B_f.keys(), method='default'):
+    def emission_factor(self, species, fire):
+        bb = fire.type.name.lower()
+        return self._ef[species][bb]
+
+    def calculate(self, species, method='default'):
         """
         Calculate emissions for each species using built-in
         emission coefficients and fudge factors.
@@ -227,10 +197,11 @@ class Emissions():
                 A_  = self.area_cloud[p]
 
                 for bb in self.biomass_burning:
-                    # TODO: A_f and B_f should be also dict.
+                    # TODO: A_f should be a dict.
+                    B_f, eB_f = self.emission_factor(s, bb)
                     ib = ('tf', 'xf', 'sv', 'gl').index(bb.type.value)
-                    E[s][bb][:,:]  += units_factor * A_f[s][ib] * S_f[p] * B_f[s][ib] * FRP[bb]
-                    E_[s][bb][:,:] += units_factor * A_f[s][ib] * S_f[p] * B_f[s][ib] * F[bb] * A_
+                    E[s][bb][:,:]  += units_factor * A_f[s.upper()][ib] * S_f[p] * B_f * FRP[bb]
+                    E_[s][bb][:,:] += units_factor * A_f[s.upper()][ib] * S_f[p] * B_f * F[bb] * A_
 
             for bb in self.biomass_burning:
                 E_b  = E[s][bb][:,:]
