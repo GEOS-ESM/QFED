@@ -28,7 +28,23 @@ emission_factors:
         extratropical_forest: [ 9.14,   0.55]
         savanna:              [ 3.40,   1.40]
         grassland:            [ 3.40,   1.40]
-        crop_residue:         [ 2.30,   0.00]
+        crop_residue:         [ 2.30,  -0.00]
+    bc:
+        species: 'Black carbon (BC)'
+        tropical_forest:      [ 0.66,   0.31]
+        extratropical_forest: [ 0.56,   0.19]
+        savanna:              [ 0.48,   0.18]
+        grassland:            [ 0.48,   0.18]
+        crop_residue:         [ 0.75,  -0.00]
+    so2:
+        species: 'Sulfur dioxide (SO2)'
+        tropical_forest:      [ 0.57,   0.23]
+        extratropical_forest: [ 1.00,   0.23]
+        savanna:              [ 0.35,   0.16]
+        grassland:            [ 0.35,   0.16]
+        crop_residue:         [-0.00,  -0.00]
+
+
 
 
 
