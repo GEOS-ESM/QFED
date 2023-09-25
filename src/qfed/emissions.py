@@ -98,8 +98,7 @@ class Emissions:
         Set the emission factors.
         """
         self.emission_factors_file = emission_factors_file
-        self._ef = read_emission_factors(emission_factors_file)
-
+        self._EF = read_emission_factors(emission_factors_file)
 
     def set_parameters(self):
         """
@@ -144,7 +143,7 @@ class Emissions:
        
         # effective combustion rate
         self._A_f = {}
-        for s in self._ef.keys():
+        for s in self._EF.keys():
             if s in AEROSOL_SPECIES:
                 enhance_factor = enhance_aerosol_C6
             else:
@@ -168,7 +167,7 @@ class Emissions:
         from different types of fires.
         """
         bb = fire.type.name.lower()
-        return self._ef[species][bb]
+        return self._EF[species][bb]
 
     def effective_combustion_rate(self, species, fire):
         """
@@ -184,7 +183,7 @@ class Emissions:
         """
         return self._S_f[platform]
 
-    def calculate(self, species, method='default'):
+    def calculate(self, species=[], method='default'):
         """
         Calculate emissions for each species using built-in
         emission coefficients and fudge factors.
@@ -192,7 +191,12 @@ class Emissions:
         The default method for computing the emissions is
         'sequential-zero'.
         """
-        units_factor = 1e-3   # [g/kg] to [kg/kg] conversion factor
+
+        if not species:
+            species = self._EF.keys()
+        
+        # [g/kg] to [kg/kg] conversion factor
+        units_factor = 1e-3
 
         A_l = np.zeros((self.im, self.jm))
         A_w = np.zeros((self.im, self.jm))

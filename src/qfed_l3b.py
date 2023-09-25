@@ -253,33 +253,12 @@ if __name__ == '__main__':
         output_file = os.path.join(output_dir, output_template.format(d))
         os.makedirs(output_dir, exist_ok=True)
 
-        species = (
-            'co2',
-            'co',
-            'oc',
-            'bc',
-            'so2',
-            'nh3',
-            'pm25',
-            'tpm',
-            'no',
-            'ch4',
-            'mek',
-            'c3h6',
-            'c2h6',
-            'c3h8',
-            'alk4',
-            'ald2',
-            'ch2o',
-            'acet',
-        )
-
         emission_factors_file = os.path.join(
             os.path.dirname(sys.argv[0]), '..', 'etc', 'emission_factors.yaml'
         )
 
         emissions = Emissions(d, frp, frp_density, area, emission_factors_file)
-        emissions.calculate(species)
+        emissions.calculate()
         emissions.save(
             filename=output_file,
             dir=output_dir,
