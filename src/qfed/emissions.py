@@ -16,67 +16,6 @@ from qfed.instruments import Instrument, Satellite
 from qfed import VERSION
 
 
-# Scaling of C6 based on C5 (based on OC tuning)
-# ----------------------------------------------
-alpha = np.array([0.96450253, 1.09728882, 1.12014982, 1.22951496, 1.21702972])
-
-# Combustion rate constant
-# (ECMWF Tech Memo 596)
-# It could be biome-dependent in case we want to tinker
-# with the A-M emission factors
-# -----------------------------------------------------
-Alpha = 1.37e-6 # kg(dry mater)/J
-A_f = {}
-
-#                          Tropical  Extratrop.   
-#                          Forests      Forests  Savanna  Grasslands
-#                          --------  ----------  -------  ----------
-enhance_gas     = np.array(( 1.0,          1.0,     1.0,      1.0 ))
-enhance_aerosol = np.array(( 2.5,          4.5,     1.8,      1.8 ))
-
-enhance_gas = enhance_gas * alpha[1:]
-enhance_aerosol = enhance_aerosol * alpha[1:]
-
-A_f['SO2']  = Alpha * enhance_aerosol
-A_f['OC']   = Alpha * enhance_aerosol
-A_f['BC']   = Alpha * enhance_aerosol
-A_f['NH3']  = Alpha * enhance_aerosol
-A_f['PM25'] = Alpha * enhance_aerosol
-A_f['TPM']  = Alpha * enhance_aerosol
-A_f['CO2']  = Alpha * enhance_gas
-A_f['CO']   = Alpha * enhance_gas
-A_f['NO']   = Alpha * enhance_gas
-A_f['MEK']  = Alpha * enhance_gas
-A_f['C3H6'] = Alpha * enhance_gas
-A_f['C2H6'] = Alpha * enhance_gas
-A_f['C3H8'] = Alpha * enhance_gas
-A_f['ALK4'] = Alpha * enhance_gas
-A_f['ALD2'] = Alpha * enhance_gas
-A_f['CH2O'] = Alpha * enhance_gas
-A_f['ACET'] = Alpha * enhance_gas
-A_f['CH4']  = Alpha * enhance_gas
-
-
-# Satellite Factors
-# -----------------
-S_f = {}
-S_f['MODIS_TERRA'] = 1.385 * alpha[0] # C6 scaling based on C5 above
-S_f['MODIS_AQUA' ] = 0.473
-
-S_f[(Instrument.MODIS, Satellite.TERRA)] = S_f['MODIS_TERRA']
-S_f[(Instrument.MODIS, Satellite.AQUA) ] = S_f['MODIS_AQUA' ]
-S_f[(Instrument.VIIRS, Satellite.JPSS1)] = 1.0
-S_f[(Instrument.VIIRS, Satellite.NPP)  ] = 1.0
-
-#                     Tropical  Extratrop.    
-#                      Forests     Forests   Savanna  Grasslands
-#                     --------  ----------   -------  ----------
-#
-#S_f['MODIS_TERRA'] = ( 1.000,      1.000,    1.000,       1.000 )
-#S_f['MODIS_AQUA' ] = ( 1.000,      1.000,    1.000,       1.000 )
-
-
-
 def read_emission_factors(file):
     with open(file) as f:
         try:
@@ -85,18 +24,18 @@ def read_emission_factors(file):
             data = None
             logging.critical(exc)
 
-    return data['emission_factors']
+    return data['emission_factors']['species']
 
 
-class Emissions():
+class Emissions:
     """
-    Class for computing biomass burning emissions 
-    from gridded FRP and .
+    Class for computing biomass burning emissions
+    from gridded FRP and areas.
     """
 
     def __init__(self, time, FRP, F, area, emission_factors_file):
         """
-        Initializes an Emission object. 
+        Initializes an Emission object.
 
           timestamp  ---   datetime object
 
@@ -121,7 +60,7 @@ class Emissions():
                       observed clear-land area [km2] for each gridbox
         """
 
-        self.area  = area
+        self.area = area
         self.area_land  = {k:area[k]['land' ] for k in area.keys()}
         self.area_water = {k:area[k]['water'] for k in area.keys()}
         self.area_cloud = {k:area[k]['cloud'] for k in area.keys()}
@@ -133,16 +72,15 @@ class Emissions():
         self.platform = list(FRP.keys())
         self.biomass_burning = list(FRP[self.platform[0]].keys())
 
+        self.set_emission_factors(emission_factors_file)
+        self.set_parameters()
         self.set_grid()
-
-        self.emission_factors_file = emission_factors_file
-        self._ef = read_emission_factors(emission_factors_file)
 
     def set_grid(self):
         """
         Sets the grid.
         """
-        #TODO: should use the grid module
+        # TODO: should use the grid module
         self.im, self.jm = self.area_land[self.platform[0]].shape
 
         if (5*self.im - 8*(self.jm - 1)) == 0:
@@ -154,9 +92,97 @@ class Emissions():
             self.lon = np.linspace(-180+d_lon/2, 180-d_lon/2, self.im)
             self.lat = np.linspace( -90+d_lat/2,  90-d_lat/2, self.jm)
 
+
+    def set_emission_factors(self, emission_factors_file):
+        """
+        Set the emission factors.
+        """
+        self.emission_factors_file = emission_factors_file
+        self._ef = read_emission_factors(emission_factors_file)
+
+
+    def set_parameters(self):
+        """
+        Set parameters used in the calculation of emissions,
+        including combustion rate, satellite factors, etc.
+        """
+
+        # Combustion rate constant (ECMWF Tech Memo 596).
+        # It could be biome-dependent in case we want to tinker
+        # with the A-M emission factors
+        Alpha = 1.37e-6 # kg(dry mater)/J
+
+        # enhancement factors for species contributing to AOD
+        AEROSOL_SPECIES = ('oc', 'bc', 'so2', 'nh3', 'pm25', 'tpm')
+        enhance_aerosol_C5 = {
+            'tropical_forest': 2.5,
+            'extratropical_forest': 4.5,
+            'savanna': 1.8,
+            'grassland': 1.8,
+        }
+       
+        # enhancement factors for non-aerosol species
+        enhance_gas_C5 = {
+            'tropical_forest': 1.0,
+            'extratropical_forest': 1.0,
+            'savanna': 1.0,
+            'grassland': 1.0,
+        }
+
+        # Scaling of C6 based on C5 (based on OC tuning)
+        # ----------------------------------------------
+        alpha_C6 = {
+            'MODIS_TERRA': 0.96450253,
+            'tropical_forest': 1.09728882, 
+            'extratropical_forest': 1.12014982, 
+            'savanna': 1.22951496, 
+            'grassland': 1.21702972
+        }
+        
+        enhance_aerosol_C6 = {b:(v * alpha_C6[b]) for b, v in enhance_aerosol_C5.items()}
+        enhance_gas_C6 = {b:(v * alpha_C6[b]) for b, v in enhance_gas_C5.items()}
+       
+        # effective combustion rate
+        self._A_f = {}
+        for s in self._ef.keys():
+            if s in AEROSOL_SPECIES:
+                enhance_factor = enhance_aerosol_C6
+            else:
+                enhance_factor = enhance_gas_C6
+
+            self._A_f[s] = {b:(Alpha * v) for (b, v) in enhance_factor.items()}
+
+        # satellite factors
+        self._S_f = {}
+        self._S_f['MODIS_TERRA'] = 1.385 * alpha_C6['MODIS_TERRA'] # C6 scaling based on C5 above
+        self._S_f['MODIS_AQUA' ] = 0.473
+        
+        self._S_f[(Instrument.MODIS, Satellite.TERRA)] = self._S_f['MODIS_TERRA']
+        self._S_f[(Instrument.MODIS, Satellite.AQUA) ] = self._S_f['MODIS_AQUA' ]
+        self._S_f[(Instrument.VIIRS, Satellite.JPSS1)] = 1.0
+        self._S_f[(Instrument.VIIRS, Satellite.NPP)  ] = 1.0
+
     def emission_factor(self, species, fire):
+        """
+        Returns emission factor for species emitted 
+        from different types of fires.
+        """
         bb = fire.type.name.lower()
         return self._ef[species][bb]
+
+    def effective_combustion_rate(self, species, fire):
+        """
+        Returns the effective combustion rate parameter
+        used in the calculation of emissions.
+        """
+        bb = fire.type.name.lower()
+        return self._A_f[species][bb]
+
+    def satellite_factor(self, platform):
+        """
+        Returns the satellite factor for obs. platform.
+        """
+        return self._S_f[platform]
 
     def calculate(self, species, method='default'):
         """
@@ -166,8 +192,7 @@ class Emissions():
         The default method for computing the emissions is
         'sequential-zero'.
         """
-        # factor needed to convert B_f from [g/kg] to [kg/kg]
-        units_factor = 1e-3
+        units_factor = 1e-3   # [g/kg] to [kg/kg] conversion factor
 
         A_l = np.zeros((self.im, self.jm))
         A_w = np.zeros((self.im, self.jm))
@@ -192,6 +217,7 @@ class Emissions():
             E_[s] = {bb:np.zeros((self.im, self.jm)) for bb in self.biomass_burning}
 
             for p in self.platform:
+                S_f = self.satellite_factor(p)
                 FRP = self.FRP[p]
                 F   = self.F[p]
                 A_  = self.area_cloud[p]
@@ -199,9 +225,9 @@ class Emissions():
                 for bb in self.biomass_burning:
                     # TODO: A_f should be a dict.
                     B_f, eB_f = self.emission_factor(s, bb)
-                    ib = ('tf', 'xf', 'sv', 'gl').index(bb.type.value)
-                    E[s][bb][:,:]  += units_factor * A_f[s.upper()][ib] * S_f[p] * B_f * FRP[bb]
-                    E_[s][bb][:,:] += units_factor * A_f[s.upper()][ib] * S_f[p] * B_f * F[bb] * A_
+                    A_f = self.effective_combustion_rate(s, bb)
+                    E[s][bb][:,:]  += units_factor * A_f * S_f * B_f * FRP[bb]
+                    E_[s][bb][:,:] += units_factor * A_f * S_f * B_f * F[bb] * A_
 
             for bb in self.biomass_burning:
                 E_b  = E[s][bb][:,:]
@@ -222,18 +248,17 @@ class Emissions():
 
                 if method == 'similarity_qfed-2.2':
                     E_b[i] = E_b[i] / A_o[i]
-                   
 
         self.estimate = E
 
 
-    def total(self, specie):
+    def total(self, species):
         """
         Calculates total emissions from fires in all biomes.
         """
         result = np.zeros((self.im, self.jm))
         for bb in self.biomass_burning:
-            result += self.estimate[specie][bb][:,:]
+            result += self.estimate[species][bb][:,:]
 
         return result
 

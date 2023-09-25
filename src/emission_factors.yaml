@@ -1,139 +1,132 @@
-biomes:
-   tropical_forest: 'tf'
-   extratropical_forest: 'xf'
-   savanna: 'sv'
-   grassland: 'gl'
-
-
 emission_factors:
+    sources: 'Andreae and Merlet (2001)'
     units: 'g(species) / kg(dry mater)'
     column: ['overal average', 'natural variation']
-    sources: 'Andreae and Merlet 2001; '
-    co2:
-        species: 'Carbon Dioxide (CO2)'
-        tropical_forest:      [1580.,    90.]
-        extratropical_forest: [1569.,   131.]
-        savanna:              [1613.,    95.]
-        grassland:            [1613.,    95.]
-        crop_residue:         [1585.,   100.]
-    co:
-        species: 'Carbon Monoxide (CO)'
-        tropical_forest:      [ 104.,    20.]
-        extratropical_forest: [ 107.,    37.]
-        savanna:              [  65.,    20.]
-        grassland:            [  65.,    20.]
-        crop_residue:         [ 102.,    33.]
-    oc:
-        species: 'Organic Carbon (OC)'
-        tropical_forest:      [ 5.20,   1.50]
-        extratropical_forest: [ 9.14,   0.55]
-        savanna:              [ 3.40,   1.40]
-        grassland:            [ 3.40,   1.40]
-        crop_residue:         [ 2.30,  -0.00]
-    bc:
-        species: 'Black Carbon (BC)'
-        tropical_forest:      [ 0.66,   0.31]
-        extratropical_forest: [ 0.56,   0.19]
-        savanna:              [ 0.48,   0.18]
-        grassland:            [ 0.48,   0.18]
-        crop_residue:         [ 0.75,  -0.00]
-    so2:
-        species: 'Sulfur Dioxide (SO2)'
-        tropical_forest:      [ 0.57,   0.23]
-        extratropical_forest: [ 1.00,   0.23]
-        savanna:              [ 0.35,   0.16]
-        grassland:            [ 0.35,   0.16]
-        crop_residue:         [-0.00,  -0.00]
-
-    nh3:
-        species: 'Ammonia (NH3)'
-        tropical_forest:      [ 1.30,   0.80]
-        extratropical_forest: [ 1.40,   0.80]
-        savanna:              [ 1.05,   0.45]
-        grassland:            [ 1.05,   0.45]
-        crop_residue:         [ 2.17,   1.27]
-    pm25:
-        species: 'PM2.5'
-        tropical_forest:      [ 9.10,   1.50]
-        extratropical_forest: [13.00,   7.00]
-        savanna:              [ 5.40,   1.50]
-        grassland:            [ 5.40,   1.50]
-        crop_residue:         [ 6.26,   2.36]
-    tpm:
-        species: 'TPM'
-        tropical_forest:      [ 8.50,   2.00]
-        extratropical_forest: [17.60,   6.40]
-        savanna:              [ 8.30,   3.20]
-        grassland:            [ 8.30,   3.20]
-        crop_residue:         [-0.00,  -0.00]
-    'no':
-        species: 'Nitrogen Oxides (NOx as NO)'
-        tropical_forest:      [ 1.60,   0.70]
-        extratropical_forest: [ 3.00,   1.40]
-        savanna:              [ 3.90,   2.40]
-        grassland:            [ 3.90,   2.40]
-        crop_residue:         [ 3.11,   1.57]
-    ch4:
-        species: 'Methane (CH4)'
-        tropical_forest:      [ 6.80,   2.00]
-        extratropical_forest: [ 4.70,   1.90]
-        savanna:              [ 2.30,   0.90]
-        grassland:            [ 2.30,   0.90]
-        crop_residue:         [ 5.82,   3.56]
-    mek:
-        species: 'Methyl Ethyl Ketone (C4H8O)'
-        tropical_forest:      [ 0.43,   0.22]
-        extratropical_forest: [ 0.45,   0.28]
-        savanna:              [ 0.26,   0.13]
-        grassland:            [ 0.26,   0.13]
-        crop_residue:         [-0.00,  -0.00]
-    c3h6:
-        species: 'Propylene (C3H6)'
-        tropical_forest:      [ 0.55,   0.25]
-        extratropical_forest: [ 0.59,   0.16]
-        savanna:              [ 0.26,   0.14]
-        grassland:            [ 0.26,   0.14]
-        crop_residue:         [ 0.68,   0.37]
-    c2h6:
-        species: 'Ethane (C2H6)'
-        tropical_forest:      [ 1.20,   0.70]
-        extratropical_forest: [ 0.60,   0.15]
-        savanna:              [ 0.32,   0.16]
-        grassland:            [ 0.32,   0.16]
-        crop_residue:         [ 0.91,   0.49]
-    c3h8:
-        species: 'Propane (C3H8)'
-        tropical_forest:      [ 0.15,   0.10]
-        extratropical_forest: [ 0.25,   0.11]
-        savanna:              [ 0.09,   0.03]
-        grassland:            [ 0.09,   0.03]
-        crop_residue:         [ 0.28,   0.15]
-    alk4:
-        species: 'C4,5 alkanes (C4H10): n-butane + i-butane'
-        tropical_forest:      [ 0.056,  0.03]
-        extratropical_forest: [ 0.091,  0.05]
-        savanna:              [ 0.025,  0.09]
-        grassland:            [ 0.025,  0.09]
-        crop_residue:         [ 0.097,  0.05]
-    ald2:
-        species: 'Acetaldehyde (C2H4O)'
-        tropical_forest:      [ 0.65,   0.32]
-        extratropical_forest: [ 0.50,   0.02]
-        savanna:              [ 0.50,   0.39]
-        grassland:            [ 0.50,   0.39]
-        crop_residue:         [-0.00,  -0.00]
-    ch2o:
-        species: 'Formaldehyde (HCHO)'
-        tropical_forest:      [ 1.40,   0.70]
-        extratropical_forest: [ 2.20,   0.50]
-        savanna:              [ 0.26,   0.44]
-        grassland:            [ 0.26,   0.44]
-        crop_residue:         [ 2.08,   0.84]
-    acet:
-        species: 'Acetone (C3H6O)'
-        tropical_forest:      [ 0.62,   0.31]
-        extratropical_forest: [ 0.56,   0.04]
-        savanna:              [ 0.43,   0.18]
-        grassland:            [ 0.43,   0.18]
-        crop_residue:         [ 0.45,   0.07]
+    species:
+        co2:
+            name: 'Carbon Dioxide (CO2)'
+            tropical_forest:      [1580.,    90.]
+            extratropical_forest: [1569.,   131.]
+            savanna:              [1613.,    95.]
+            grassland:            [1613.,    95.]
+            crop_residue:         [1585.,   100.]
+        co:
+            name: 'Carbon Monoxide (CO)'
+            tropical_forest:      [ 104.,    20.]
+            extratropical_forest: [ 107.,    37.]
+            savanna:              [  65.,    20.]
+            grassland:            [  65.,    20.]
+            crop_residue:         [ 102.,    33.]
+        oc:
+            name: 'Organic Carbon (OC)'
+            tropical_forest:      [ 5.20,   1.50]
+            extratropical_forest: [ 9.14,   0.55]
+            savanna:              [ 3.40,   1.40]
+            grassland:            [ 3.40,   1.40]
+            crop_residue:         [ 2.30,  -0.00]
+        bc:
+            name: 'Black Carbon (BC)'
+            tropical_forest:      [ 0.66,   0.31]
+            extratropical_forest: [ 0.56,   0.19]
+            savanna:              [ 0.48,   0.18]
+            grassland:            [ 0.48,   0.18]
+            crop_residue:         [ 0.75,  -0.00]
+        so2:
+            name: 'Sulfur Dioxide (SO2)'
+            tropical_forest:      [ 0.57,   0.23]
+            extratropical_forest: [ 1.00,   0.23]
+            savanna:              [ 0.35,   0.16]
+            grassland:            [ 0.35,   0.16]
+            crop_residue:         [-0.00,  -0.00]
+        nh3:
+            name: 'Ammonia (NH3)'
+            tropical_forest:      [ 1.30,   0.80]
+            extratropical_forest: [ 1.40,   0.80]
+            savanna:              [ 1.05,   0.45]
+            grassland:            [ 1.05,   0.45]
+            crop_residue:         [ 2.17,   1.27]
+        pm25:
+            name: 'PM2.5'
+            tropical_forest:      [ 9.10,   1.50]
+            extratropical_forest: [13.00,   7.00]
+            savanna:              [ 5.40,   1.50]
+            grassland:            [ 5.40,   1.50]
+            crop_residue:         [ 6.26,   2.36]
+        tpm:
+            name: 'TPM'
+            tropical_forest:      [ 8.50,   2.00]
+            extratropical_forest: [17.60,   6.40]
+            savanna:              [ 8.30,   3.20]
+            grassland:            [ 8.30,   3.20]
+            crop_residue:         [-0.00,  -0.00]
+        'no':
+            name: 'Nitrogen Oxides (NOx as NO)'
+            tropical_forest:      [ 1.60,   0.70]
+            extratropical_forest: [ 3.00,   1.40]
+            savanna:              [ 3.90,   2.40]
+            grassland:            [ 3.90,   2.40]
+            crop_residue:         [ 3.11,   1.57]
+        ch4:
+            name: 'Methane (CH4)'
+            tropical_forest:      [ 6.80,   2.00]
+            extratropical_forest: [ 4.70,   1.90]
+            savanna:              [ 2.30,   0.90]
+            grassland:            [ 2.30,   0.90]
+            crop_residue:         [ 5.82,   3.56]
+        mek:
+            name: 'Methyl Ethyl Ketone (C4H8O)'
+            tropical_forest:      [ 0.43,   0.22]
+            extratropical_forest: [ 0.45,   0.28]
+            savanna:              [ 0.26,   0.13]
+            grassland:            [ 0.26,   0.13]
+            crop_residue:         [-0.00,  -0.00]
+        c3h6:
+            name: 'Propylene (C3H6)'
+            tropical_forest:      [ 0.55,   0.25]
+            extratropical_forest: [ 0.59,   0.16]
+            savanna:              [ 0.26,   0.14]
+            grassland:            [ 0.26,   0.14]
+            crop_residue:         [ 0.68,   0.37]
+        c2h6:
+            name: 'Ethane (C2H6)'
+            tropical_forest:      [ 1.20,   0.70]
+            extratropical_forest: [ 0.60,   0.15]
+            savanna:              [ 0.32,   0.16]
+            grassland:            [ 0.32,   0.16]
+            crop_residue:         [ 0.91,   0.49]
+        c3h8:
+            name: 'Propane (C3H8)'
+            tropical_forest:      [ 0.15,   0.10]
+            extratropical_forest: [ 0.25,   0.11]
+            savanna:              [ 0.09,   0.03]
+            grassland:            [ 0.09,   0.03]
+            crop_residue:         [ 0.28,   0.15]
+        alk4:
+            name: 'C4,5 alkanes (C4H10): n-butane + i-butane'
+            tropical_forest:      [ 0.056,  0.03]
+            extratropical_forest: [ 0.091,  0.05]
+            savanna:              [ 0.025,  0.09]
+            grassland:            [ 0.025,  0.09]
+            crop_residue:         [ 0.097,  0.05]
+        ald2:
+            name: 'Acetaldehyde (C2H4O)'
+            tropical_forest:      [ 0.65,   0.32]
+            extratropical_forest: [ 0.50,   0.02]
+            savanna:              [ 0.50,   0.39]
+            grassland:            [ 0.50,   0.39]
+            crop_residue:         [-0.00,  -0.00]
+        ch2o:
+            name: 'Formaldehyde (HCHO)'
+            tropical_forest:      [ 1.40,   0.70]
+            extratropical_forest: [ 2.20,   0.50]
+            savanna:              [ 0.26,   0.44]
+            grassland:            [ 0.26,   0.44]
+            crop_residue:         [ 2.08,   0.84]
+        acet:
+            name: 'Acetone (C3H6O)'
+            tropical_forest:      [ 0.62,   0.31]
+            extratropical_forest: [ 0.56,   0.04]
+            savanna:              [ 0.43,   0.18]
+            grassland:            [ 0.43,   0.18]
+            crop_residue:         [ 0.45,   0.07]
 
