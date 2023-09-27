@@ -264,5 +264,5 @@ if __name__ == '__main__':
             dir=output_dir,
             forecast=l3a_fcst_files,
             ndays=args.ndays,
-            uncompressed=args.uncompressed,
+            compress=(not args.uncompressed),
         )

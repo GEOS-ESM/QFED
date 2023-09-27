@@ -288,16 +288,33 @@ class Emissions:
         dir       ---  optional directory name, only used
                        when *filename* is omitted
         """
-
         nymd = 22220101  # 10000*self.date.year + 100*self.date.month + self.date.day
         nhms = 120000
 
-        # loop over species
+        # create a file for each of the considered species
         self.file = {}
-        for s in self.estimate.keys():
-            file = os.path.join(dir, f'qfed.emis_{s.lower()}.{nymd}.nc4')
-            self.file[s] = file
+        for species in self.estimate.keys():
+            file = os.path.join(dir, f'qfed.emis_{species}.{nymd}.nc4'.lower())
+            self.file[species] = file
 
+            # construct meta data for the data variables: name, long name and units
+            v_meta_data = {
+                'total': {
+                    'name': 'biomass',
+                    'long_name': f'Biomass burning emissions of {species.upper()}',
+                    'units': 'kg s-1 m-2',
+                }
+            }
+
+            for bb in self.biomass_burning:
+                fire = bb.type.name.title().replace('_', ' ')
+                v_meta_data[bb] = {
+                    'name': f'biomass_{bb.type.value}',
+                    'long_name': f'Biomass burning emissions of {species.upper()} from {fire}',
+                    'units': 'kg s-1 m-2',
+                }
+
+            # create a file
             f = nc.Dataset(file, 'w', format='NETCDF4')
 
             # global attributes
@@ -316,15 +333,22 @@ class Emissions:
             f.createDimension('lat', len(self.lat))
             f.createDimension('time', None)
 
-            # variables
+            # coordinate variables
             f.createVariable('lon', 'f8', ('lon'))
             f.createVariable('lat', 'f8', ('lat'))
             f.createVariable('time', 'i4', ('time'))
 
-            for v in ('biomass', 'biomass_tf', 'biomass_xf', 'biomass_sv', 'biomass_gl'):
-                f.createVariable(v, 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False)
+            # data variables
+            for v in v_meta_data.values():
+                f.createVariable(
+                    v['name'],
+                    'f4',
+                    ('time', 'lat', 'lon'),
+                    fill_value=fill_value,
+                    zlib=False,
+                )
 
-            # variables attributes
+            # coordinate variables - attributes
             v = f.variables['lon']
             v.long_name = 'longitude'
             v.standard_name = 'longitude'
@@ -346,38 +370,41 @@ class Emissions:
             v.begin_date = np.array(begin_date, dtype=np.int32)
             v.begin_time = np.array(begin_time, dtype=np.int32)
 
-            # long name and units
-            v_meta_data = {
-                'biomass'   : (f'Biomass Burning Emissions of {s}', 'kg s-1 m-2'),
-                'biomass_tf': (f'Biomass Burning Emissions of {s} from Tropical Forests', 'kg s-1 m-2'),
-                'biomass_xf': (f'Biomass Burning Emissions of {s} from Extratropical Forests', 'kg s-1 m-2'),
-                'biomass_sv': (f'Biomass Burning Emissions of {s} from Savanna', 'kg s-1 m-2'),
-                'biomass_gl': (f'Biomass Burning Emissions of {s} from Grasslands', 'kg s-1 m-2'),
-            }
-
-            for _v, (_l, _u) in v_meta_data.items():
-                v = f.variables[_v]
-                v.long_name = _l
-                v.units = _u
+            # data variables - attributes
+            for _v in v_meta_data.values():
+                v = f.variables[_v['name']]
+                v.long_name = _v['long_name']
+                v.units = _v['units']
                 v.missing_value = np.array(fill_value, np.float32)
                 v.fmissing_value = np.array(fill_value, np.float32)
                 v.vmin = np.array(fill_value, np.float32)
                 v.vmax = np.array(fill_value, np.float32)
 
-            # data
+            # coordinate variables - data
             f.variables['time'][:] = np.array((0,))
             f.variables['lon'][:] = np.array(self.lon)
             f.variables['lat'][:] = np.array(self.lat)
 
-            f.variables['biomass'][0, :, :] = np.transpose(self.total(s)[:, :])
-
+            # data variables - data
+            f.variables['biomass'][0, :, :] = np.transpose(self.total(species)[:, :])
             for bb in self.biomass_burning:
-                v = f.variables[f'biomass_{bb.type.value}']
-                v[0, :, :] = np.transpose(self.estimate[s][bb][:, :])
+                v = f.variables[v_meta_data[bb]['name']]
+                v[0, :, :] = np.transpose(self.estimate[species][bb][:, :])
 
             f.close()
 
             logging.info(f"Successfully saved gridded emissions to file {filename}.")
+
+    def compress_n4zip(self):
+        """
+        Compress output files with n4zip.
+        """
+        for s, f in self.filename.items():
+            rc = os.system(f'n4zip {f}')
+            if rc:
+                logging.warning(f"Could not compress file '{f}'.")
+            else:
+                logging.info(f"Successfully compressed file '{f}'.")
 
     def save(
         self,
@@ -386,7 +413,7 @@ class Emissions:
         forecast=None,
         expid='qfed2',
         ndays=1,
-        uncompressed=False,
+        compress=False,
     ):
         """
         Writes gridded emissions that can persist for a number of days. You must
@@ -401,8 +428,7 @@ class Emissions:
         expid         ---  optional experiment id, only used
                            when *filename* is omitted
         ndays         ---  persist emissions for a number of days
-        uncompressed  ---  use n4zip to compress gridded output file
-
+        compress      ---  use n4zip to compress gridded output file
         """
 
         # TODO:
@@ -413,15 +439,9 @@ class Emissions:
             # write out the emission files
             self._save_ana(dir, filename, fill_value=1e20)
 
-            if not uncompressed:
-                for s, f in self.filename.items():
-                    rc = os.system(f'n4zip {f}')
-                    if rc:
-                        logging.warning(f"Could not compress file '{f}'.")
-                    else:
-                        logging.info(f"Successfully compressed file '{f}'.")
+            if compress:
+                self.compress()
 
             # increment time to persist emissions
             self.time = self.time + timedelta(hours=24)
-
 
