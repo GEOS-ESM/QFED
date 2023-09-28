@@ -415,10 +415,11 @@ class GriddedFRP:
         dir={'ana': '.', 'bkg': '.'},
         qc=True,
         bootstrap=False,
+        compress=False,
         fill_value=1e15,
     ):
         """
-        Writes gridded Areas and FRP to file.
+        Saves gridded Areas and FRP to file.
         """
         if timestamp is None:
             logging.warning(
@@ -436,23 +437,25 @@ class GriddedFRP:
             logging.info("Skipping modulation of FRP due to QC being disabled.")
 
         self._save_as_netcdf4(
-            filename=filename,
-            date=timestamp,
-            dir=dir['ana'],
-            bootstrap=bootstrap,
-            fill_value=fill_value,
+            timestamp,
+            dir['ana'],
+            filename,
+            bootstrap,
+            compress,
+            fill_value,
         )
 
     def _save_as_netcdf4(
         self,
         date=None,
-        filename=None,
         dir='.',
+        filename=None,
         bootstrap=False,
+        compress=False,
         fill_value=1e15,
     ):
         """
-        Writes gridded Areas and FRP to a NetCDF4 file.
+        Saves gridded Areas and FRP to a NetCDF4 file.
         """
 
         if bootstrap:
@@ -464,7 +467,7 @@ class GriddedFRP:
             # global attributes
             f.Conventions = "COARDS"
             f.institution = "NASA/GSFC, Global Modeling and Assimilation Office"
-            f.title = f"QFED Gridded FRP (Level-3A, v{VERSION}"
+            f.title = f"QFED Gridded FRP (Level-3A, v{VERSION})"
             f.contact = "Anton Darmenov <anton.s.darmenov@nasa.gov>"
             f.version = VERSION
             f.source = "TODO"
@@ -478,24 +481,36 @@ class GriddedFRP:
             f.createDimension('time', None)
 
             # coordinate variables
-            f.createVariable('lon', 'f8', ('lon'))
-            f.createVariable('lat', 'f8', ('lat'))
-            f.createVariable('time', 'i4', ('time'))
+            f.createVariable('lon', 'f8', dimensions='lon')
+            f.createVariable('lat', 'f8', dimensions='lat')
+            f.createVariable('time', 'i4', dimensions='time')
 
             # data variables
             for v in ('land', 'water', 'cloud', 'unknown'):
                 f.createVariable(
-                    v, 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False
+                    v,
+                    'f4',
+                    dimensions=('time', 'lat', 'lon'),
+                    fill_value=fill_value,
+                    zlib=compress,
                 )
 
             for v in ('frp_tf', 'frp_xf', 'frp_sv', 'frp_gl'):
                 f.createVariable(
-                    v, 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False
+                    v,
+                    'f4',
+                    dimensions=('time', 'lat', 'lon'),
+                    fill_value=fill_value,
+                    zlib=compress,
                 )
 
             for v in ('fb_tf', 'fb_xf', 'fb_sv', 'fb_gl'):
                 f.createVariable(
-                    v, 'f4', ('time', 'lat', 'lon'), fill_value=fill_value, zlib=False
+                    v,
+                    'f4',
+                    dimensions=('time', 'lat', 'lon'),
+                    fill_value=fill_value,
+                    zlib=compress,
                 )
 
             # variables attributes
