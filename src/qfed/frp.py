@@ -94,13 +94,11 @@ class GriddedFRP:
             gp_file = None
 
         if gp_file is None:
-            msg = (
+            logging.warning(
                 f"Skipping file '{fp_filename}' because "
                 f"the required geolocation file "
                 f"'{geolocation_product_file}' was not found."
             )
-
-            logging.warning(msg)
 
             # interrupt further processing of data associated with this granule
             return
@@ -109,12 +107,10 @@ class GriddedFRP:
         n_fires = self._fp_reader.get_num_fire_pixels(fire_product_file)
 
         if n_fires == 0:
-            msg = (
+            logging.info(
                 f"Skipping file '{fp_filename}' because "
                 f"it does not contain fires.\n"
             )
-
-            logging.info(msg)
 
             # TODO: Interrupting the processing 'here' means that
             #       none of the no-fire pixels (water, land, cloud, etc.)
@@ -382,7 +378,7 @@ class GriddedFRP:
                 lon[i][j], lat[i][j], frp[i][j], self.im, self.jm, self.grid_type
             )
 
-    def ingest(self, date_start, date_end):
+    def ingest(self, t_start, t_end):
         """
         Ingests input data.
         """
@@ -402,31 +398,25 @@ class GriddedFRP:
         self.frp = {bb: np.zeros((self.im, self.jm)) for bb in fire.BIOMASS_BURNING}
 
         # find the input files and process the data
-        input_data = self._finder.find(date_start, date_end)
+        input_data = self._finder.find(t_start, t_end)
         for i in input_data:
             self._igbp_dir = i.vegetation
             self._process(i.geolocation, i.fire)
 
     def save(
         self,
-        filename=None,
-        timestamp=None,
+        file,
+        timestamp,
+        instrument='',
         satellite='',
-        dir={'ana': '.', 'bkg': '.'},
+        source='',
         qc=True,
-        bootstrap=False,
         compress=False,
         fill_value=1e15,
     ):
         """
         Saves gridded Areas and FRP to file.
         """
-        if timestamp is None:
-            logging.warning(
-                "An output file is not written due to mismatched input file."
-            )
-            return
-
         if qc == True:
             raise NotImplementedError('QA is not implemented.')
             # TODO
@@ -437,138 +427,118 @@ class GriddedFRP:
             logging.info("Skipping modulation of FRP due to QC being disabled.")
 
         self._save_as_netcdf4(
+            file,
             timestamp,
-            dir['ana'],
-            filename,
-            bootstrap,
+            instrument,
+            satellite,
+            source,
             compress,
             fill_value,
         )
 
     def _save_as_netcdf4(
         self,
-        date=None,
-        dir='.',
-        filename=None,
-        bootstrap=False,
+        file,
+        timestamp,
+        instrument='',
+        satellite='',
+        source='',
         compress=False,
         fill_value=1e15,
     ):
         """
         Saves gridded Areas and FRP to a NetCDF4 file.
         """
+        f = nc.Dataset(file, 'w', format='NETCDF4')
 
-        if bootstrap:
-            logging.info("Prior FRP are initialized to zero.")
+        # global attributes
+        f.Conventions = "COARDS"
+        f.institution = "NASA/GSFC, Global Modeling and Assimilation Office"
+        f.title = f"QFED Gridded FRP (Level-3A, v{VERSION})"
+        f.contact = "Anton Darmenov <anton.s.darmenov@nasa.gov>"
+        f.version = VERSION
+        f.source = f"{source}"
+        f.instrument = f"{instrument}"
+        f.satellite = f"{satellite}"
+        f.processed = str(datetime.now())
+        f.history = ""
 
-            # create a file
-            f = nc.Dataset(filename, 'w', format='NETCDF4')
+        # dimensions
+        f.createDimension('lon', len(self.glon))
+        f.createDimension('lat', len(self.glat))
+        f.createDimension('time', None)
 
-            # global attributes
-            f.Conventions = "COARDS"
-            f.institution = "NASA/GSFC, Global Modeling and Assimilation Office"
-            f.title = f"QFED Gridded FRP (Level-3A, v{VERSION})"
-            f.contact = "Anton Darmenov <anton.s.darmenov@nasa.gov>"
-            f.version = VERSION
-            f.source = "TODO"
-            f.processed = str(datetime.now())
-            f.history = ""
-            f.platform = "TODO: modis/aqua"
+        # coordinate variables
+        f.createVariable('lon', 'f8', dimensions='lon')
+        f.createVariable('lat', 'f8', dimensions='lat')
+        f.createVariable('time', 'i4', dimensions='time')
 
-            # dimensions
-            f.createDimension('lon', len(self.glon))
-            f.createDimension('lat', len(self.glat))
-            f.createDimension('time', None)
+        # data variables
+        for v in ('land', 'water', 'cloud', 'unknown'):
+            f.createVariable(
+                v,
+                'f4',
+                dimensions=('time', 'lat', 'lon'),
+                fill_value=fill_value,
+                zlib=compress,
+            )
 
-            # coordinate variables
-            f.createVariable('lon', 'f8', dimensions='lon')
-            f.createVariable('lat', 'f8', dimensions='lat')
-            f.createVariable('time', 'i4', dimensions='time')
+        for v in ('frp_tf', 'frp_xf', 'frp_sv', 'frp_gl'):
+            f.createVariable(
+                v,
+                'f4',
+                dimensions=('time', 'lat', 'lon'),
+                fill_value=fill_value,
+                zlib=compress,
+            )
 
-            # data variables
-            for v in ('land', 'water', 'cloud', 'unknown'):
-                f.createVariable(
-                    v,
-                    'f4',
-                    dimensions=('time', 'lat', 'lon'),
-                    fill_value=fill_value,
-                    zlib=compress,
-                )
+        # variables attributes
+        v = f.variables['lon']
+        v.long_name = 'longitude'
+        v.standard_name = 'longitude'
+        v.units = 'degrees_east'
+        v.comment = 'center_of_cell'
 
-            for v in ('frp_tf', 'frp_xf', 'frp_sv', 'frp_gl'):
-                f.createVariable(
-                    v,
-                    'f4',
-                    dimensions=('time', 'lat', 'lon'),
-                    fill_value=fill_value,
-                    zlib=compress,
-                )
+        v = f.variables['lat']
+        v.long_name = 'latitude'
+        v.standard_name = 'latitude'
+        v.units = 'degrees_north'
+        v.comment = 'center_of_cell'
 
-            for v in ('fb_tf', 'fb_xf', 'fb_sv', 'fb_gl'):
-                f.createVariable(
-                    v,
-                    'f4',
-                    dimensions=('time', 'lat', 'lon'),
-                    fill_value=fill_value,
-                    zlib=compress,
-                )
+        v = f.variables['time']
+        begin_date = int(f'{timestamp:%Y%m%d}')
+        begin_time = int(f'{timestamp:%H%M%S}')
+        v.long_name = 'time'
+        v.standard_name = 'time'
+        v.units = f'minutes since {timestamp:%Y-%m-%d %H:%M:%S}'
+        v.begin_date = np.array(begin_date, dtype=np.int32)
+        v.begin_time = np.array(begin_time, dtype=np.int32)
 
-            # variables attributes
-            v = f.variables['lon']
-            v.long_name = 'longitude'
-            v.standard_name = 'longitude'
-            v.units = 'degrees_east'
-            v.comment = 'center_of_cell'
+        # long name and units
+        v_meta_data = {
+            'land': ('Area of cloud-free land pixels', 'km2'),
+            'water': ('Area of water pixels', 'km2'),
+            'cloud': ('Area of cloud pixels over land', 'km2'),
+            'unknown': ('Area of cloud pixels', 'km2'),
+            'frp_tf': ('Fire Radiative Power (Tropical Forests)', 'MW'),
+            'frp_xf': ('Fire Radiative Power (Extra-tropical Forests)', 'MW'),
+            'frp_sv': ('Fire Radiative Power (Savanna)', 'MW'),
+            'frp_gl': ('Fire Radiative Power (Grasslands)', 'MW'),
+        }
 
-            v = f.variables['lat']
-            v.long_name = 'latitude'
-            v.standard_name = 'latitude'
-            v.units = 'degrees_north'
-            v.comment = 'center_of_cell'
+        for _v, (_l, _u) in v_meta_data.items():
+            v = f.variables[_v]
+            v.long_name = _l
+            v.units = _u
+            v.missing_value = np.array(fill_value, np.float32)
+            v.fmissing_value = np.array(fill_value, np.float32)
+            v.vmin = np.array(fill_value, np.float32)
+            v.vmax = np.array(fill_value, np.float32)
 
-            v = f.variables['time']
-            begin_date = int(f'{date:%Y%m%d}')
-            begin_time = int(f'{date:%H%M%S}')
-            v.long_name = 'time'
-            v.standard_name = 'time'
-            v.units = f'minutes since {date:%Y-%m-%d %H:%M:%S}'
-            v.begin_date = np.array(begin_date, dtype=np.int32)
-            v.begin_time = np.array(begin_time, dtype=np.int32)
-
-            # long name and units
-            v_meta_data = {
-                'land': ('Area of cloud-free land pixels', 'km2'),
-                'water': ('Area of water pixels', 'km2'),
-                'cloud': ('Area of cloud pixels over land', 'km2'),
-                'unknown': ('Area of cloud pixels', 'km2'),
-                'frp_tf': ('Fire Radiative Power (Tropical Forests)', 'MW'),
-                'frp_xf': ('Fire Radiative Power (Extra-tropical Forests)', 'MW'),
-                'frp_sv': ('Fire Radiative Power (Savanna)', 'MW'),
-                'frp_gl': ('Fire Radiative Power (Grasslands)', 'MW'),
-                'fb_tf': ('Background FRP Density (Tropical Forests)', 'MW km-2'),
-                'fb_xf': ('Background FRP Density (Extra-tropical Forests)', 'MW km-2'),
-                'fb_sv': ('Background FRP Density (Savanna)', 'MW km-2'),
-                'fb_gl': ('Background FRP Density (Grasslands)', 'MW km-2'),
-            }
-
-            for _v, (_l, _u) in v_meta_data.items():
-                v = f.variables[_v]
-                v.long_name = _l
-                v.units = _u
-                v.missing_value = np.array(fill_value, np.float32)
-                v.fmissing_value = np.array(fill_value, np.float32)
-                v.vmin = np.array(fill_value, np.float32)
-                v.vmax = np.array(fill_value, np.float32)
-
-            # data
-            f.variables['time'][:] = np.array((0,))
-            f.variables['lon'][:] = np.array(self.glon)
-            f.variables['lat'][:] = np.array(self.glat)
-        else:
-            raise NotImplementedError('Sequential FRP estimate is not implemented')
-            # TODO: - filename should correspond to date + 24h in case of daily files
-            #       - will need new approach to generlize for arbitrary time periods/steps
-            f = nc.Dataset(filename, 'r+', format='NETCDF4')
+        # data
+        f.variables['time'][:] = np.array((0,))
+        f.variables['lon'][:] = np.array(self.glon)
+        f.variables['lat'][:] = np.array(self.glat)
 
         # data
         f.variables['land'][0, :, :] = np.transpose(self.area_land)
@@ -580,16 +550,8 @@ class GriddedFRP:
             biome = bb.type.value
             f.variables[f'frp_{biome}'][0, :, :] = np.transpose(frp)
 
-        if bootstrap:
-            for bb, frp in self.frp.items():
-                biome = bb.type.value
-                f.variables[f'fb_{biome}'][0, :, :] = np.zeros_like(np.transpose(frp))
-
         f.close()
-
-        logging.info(
-            f"Successfully saved gridded FRP and areas to file '{filename}'.\n\n"
-        )
+        logging.info(f"Successfully saved gridded FRP and areas to file '{file}'.\n\n")
 
 
 def _binareas(lon, lat, area, im, jm, grid_type):

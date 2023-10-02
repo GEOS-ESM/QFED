@@ -4,6 +4,7 @@ Calculate emissions from Fire Radiative Flux (FRP/Area).
 
 
 import os
+import subprocess
 import logging
 import yaml
 from datetime import date, datetime, timedelta
@@ -276,27 +277,24 @@ class Emissions:
 
         return result
 
-    def _save_ana(self, dir, filename, fill_value=1e15):
+    def _save_as_netcdf4(self, dir, filename, compress=False, fill_value=1e15):
         """
-        Writes gridded emissions. You must call method
-        calculate() first. Optional input parameters:
-
-        filename  ---  file name; if not specified each
-                       species will be written to a separate
-                       file, e.g.,
-                          qfed2.emis_co.sfc.20030205.nc4
-        dir       ---  optional directory name, only used
-                       when *filename* is omitted
+        Saves gridded emissions to a file. 
         """
         nymd = 22220101  # 10000*self.date.year + 100*self.date.month + self.date.day
         nhms = 120000
 
-        # create a file for each of the considered species
-        self.file = {}
-        for species in self.estimate.keys():
-            file = os.path.join(dir, f'qfed.emis_{species}.{nymd}.nc4'.lower())
-            self.file[species] = file
+        # map species to output files
+        self.file = {
+            species: os.path.join(dir, f'qfed.emis_{species}.{nymd}.nc4'.lower())
+            for species in self.estimate.keys()
+        }
 
+        # TODO
+        nymd = 22220101  # 10000*self.date.year + 100*self.date.month + self.date.day
+        nhms = 120000
+
+        for species, file in self.file.items():
             # construct meta data for the data variables: name, long name and units
             v_meta_data = {
                 'total': {
@@ -305,7 +303,6 @@ class Emissions:
                     'units': 'kg s-1 m-2',
                 }
             }
-
             for bb in self.biomass_burning:
                 fire = bb.type.name.title().replace('_', ' ')
                 v_meta_data[bb] = {
@@ -323,10 +320,10 @@ class Emissions:
             f.title = 'QFED Gridded Emissions (Level-3B, v{0:s})'.format(VERSION)
             f.contact = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
             f.version = VERSION
-            f.source = 'TODO'
+            f.source = ''
             f.processed = str(datetime.now())
             f.history = ''
-            f.platform = 'TODO'
+            # f.platform = 'TODO'
 
             # dimensions
             f.createDimension('lon', len(self.lon))
@@ -334,18 +331,18 @@ class Emissions:
             f.createDimension('time', None)
 
             # coordinate variables
-            f.createVariable('lon', 'f8', ('lon'))
-            f.createVariable('lat', 'f8', ('lat'))
-            f.createVariable('time', 'i4', ('time'))
+            f.createVariable('lon', 'f8', dimensions='lon')
+            f.createVariable('lat', 'f8', dimensions='lat')
+            f.createVariable('time', 'i4', dimensions='time')
 
             # data variables
             for v in v_meta_data.values():
                 f.createVariable(
                     v['name'],
                     'f4',
-                    ('time', 'lat', 'lon'),
+                    dimensions=('time', 'lat', 'lon'),
                     fill_value=fill_value,
-                    zlib=False,
+                    zlib=compress,
                 )
 
             # coordinate variables - attributes
@@ -393,54 +390,50 @@ class Emissions:
 
             f.close()
 
-            logging.info(f"Successfully saved gridded emissions to file {filename}.")
+            logging.info(f"Successfully saved gridded emissions to file '{filename}'.")
 
     def compress_n4zip(self):
         """
         Compress output files with n4zip.
         """
-        for s, f in self.filename.items():
-            rc = os.system(f'n4zip {f}')
-            if rc:
-                logging.warning(f"Could not compress file '{f}'.")
+        for species, file in self.file.items():
+            result = subprocess.run(
+                'n4zip',
+                file,
+                stdout = subprocess.DEVNULL,
+                stderr = subprocess.DEVNULL,
+            )
+
+            if result.returncode:
+                logging.warning(f"Could not compress file '{file}' with n4zip.")
             else:
-                logging.info(f"Successfully compressed file '{f}'.")
+                logging.info(f"Successfully compressed file '{file}' with n4zip.")
 
     def save(
         self,
-        filename=None,
-        dir='.',
+        dir,
+        filename,
         forecast=None,
-        expid='qfed2',
         ndays=1,
         compress=False,
+        fill_value=1e20,
     ):
         """
-        Writes gridded emissions that can persist for a number of days. You must
-        call method calculate() first. Optional input parameters:
-
-        filename      ---  file name; if not specified each
-                           species will be written to a separate
-                           file, e.g.,
-                           qfed2.emis_co.sfc.20030205.nc4
-        dir           ---  optional directory name, only used
-                           when *filename* is omitted
-        expid         ---  optional experiment id, only used
-                           when *filename* is omitted
-        ndays         ---  persist emissions for a number of days
-        compress      ---  use n4zip to compress gridded output file
+        Saves gridded emissions to a file. 
+        
+        If the argument ndays is larger than 1,
+        the estimated emissions will be persisted
+        over the specified number of days.
         """
 
         # TODO:
-        # self._write_fcs(forecast, fill_value=1.0e20)
+        # self._save_forecast(forecast, fill_value=1.0e20)
 
         for n in range(ndays):
+            self._save_as_netcdf4(dir, filename, compress in (True,), fill_value)
 
-            # write out the emission files
-            self._save_ana(dir, filename, fill_value=1e20)
-
-            if compress:
-                self.compress()
+            if compress == 'n4zip':
+                self.compress_n4zip()
 
             # increment time to persist emissions
             self.time = self.time + timedelta(hours=24)

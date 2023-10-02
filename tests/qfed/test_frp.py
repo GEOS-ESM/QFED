@@ -18,7 +18,6 @@ class test(unittest.TestCase):
         """
         Test basic functionality of GriddedFRP instances.
         """
-
         modis_dir = '/discover/nobackup/dao_ops/intermediate/flk/modis'
         viirs_dir = '/css/viirs/data/'
         igbp_dir  = '/discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/'
@@ -59,12 +58,7 @@ class test(unittest.TestCase):
 
         frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
         frp.ingest(time_s, time_e)
-        frp.save(
-            filename='qfed3-foo.frp.modis-terra.nc4',
-            timestamp=time,
-            bootstrap=True,
-            qc=False,
-        )
+        frp.save('qfed3-foo.frp.modis-terra.nc4', time, qc=False)
 
         # MODIS/Aqua
         gp_file = os.path.join(
@@ -94,12 +88,7 @@ class test(unittest.TestCase):
 
         frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
         frp.ingest(time_s, time_e)
-        frp.save(
-            filename='qfed3-foo.frp.modis-aqua.nc4',
-            timestamp=time,
-            bootstrap=True,
-            qc=False,
-        )
+        frp.save('qfed3-foo.frp.modis-aqua.nc4', time, qc=False)
 
         # VIIRS-NPP
         # gp_dir = os.path.join(viirs_dir, 'Level1', 'NPP_IMFTS_L1', '{0:%Y}', '{0:%j}')
@@ -130,12 +119,7 @@ class test(unittest.TestCase):
 
         frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
         frp.ingest(time_s, time_e)
-        frp.save(
-            filename='qfed3-foo.frp.viirs-npp.nc4',
-            timestamp=time,
-            bootstrap=True,
-            qc=False,
-        )
+        frp.save('qfed3-foo.frp.viirs-npp.nc4', time, qc=False)
 
         # VIIRS-JPSS1
         gp_file = os.path.join(
@@ -165,12 +149,7 @@ class test(unittest.TestCase):
 
         frp = GriddedFRP(grid_, finder, gp_reader, fp_reader, cp_reader)
         frp.ingest(time_s, time_e)
-        frp.save(
-            filename='qfed3-foo.frp.viirs-jpss1.nc4',
-            timestamp=time,
-            bootstrap=True,
-            qc=False,
-        )
+        frp.save('qfed3-foo.frp.viirs-jpss1.nc4', time, qc=False)
 
 
 if __name__ == '__main__':

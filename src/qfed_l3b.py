@@ -128,6 +128,34 @@ def display_banner(version):
     logging.info('')
 
 
+def search(file_l3a, logging):
+    """
+    Search for a L3A file in the filesystem.
+    """
+    match = glob(file_l3a)
+
+    if not match:
+        logging.warning(
+            f"Did not find QFED L3A file '{search_path}'. "
+            f"This file will not be included in the processing."
+        )
+        return ()
+
+    if len(match) > 1:
+        logging.warning(
+            f"Found multiple files matching "
+            f"pattern '{os.path.basename(file_l3a)}' "
+            f"in directory '{os.path.dirname(file_l3a)}': "
+            f"{match}."
+        )
+        logging.warning(
+            f"Retaining file {match[0]}. The remaining files "
+            f"{match[1:]} will not be included in the processing."
+        )
+
+    return match[0]
+
+
 if __name__ == '__main__':
 
     defaults = dict(
@@ -181,35 +209,9 @@ if __name__ == '__main__':
                 )
             )
 
-            match = glob(search_path)
-            if match:
-                if len(match) > 1:
-                    logging.warning(
-                        (
-                            f"Found multiple files matching "
-                            f"pattern '{os.path.basename(search_path)}' "
-                            f"in directory '{os.path.dirname(search_path)}': "
-                            f"{match}."
-                        )
-                    )
-
-                    logging.warning(
-                        (
-                            f"Retaining file {match[0]}. The remaining files "
-                            f"{match[1:]} will not be included in the processing."
-                        )
-                    )
-            else:
-                logging.warning(
-                    (
-                        f"Did not find QFED L3A file '{search_path}'. "
-                        f"This file will not be included in the processing."
-                    )
-                )
-
+            l3a_file = search(search_path, logging)
+            if not l3a_file:
                 continue
-
-            l3a_file = match[0]
 
             logging.info(f"Reading QFED L3A file '{os.path.basename(l3a_file)}'.")
             f = nc.Dataset(l3a_file, 'r')
@@ -225,7 +227,8 @@ if __name__ == '__main__':
             }
 
             frp_density[platform] = {
-                bb: np.transpose(f.variables[f'fb_{bb.type.value}'][0, :, :])
+                # TODO: read the predicted FRP
+                bb: np.zeros_like(frp[platform][bb])
                 for bb in fire.BIOMASS_BURNING
             }
 

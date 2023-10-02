@@ -163,9 +163,11 @@ if __name__ == '__main__':
         frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
         frp.ingest(time_s, time_e)
         frp.save(
-            filename=output_file,
-            timestamp=time,
-            bootstrap=True,
+            output_file,
+            time,
             qc=False,
+            source=f'{instrument}/{satellite}'.upper(),
+            instrument=instrument.upper(),
+            satellite=satellite.upper(),
             fill_value=1e20,
         )
