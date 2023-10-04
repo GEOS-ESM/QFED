@@ -1,3 +1,7 @@
+emissions: 
+        - ./validation/v3.0.0-geos-esm/QFED/
+        - qfed.emis_co2.{0:%Y%m%d}.{0:%H%M}.300.nc4
+
 modis/terra:
     geolocation:
         - /discover/nobackup/dao_ops/intermediate/flk/modis/061/MOD03/
@@ -26,7 +30,7 @@ viirs/npp:
     frp: qfed.frp.vnp.{0:%Y%m%d}.{0:%H%M}.300.nc4
 
 viirs/jpss-1:
-    geolocation: 
+    geolocation:
         - /css/viirs/data/Level1/VJ103IMG.trimmed/
         - VJ103IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
     fires:
@@ -36,4 +40,4 @@ viirs/jpss-1:
 
 igbp: /discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/
 
-
+watermask: watermask-700m.nc4

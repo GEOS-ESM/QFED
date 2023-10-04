@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 import yaml
 import argparse
 
+import netCDF4 as nc
+
 from qfed import grid
 from qfed import geolocation_products
 from qfed import classification_products
@@ -105,6 +107,15 @@ def display_banner(version):
     logging.info('')
 
 
+def auxiliary_watermask(file):
+    logging.info(f"Reading auxiliary watermask from file '{file}'.")
+    f = nc.Dataset(file)
+    watermask = f.variables['watermask'][...]
+    f.close()
+    logging.debug(f'The auxiliary watermask uses {1e-6*watermask.nbytes} MB of RAM.')
+    return watermask
+
+
 if __name__ == '__main__':
 
     defaults = dict(
@@ -137,6 +148,8 @@ if __name__ == '__main__':
     output_grid = grid.Grid(args.resolution)
     products = args.products.replace(' ', '').split(',')
 
+    watermask = auxiliary_watermask(config['watermask'])
+
     for p in products:
         instrument, satellite = p.split('/')
         platform = Instrument(instrument), Satellite(satellite)
@@ -158,6 +171,9 @@ if __name__ == '__main__':
         gp_reader = geolocation_products.create(*platform)
         fp_reader = fire_products.create(*platform)
         cp_reader = classification_products.create(*platform)
+
+        if Instrument(instrument) == Instrument.VIIRS:
+            cp_reader.set_auxiliary(watermask=watermask)
 
         # generate gridded FRP and areas
         frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)

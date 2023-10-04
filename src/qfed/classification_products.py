@@ -110,6 +110,9 @@ class MODIS(PixelClassifier):
         self._get_fire_mask()
         self._get_algorithm_qa()
 
+    def set_auxiliary(self, **kwargs):
+        pass
+
     def _get_fire_mask(self):
         self._fire_mask = self._engine.get_variable(self._file, 'fire mask')
 
@@ -303,21 +306,28 @@ class VIIRS(PixelClassifier):
     AQA_RESIDUAL_BOWTIE_PIXEL_FALSE = 0
 
 
-    def __init__(self, engine, watermask=None, mask=None):
+    def __init__(self, engine, **kwargs):
         self._engine = engine
-        #TODO: implement selective processing using a mask
-        self._mask = mask
 
-
-        ##f = nc.Dataset('watermask.nc', 'r')
-        ##self._aux_watermask = f.variables['watermsk'][...]
-        ##print(f.variables['']
-
+        self._lon = ()
+        self._lat = ()
+        self._watermask = ()
+        self.set_auxiliary (**kwargs)
 
     def read(self, file):
         self._file = file
         self._get_fire_mask()
         self._get_algorithm_qa()
+
+    def set_auxiliary(self, **kwargs):
+        if 'lon' in kwargs:
+            self._lon = kwargs['lon']
+
+        if 'lat' in kwargs:
+            self._lat = kwargs['lat']
+
+        if 'watermask' in kwargs:
+            self._watermask = kwargs['watermask']
 
     def _get_fire_mask(self):
         self._fire_mask = self._engine.get_variable(self._file, 'fire mask')
@@ -461,7 +471,37 @@ class VIIRS(PixelClassifier):
         classification is set to 'unknown'.
         '''
         pixel = (self._fire_mask == VIIRS.CLOUD)
-        result = self._place_as_unknown(pixel)
+
+        if self._watermask != ():
+            AUX_WATER = 0
+            AUX_COAST = 1
+            AUX_LAND  = 2
+
+            d_lon = 360.0/self._watermask.shape[1]
+            d_lat = 180.0/self._watermask.shape[0]
+            j = np.floor((self._lon + 180.0)/d_lon).astype(int)
+            i = np.floor((self._lat +  90.0)/d_lat).astype(int)
+
+            pole = i > self._watermask.shape[0] - 1
+            i[pole] = self._watermask.shape[0] - 1
+            if np.any(pole):
+                logging.debug(f'Detected cloud pixels with latitude >= 90.')
+                logging.debug(f'The range of cloud latitudes is [{self._lat.min()}, {self._lat.max()}]')
+
+            wrap = j > self._watermask.shape[1] - 1
+            j[wrap] = j[wrap] - self._watermask.shape[1]
+            if np.any(wrap):
+                logging.debug(f'Detected cloud pixels with longitude >= 180.')
+                logging.debug(f'The range of cloud longitudes is [{self._lon.min()}, {self._lon.max()}]')
+
+            result = {}
+            result['land' ] = pixel & (self._watermask[i,j] == AUX_LAND)
+            result['water'] = pixel & (self._watermask[i,j] == AUX_WATER)
+            result['coast'  ] = pixel & (self._watermask[i,j] == AUX_COAST)
+            result['unknown'] = (self._fire_mask >= 0) & self._no_such_classification()
+        else:
+            result = self._place_as_unknown(pixel)
+
         self._info('cloud', result)
         return result
 

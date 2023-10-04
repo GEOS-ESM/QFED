@@ -144,6 +144,10 @@ class GriddedFRP:
         Read and process NON-FIRE pixels.
         """
         self._get_coordinates(geolocation_product_file)
+
+        if callable(getattr(self._cp_reader, 'set_auxiliary', None)):
+            self._cp_reader.set_auxiliary(lon=self._lon, lat=self._lat)
+
         self._get_pixels(classification_product_file)
 
         logging.debug("Processing areas without fires.")
