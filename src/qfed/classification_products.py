@@ -79,6 +79,12 @@ class PixelClassifier(ABC):
         Pixel area.
         '''
 
+    @abc.abstractmethod
+    def set_auxiliary(self, **kwargs):
+        '''
+        Auxiliary data.
+        '''
+
 class MODIS(PixelClassifier):
 
     # fire mask pixel classes
@@ -104,6 +110,7 @@ class MODIS(PixelClassifier):
         self._engine = engine
         #TODO: implement selective processing using a mask
         self._mask = mask
+        self._watermask = ()
 
     def read(self, file):
         self._file = file

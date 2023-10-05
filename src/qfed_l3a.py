@@ -172,8 +172,7 @@ if __name__ == '__main__':
         fp_reader = fire_products.create(*platform)
         cp_reader = classification_products.create(*platform)
 
-        if Instrument(instrument) == Instrument.VIIRS:
-            cp_reader.set_auxiliary(watermask=watermask)
+        cp_reader.set_auxiliary(watermask=watermask)
 
         # generate gridded FRP and areas
         frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
