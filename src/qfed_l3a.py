@@ -56,11 +56,14 @@ def parse_arguments(default, version):
     )
 
     parser.add_argument(
-        '-p',
-        '--products',
-        dest='products',
-        default=default['products'],
-        help='list of active fire products',
+        '-s',
+        '--obs',
+        nargs='+',
+        type=str,
+        metavar='platform',
+        dest='obs',
+        default=default['obs'],
+        help='fire observing system',
     )
 
     parser.add_argument(
@@ -80,8 +83,30 @@ def parse_arguments(default, version):
         help='logging level',
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        '--compress',
+        dest='compress',
+        action='store_true',
+        help='compress the output files',
+    )
 
+    parser.add_argument(
+        'date_start',
+        type=datetime.fromisoformat,
+        metavar='start',
+        help='start date in the format YYYY-MM-DD',
+    )
+
+    parser.add_argument(
+        'date_end',
+        type=datetime.fromisoformat,
+        nargs='?',
+        metavar='end',
+        help='end date',
+    )
+
+    args = parser.parse_args()
+    print(f'{args = }')
     return args
 
 
@@ -99,7 +124,11 @@ def read_config(config):
     return data
 
 
-def display_banner(version):
+def display_description(version):
+    """
+    Displays the QFED version and a brief description
+    of this script.
+    """
     logging.info('')
     logging.info(f'QFED {version}')
     logging.info('')
@@ -107,19 +136,116 @@ def display_banner(version):
     logging.info('')
 
 
-def auxiliary_watermask(file):
+def get_auxiliary_watermask(file):
+    """
+    Reads auxiliary watermask from a file.
+    """
     logging.info(f"Reading auxiliary watermask from file '{file}'.")
     f = nc.Dataset(file)
     watermask = f.variables['watermask'][...]
     f.close()
-    logging.debug(f'The auxiliary watermask uses {1e-6*watermask.nbytes} MB of RAM.')
+    logging.debug(
+        f'The auxiliary watermask uses {1e-6*watermask.nbytes:.1f} MB of RAM.'
+    )
     return watermask
 
 
-if __name__ == '__main__':
+def get_entire_time_interval(args):
+    """
+    Parses args and returns the start and end
+    of the entire time interval that needs to be
+    processed.
+    """
+    time_start = args.date_start
+    time_end = args.date_end
 
+    if time_end is None:
+        time_end = time_start
+
+    return time_start, time_end
+
+
+def get_timestamped_time_intervals(time_start, time_end, time_window):
+    """
+    Returns a list of timestamped time intervals.
+
+    Use with caution. This is very basic... sub-intervals may
+    end up outside of the complete time interval.
+    """
+    result = []
+
+    t = time_start
+    while t <= time_end:
+        t_s = t
+        t_e = t + time_window
+        t_stamp = t + 0.5 * time_window
+
+        result.append((t, t_e, t_stamp))
+        t = t + time_window
+
+    return result
+
+
+def process(
+    t_start,
+    t_end,
+    timestamp,
+    output_grid,
+    output_dir,
+    obs_system,
+    igbp,
+    watermask,
+    compress,
+):
+    """
+    Processes single timestamped time interval.
+    """
+    for component in obs_system.keys():
+        instrument, satellite = component.split('/')
+        platform = Instrument(instrument), Satellite(satellite)
+
+        # input files
+        gp_dir, gp_template = obs_system[component]['geolocation']
+        fp_dir, fp_template = obs_system[component]['fires']
+        vg_dir = igbp
+
+        gp_file = os.path.join(gp_dir, '{0:%Y}', '{0:%j}', gp_template)
+        fp_file = os.path.join(fp_dir, '{0:%Y}', '{0:%j}', fp_template)
+
+        # output file
+        output_template = obs_system[component]['frp']
+        output_file = os.path.join(output_dir, output_template.format(timestamp))
+
+        # product readers
+        finder = Finder(gp_file, fp_file, vg_dir)
+        gp_reader = geolocation_products.create(*platform)
+        fp_reader = fire_products.create(*platform)
+        cp_reader = classification_products.create(*platform)
+
+        cp_reader.set_auxiliary(watermask=watermask)
+
+        # generate gridded FRP and areas
+        frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
+        frp.ingest(t_start, t_end)
+        frp.save(
+            output_file,
+            timestamp,
+            qc=False,
+            compress=compress,
+            source=f'{instrument}/{satellite}'.upper(),
+            instrument=instrument.upper(),
+            satellite=satellite.upper(),
+            fill_value=1e20,
+        )
+
+
+def main():
+    """
+    Processes QFED L3A files according to command line arguments,
+    and a configuration file.
+    """
     defaults = dict(
-        products='modis/aqua,modis/terra,viirs/npp,viirs/jpss-1',
+        obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1'],
         resolution='e',
         output_dir='./',
         log_level='INFO',
@@ -133,56 +259,34 @@ if __name__ == '__main__':
         # filename='qfed_l3a.log',
     )
 
-    time = datetime(2021, 2, 1, 12)
-    time_window = timedelta(hours=24)
-
-    time_s = time - 0.5 * time_window
-    time_e = time + 0.5 * time_window
-
     args = parse_arguments(defaults, VERSION)
     config = read_config(args.config)
 
     logging.getLogger().setLevel(args.log_level)
-    display_banner(VERSION)
+    display_description(VERSION)
 
     output_grid = grid.Grid(args.resolution)
-    products = args.products.replace(' ', '').split(',')
 
-    watermask = auxiliary_watermask(config['watermask'])
+    watermask = get_auxiliary_watermask(config['watermask'])
 
-    for p in products:
-        instrument, satellite = p.split('/')
-        platform = Instrument(instrument), Satellite(satellite)
+    start, end = get_entire_time_interval(args)
+    intervals = get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
-        # input files
-        gp_dir, gp_template = config[p]['geolocation']
-        fp_dir, fp_template = config[p]['fires']
-        vg_dir = config['igbp']
+    obs = {platform: config[platform] for platform in args.obs}
 
-        gp_file = os.path.join(gp_dir, '{0:%Y}', '{0:%j}', gp_template)
-        fp_file = os.path.join(fp_dir, '{0:%Y}', '{0:%j}', fp_template)
-
-        # output file
-        output_template = config[p]['frp']
-        output_file = os.path.join(args.output_dir, output_template.format(time))
-
-        # product readers
-        finder = Finder(gp_file, fp_file, vg_dir)
-        gp_reader = geolocation_products.create(*platform)
-        fp_reader = fire_products.create(*platform)
-        cp_reader = classification_products.create(*platform)
-
-        cp_reader.set_auxiliary(watermask=watermask)
-
-        # generate gridded FRP and areas
-        frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
-        frp.ingest(time_s, time_e)
-        frp.save(
-            output_file,
-            time,
-            qc=False,
-            source=f'{instrument}/{satellite}'.upper(),
-            instrument=instrument.upper(),
-            satellite=satellite.upper(),
-            fill_value=1e20,
+    for t_start, t_end, timestamp in intervals:
+        process(
+            t_start,
+            t_end,
+            timestamp,
+            output_grid,
+            args.output_dir,
+            obs,
+            config['igbp'],
+            watermask,
+            args.compress,
         )
+
+
+if __name__ == '__main__':
+    main()
