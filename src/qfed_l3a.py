@@ -60,15 +60,6 @@ def parse_arguments(default, version):
     )
 
     parser.add_argument(
-        '-o',
-        '--output-dir',
-        type=pathlib.Path,
-        dest='output_dir',
-        default=default['output_dir'],
-        help='directory for output files (default: %(default)s)',
-    )
-
-    parser.add_argument(
         '-s',
         '--obs',
         nargs='+',
@@ -77,15 +68,6 @@ def parse_arguments(default, version):
         default=default['obs'],
         choices=('modis/terra', 'modis/aqua', 'viirs/npp', 'viirs/jpss-1'),
         help='fire observing system (default: %(default)s)',
-    )
-
-    parser.add_argument(
-        '-r',
-        '--resolution',
-        dest='resolution',
-        default=default['resolution'],
-        choices=('c', 'd', 'e', 'f', '0.1x0.1'),
-        help='horizontal resolution (default: %(default)s)',
     )
 
     parser.add_argument(
@@ -101,7 +83,7 @@ def parse_arguments(default, version):
         '--compress',
         dest='compress',
         action='store_true',
-        help='compress the output files (default: %(default)s)',
+        help='compress output files (default: %(default)s)',
     )
 
     parser.add_argument(
@@ -135,6 +117,18 @@ def read_config(config):
             logging.critical(exc)
 
     return data
+
+
+def get_path(path, timestamp=None):
+    if isinstance(path, list):
+        result = path
+    else:
+        result = [path]
+
+    if timestamp is not None:
+        result = [atom.format(timestamp) for atom in result]
+
+    return os.path.join(*result)
 
 
 def display_description(version):
@@ -204,7 +198,7 @@ def process(
     t_end,
     timestamp,
     output_grid,
-    output_dir,
+    output,
     obs_system,
     igbp,
     watermask,
@@ -218,16 +212,13 @@ def process(
         platform = Instrument(instrument), Satellite(satellite)
 
         # input files
-        gp_dir, gp_template = obs_system[component]['geolocation']
-        fp_dir, fp_template = obs_system[component]['fires']
+        gp_file = get_path(obs_system[component]['geolocation']['file'])
+        fp_file = get_path(obs_system[component]['fires']['file'])
+
         vg_dir = igbp
 
-        gp_file = os.path.join(gp_dir, '{0:%Y}', '{0:%j}', gp_template)
-        fp_file = os.path.join(fp_dir, '{0:%Y}', '{0:%j}', fp_template)
-
         # output file
-        output_template = obs_system[component]['frp']
-        output_file = os.path.join(output_dir, output_template.format(timestamp))
+        output_file = get_path(output[component]['file'], timestamp)
 
         # product readers
         finder = Finder(gp_file, fp_file, vg_dir)
@@ -259,10 +250,8 @@ def main():
     """
     defaults = dict(
         obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1'],
-        resolution='e',
-        output_dir='./frp/',
-        log_level='INFO',
         config='config.yaml',
+        log_level='INFO',
     )
 
     logging.basicConfig(
@@ -278,14 +267,27 @@ def main():
     logging.getLogger().setLevel(args.log_level)
     display_description(VERSION)
 
-    output_grid = grid.Grid(args.resolution)
+    resolution = config['qfed']['output']['grid']['resolution']
+    if resolution not in grid.CLI_ALIAS_CHOICES:
+        logging.critical(
+            f"Invalid choice of resolution: '{resolution}' "
+            f"(choose from {str(grid.CLI_ALIAS_CHOICES).strip('()')} "
+            f"in '{args.config}')."
+        )
+        return
 
-    watermask = get_auxiliary_watermask(config['watermask'])
+    output_grid = grid.Grid(resolution)
+
+    watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
 
     start, end = get_entire_time_interval(args)
     intervals = get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
-    obs = {platform: config[platform] for platform in args.obs}
+    obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
+
+    output = {
+        platform: config['qfed']['output']['frp'][platform] for platform in args.obs
+    }
 
     for t_start, t_end, timestamp in intervals:
         process(
@@ -293,9 +295,9 @@ def main():
             t_end,
             timestamp,
             output_grid,
-            args.output_dir,
+            output,
             obs,
-            config['igbp'],
+            config['qfed']['with']['igbp'],
             watermask,
             args.compress,
         )

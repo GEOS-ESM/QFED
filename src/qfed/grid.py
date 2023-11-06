@@ -2,7 +2,6 @@
 Basic representation of lat/lon and cubed sphere grids.
 """
 
-
 import re
 from enum import Enum, unique
 import numpy as np
@@ -27,27 +26,30 @@ _REFINE_FACTOR = {
 }
 
 
+CLI_ALIAS_CHOICES = ('c', 'd', 'e', 'f', '0.1x0.1')
+
+
 class Grid:
     def __init__(self, alias):
         """
         Creates a grid object.
 
-        Name aliases:
+        Grid specification aliases:
         -- single letter denoting GEOS resolution:
-           'a'    produces a      4x5        grid
-           'b'    produces a      2x2.50     grid
-           'c'    produces a      1x1.25     grid
-           'd'    produces a   0.50x0.625    grid
-           'e'    produces a   0.25x0.3125   grid
-           'f'    produces a  0.125x0.15625  grid
+           'a'    - 4x5
+           'b'    - 2x2.50
+           'c'    - 1x1.25
+           'd'    - 0.50x0.625
+           'e'    - 0.25x0.3125
+           'f'    - 0.125x0.15625
         -- cubed sphere GEOS notation:
-           'c48'  produces approx.    2x2    grid
-           'c90'  produces approx.    1x1    grid
-           'c180' produces approx.  0.5x0.5  grid
-           'c360' produces approx. 0.25x0.25 grid
+           'c48'  - approx. 2x2
+           'c90'  - approx. 1x1
+           'c180' - approx. 0.5x0.5
+           'c360' - approx. 0.25x0.25
         -- or
-           '0.1x0.1'   produces     0.1x0.1  grid
-           '3600x1800' produces     0.1x0.1  grid
+           '0.1x0.1'   - 0.1x0.1
+           '3600x1800' - 0.1x0.1
         """
         self._set_spec(alias)
         self._set_coordinates()

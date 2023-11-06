@@ -15,6 +15,7 @@ from glob import glob
 import numpy as np
 import netCDF4 as nc
 
+from qfed import grid
 from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
 from qfed import fire
@@ -47,18 +48,21 @@ def parse_arguments(default, version):
     )
 
     parser.add_argument(
-        '-p',
-        '--products',
-        dest='products',
-        default=default['products'],
-        help='list of active fire products',
+        '-s',
+        '--obs',
+        nargs='+',
+        metavar='platform',
+        dest='obs',
+        default=default['obs'],
+        choices=('modis/terra', 'modis/aqua', 'viirs/npp', 'viirs/jpss-1'),
+        help='fire observing system (default: %(default)s)',
     )
 
     parser.add_argument(
-        '-u',
-        '--uncompressed',
+        '--compress',
+        dest='compress',
         action='store_true',
-        help='do not compress output files (default=False)',
+        help='compress output files (default: %(default)s)',
     )
 
     parser.add_argument(
@@ -120,7 +124,23 @@ def read_config(config):
     return data
 
 
-def display_banner(version):
+def get_path(path, timestamp=None):
+    if isinstance(path, list):
+        result = path
+    else:
+        result = [path]
+
+    if timestamp is not None:
+        result = [atom.format(timestamp) for atom in result]
+
+    return os.path.join(*result)
+
+
+def display_description(version):
+    """
+    Displays the QFED version and a brief description
+    of this script.
+    """
     logging.info('')
     logging.info(f'QFED {version}')
     logging.info('')
@@ -136,8 +156,9 @@ def search(file_l3a, logging):
 
     if not match:
         logging.warning(
-            f"Did not find QFED L3A file '{search_path}'. "
-            f"This file will not be included in the processing."
+            f"The QFED L3A file '{os.path.basename(file_l3a)}' "
+            f"was not found and cannot be included in the "
+            f"QFED L3B processing."
         )
         return ()
 
@@ -156,13 +177,16 @@ def search(file_l3a, logging):
     return match[0]
 
 
-if __name__ == '__main__':
-
+def main():
+    """
+    Processes QFED L3B files according to command line arguments,
+    and a configuration file.
+    """
     defaults = dict(
-        products='modis/aqua,modis/terra,viirs/npp,viirs/jpss-1',
+        obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1'],
         fill_days=1,
-        log_level='INFO',
         config='config.yaml',
+        log_level='INFO',
     )
 
     logging.basicConfig(
@@ -176,9 +200,18 @@ if __name__ == '__main__':
     config = read_config(args.config)
 
     logging.getLogger().setLevel(args.log_level)
-    display_banner(VERSION)
+    display_description(VERSION)
 
-    products = args.products.replace(' ', '').split(',')
+    resolution = config['qfed']['output']['grid']['resolution']
+    if resolution not in grid.CLI_ALIAS_CHOICES:
+        logging.critical(
+            f"Invalid choice of resolution: '{resolution}' "
+            f"(choose from {str(grid.CLI_ALIAS_CHOICES).strip('()')} "
+            f"in '{args.config}')."
+        )
+        return
+
+    output_grid = grid.Grid(resolution)
 
     doy_s = args.doy[0]
     doy_e = args.doy[1] + 1
@@ -191,22 +224,19 @@ if __name__ == '__main__':
         area = {}
         frp_density = {}
 
-        for p in products:
-            instrument, satellite = p.split('/')
+        for component in args.obs:
+            instrument, satellite = component.split('/')
             platform = Instrument(instrument), Satellite(satellite)
 
-            # TODO
-            l3a_dir = './validation/v3.0.0-geos-esm/FRP/'
-            l3a_filename = config[p]['frp'].format(d)
-
-            search_path = os.path.join(l3a_dir, l3a_filename)
+            search_path = get_path(
+                config['qfed']['output']['frp'][component]['file'],
+                timestamp=d,
+            )
 
             logging.debug(
-                (
-                    f"Searching for QFED L3A file "
-                    f"matching pattern '{os.path.basename(search_path)}' "
-                    f"in directory '{os.path.dirname(search_path)}'."
-                )
+                f"Searching for QFED L3A file "
+                f"matching pattern '{os.path.basename(search_path)}' "
+                f"in directory '{os.path.dirname(search_path)}'."
             )
 
             l3a_file = search(search_path, logging)
@@ -235,25 +265,28 @@ if __name__ == '__main__':
         # TODO: FRP density forecast files
         d_fcst = d + timedelta(days=1)
         l3a_fcst_files = {}
-        for p in products:
-            instrument, satellite = p.split('/')
+        for component in args.obs:
+            instrument, satellite = component.split('/')
             platform = Instrument(instrument), Satellite(satellite)
 
-            l3a_fcst_dir = './validation/v3.0.0-geos-esm/FRP/'
-            l3a_fcst_filename = config[p]['frp'].format(d_fcst)
+            search_path = get_path(
+                config['qfed']['output']['frp'][component]['file'],
+                timestamp=d_fcst,
+            )
 
-            search_path = os.path.join(l3a_fcst_dir, l3a_fcst_filename)
             match = glob(search_path)
-
             if match:
-                l3a_fcst_files[p] = match[0]
+                l3a_fcst_files[component] = match[0]
             else:
-                l3a_fcst_files[p] = None
+                l3a_fcst_files[component] = None
 
-        # output
-        output_dir = config['emissions'][0]
-        output_template = config['emissions'][1]
-        output_file = os.path.join(output_dir, output_template.format(d))
+        # emissions and output
+        output_file = get_path(
+            config['qfed']['output']['emissions']['file'],
+            timestamp=d,
+        )
+
+        output_dir = os.path.dirname(output_file)
         os.makedirs(output_dir, exist_ok=True)
 
         emission_factors_file = os.path.join(
@@ -261,11 +294,14 @@ if __name__ == '__main__':
         )
 
         emissions = Emissions(d, frp, frp_density, area, emission_factors_file)
-        emissions.calculate()
+        emissions.calculate(('co2', 'oc'))
         emissions.save(
-            filename=output_file,
-            dir=output_dir,
+            output_file,
             forecast=l3a_fcst_files,
             ndays=args.ndays,
-            compress=(not args.uncompressed),
+            compress=args.compress,
         )
+
+
+if __name__ == '__main__':
+    main()
