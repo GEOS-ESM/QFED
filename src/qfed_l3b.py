@@ -15,6 +15,7 @@ from glob import glob
 import numpy as np
 import netCDF4 as nc
 
+from qfed import utils
 from qfed import grid
 from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
@@ -28,7 +29,7 @@ def parse_arguments(default, version):
     """
     parser = argparse.ArgumentParser(
         prog='qfed_l3b.py',
-        description='Creates QFED Level 3B files',
+        description='Create QFED Level 3B files',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -110,44 +111,6 @@ def parse_arguments(default, version):
     return args
 
 
-def read_config(config):
-    """
-    Parses the QFED config file into a dictionary.
-    """
-    with open(config) as file:
-        try:
-            data = yaml.safe_load(file)
-        except yaml.YAMLError as exc:
-            data = None
-            logging.critical(exc)
-
-    return data
-
-
-def get_path(path, timestamp=None):
-    if isinstance(path, list):
-        result = path
-    else:
-        result = [path]
-
-    if timestamp is not None:
-        result = [atom.format(timestamp) for atom in result]
-
-    return os.path.join(*result)
-
-
-def display_description(version):
-    """
-    Displays the QFED version and a brief description
-    of this script.
-    """
-    logging.info('')
-    logging.info(f'QFED {version}')
-    logging.info('')
-    logging.info('QFED Level 3B - Gridded Emissions')
-    logging.info('')
-
-
 def search(file_l3a, logging):
     """
     Search for a L3A file in the filesystem.
@@ -197,10 +160,10 @@ def main():
     )
 
     args = parse_arguments(defaults, VERSION)
-    config = read_config(args.config)
+    config = utils.read_config(args.config)
 
     logging.getLogger().setLevel(args.log_level)
-    display_description(VERSION)
+    utils.display_description(VERSION, 'QFED Level 3B - Gridded Emissions')
 
     resolution = config['qfed']['output']['grid']['resolution']
     if resolution not in grid.CLI_ALIAS_CHOICES:
@@ -228,7 +191,7 @@ def main():
             instrument, satellite = component.split('/')
             platform = Instrument(instrument), Satellite(satellite)
 
-            search_path = get_path(
+            search_path = utils.get_path(
                 config['qfed']['output']['frp'][component]['file'],
                 timestamp=d,
             )
@@ -269,7 +232,7 @@ def main():
             instrument, satellite = component.split('/')
             platform = Instrument(instrument), Satellite(satellite)
 
-            search_path = get_path(
+            search_path = utils.get_path(
                 config['qfed']['output']['frp'][component]['file'],
                 timestamp=d_fcst,
             )
@@ -281,7 +244,7 @@ def main():
                 l3a_fcst_files[component] = None
 
         # emissions and output
-        output_file = get_path(
+        output_file = utils.get_path(
             config['qfed']['output']['emissions']['file'],
             timestamp=d,
         )
