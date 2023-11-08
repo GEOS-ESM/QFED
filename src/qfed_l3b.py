@@ -79,7 +79,7 @@ def parse_arguments(default, version):
         dest='ndays',
         type=int,
         default=default['fill_days'],
-        help='number of days to fill in',
+        help='number of days to fill in (default: %(default)s)',
     )
 
     parser.add_argument(
@@ -103,6 +103,13 @@ def parse_arguments(default, version):
         type=datetime.fromisoformat,
         metavar='start',
         help='start date in the format YYYY-MM-DD',
+    )
+
+    parser.add_argument(
+        '--dry-run',
+        dest='dry_run',
+        action='store_true',
+        help='perform a trial run without modifying output files (default: %(default)s)',
     )
 
     parser.add_argument(
@@ -191,6 +198,7 @@ def process(
     species,
     ndays,
     compress,
+    dry_run,
 ):
     """
     Processes single time/date.
@@ -272,6 +280,7 @@ def process(
         forecast=l3a_fcst_files,
         ndays=ndays,
         compress=compress,
+        diskless=dry_run,
     )
 
 
@@ -333,6 +342,7 @@ def main():
             species,
             args.ndays,
             args.compress,
+            args.dry_run,
         )
 
 

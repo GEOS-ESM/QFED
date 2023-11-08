@@ -414,6 +414,7 @@ class GriddedFRP:
         qc=True,
         compress=False,
         fill_value=1e15,
+        diskless=False,
     ):
         """
         Saves gridded Areas and FRP to file.
@@ -435,6 +436,7 @@ class GriddedFRP:
             source,
             compress,
             fill_value,
+            diskless,
         )
 
     def _save_as_netcdf4(
@@ -446,11 +448,15 @@ class GriddedFRP:
         source='',
         compress=False,
         fill_value=1e15,
+        diskless=False,
     ):
         """
         Saves gridded Areas and FRP to a NetCDF4 file.
         """
-        f = nc.Dataset(file, 'w', format='NETCDF4')
+        f = nc.Dataset(file, 'w', format='NETCDF4', diskless=diskless)
+ 
+        if diskless:
+            logging.info(f"Successfully created a diskless (in-memory) file '{file}'.")
 
         # global attributes
         f.Conventions = "COARDS"

@@ -9,7 +9,6 @@ import logging
 from datetime import datetime, timedelta
 import yaml
 import argparse
-import pathlib
 import textwrap
 
 import netCDF4 as nc
@@ -88,6 +87,13 @@ def parse_arguments(default, version):
     )
 
     parser.add_argument(
+        '--dry-run',
+        dest='dry_run',
+        action='store_true',
+        help='perform a trial run without modifying output files (default: %(default)s)',
+    )
+
+    parser.add_argument(
         'date_start',
         type=datetime.fromisoformat,
         metavar='start',
@@ -139,7 +145,7 @@ def get_timestamped_time_intervals(time_start, time_end, time_window):
     """
     Returns a list of timestamped time intervals.
 
-    Use with caution. This is very basic... sub-intervals may
+    Use with caution. This code is very basic... sub-intervals may
     end up outside of the complete time interval.
     """
     result = []
@@ -166,6 +172,7 @@ def process(
     igbp,
     watermask,
     compress,
+    dry_run,
 ):
     """
     Processes single timestamped time interval.
@@ -203,6 +210,7 @@ def process(
             instrument=instrument.upper(),
             satellite=satellite.upper(),
             fill_value=1e20,
+            diskless=dry_run,
         )
 
 
@@ -242,15 +250,16 @@ def main():
     output_grid = grid.Grid(resolution)
 
     watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
-
-    start, end = get_entire_time_interval(args)
-    intervals = get_timestamped_time_intervals(start, end, timedelta(hours=24))
+    igbp = config['qfed']['with']['igbp']
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
     output = {
         platform: config['qfed']['output']['frp'][platform] for platform in args.obs
     }
+
+    start, end = get_entire_time_interval(args)
+    intervals = get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
     for t_start, t_end, timestamp in intervals:
         process(
@@ -260,9 +269,10 @@ def main():
             output_grid,
             output,
             obs,
-            config['qfed']['with']['igbp'],
+            igbp,
             watermask,
             args.compress,
+            args.dry_run,
         )
 
 

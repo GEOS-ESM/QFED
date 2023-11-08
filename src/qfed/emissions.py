@@ -315,9 +315,9 @@ class Emissions:
 
         return result
 
-    def _save_as_netcdf4(self, file, compress=False, fill_value=1e15):
+    def _save_as_netcdf4(self, file, compress=False, fill_value=1e15, diskless=False):
         """
-        Saves gridded emissions to a file. 
+        Saves gridded emissions to a file.
         """
 
         # map species to output files
@@ -344,7 +344,12 @@ class Emissions:
                 }
 
             # create a file
-            f = nc.Dataset(file, 'w', format='NETCDF4')
+            f = nc.Dataset(file, 'w', format='NETCDF4', diskless=diskless)
+
+            if diskless:
+                logging.info(
+                    f"Successfully created a diskless (in-memory) file '{file}'."
+                )
 
             # global attributes
             f.Conventions = 'COARDS'
@@ -432,8 +437,8 @@ class Emissions:
             result = subprocess.run(
                 'n4zip',
                 file,
-                stdout = subprocess.DEVNULL,
-                stderr = subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
 
             if result.returncode:
@@ -448,10 +453,11 @@ class Emissions:
         ndays=1,
         compress=False,
         fill_value=1e20,
+        diskless=False,
     ):
         """
-        Saves gridded emissions to a file. 
-        
+        Saves gridded emissions to a file.
+
         If the argument ndays is larger than 1,
         the estimated emissions will be persisted
         over the specified number of days.
@@ -461,7 +467,7 @@ class Emissions:
         # self._save_forecast(forecast, fill_value=1.0e20)
 
         for n in range(ndays):
-            self._save_as_netcdf4(file, compress in (True,), fill_value)
+            self._save_as_netcdf4(file, compress in (True,), fill_value, diskless)
 
             if compress == 'n4zip':
                 self.compress_n4zip()
