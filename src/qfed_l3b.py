@@ -72,7 +72,7 @@ def parse_arguments(default, version):
         dest='ndays',
         type=int,
         default=default['fill_days'],
-        help='Number of days to fill in',
+        help='number of days to fill in',
     )
 
     parser.add_argument(
@@ -85,29 +85,21 @@ def parse_arguments(default, version):
     )
 
     parser.add_argument(
-        'year',
-        type=int,
-        help="year specified in 'yyyy' format",
+        'date_start',
+        type=datetime.fromisoformat,
+        metavar='start',
+        help='start date in the format YYYY-MM-DD',
     )
 
     parser.add_argument(
-        'doy', nargs='+', type=int, help='single DOY, or start and end DOYs'
+        'date_end',
+        type=datetime.fromisoformat,
+        nargs='?',
+        metavar='end',
+        help='end date in the format YYYY-MM-DD',
     )
 
     args = parser.parse_args()
-
-    # modify the Namespace object to set the 'doy' argument value
-    if len(args.doy) == 1:
-        doy_beg = args.doy[0]
-        doy_end = doy_beg
-    elif len(args.doy) == 2:
-        doy_beg = min(args.doy[0], args.doy[1])
-        doy_end = max(args.doy[0], args.doy[1])
-    else:
-        parser.error("must have one or two DOY arguments: doy | 'start doy' 'end doy'")
-
-    args.doy = [doy_beg, doy_end]
-
     return args
 
 
@@ -138,6 +130,135 @@ def search(file_l3a, logging):
         )
 
     return match[0]
+
+
+def get_entire_time_interval(args):
+    """
+    Parses args and returns the start and end
+    of the entire time interval that needs to be
+    processed.
+    """
+    time_start = args.date_start
+    time_end = args.date_end
+
+    if time_end is None:
+        time_end = time_start
+
+    return time_start, time_end
+
+
+def get_timestamped_time_intervals(time_start, time_end, time_window):
+    """
+    Returns a list of timestamped time intervals.
+
+    Use with caution. This code is very basic... sub-intervals may
+    end up outside of the complete time interval.
+    """
+    result = []
+
+    t = time_start
+    while t <= time_end:
+        t_s = t
+        t_e = t + time_window
+        t_stamp = t + 0.5 * time_window
+
+        result.append((t, t_e, t_stamp))
+        t = t + time_window
+
+    return result
+
+
+def process(
+    time,
+    output_grid,
+    output_file,
+    obs_system,
+    emission_factors_file,
+    species,
+    ndays,
+    compress,
+):
+    """
+    Processes single time/date.
+    """
+
+    frp = {}
+    area = {}
+    frp_density = {}
+
+    for component in obs_system:
+        instrument, satellite = component.split('/')
+        platform = Instrument(instrument), Satellite(satellite)
+
+        search_path = utils.get_path(
+            obs_system[component]['file'],
+            timestamp=time,
+        )
+
+        logging.debug(
+            f"Searching for QFED L3A file "
+            f"matching pattern '{os.path.basename(search_path)}' "
+            f"in directory '{os.path.dirname(search_path)}'."
+        )
+
+        l3a_file = search(search_path, logging)
+        if not l3a_file:
+            continue
+
+        logging.info(f"Reading QFED L3A file '{os.path.basename(l3a_file)}'.")
+        f = nc.Dataset(l3a_file, 'r')
+
+        area[platform] = {
+            v: np.transpose(f.variables[v][0, :, :])
+            for v in ('land', 'water', 'cloud', 'unknown')
+        }
+
+        frp[platform] = {
+            bb: np.transpose(f.variables[f'frp_{bb.type.value}'][0, :, :])
+            for bb in fire.BIOMASS_BURNING
+        }
+
+        frp_density[platform] = {
+            # TODO: read the predicted FRP
+            bb: np.zeros_like(frp[platform][bb])
+            for bb in fire.BIOMASS_BURNING
+        }
+
+    # TODO: FRP density forecast files
+    d_fcst = time + timedelta(days=1)
+    l3a_fcst_files = {}
+    for component in obs_system:
+        instrument, satellite = component.split('/')
+        platform = Instrument(instrument), Satellite(satellite)
+
+        search_path = utils.get_path(
+            obs_system[component]['file'],
+            timestamp=d_fcst,
+        )
+
+        match = glob(search_path)
+        if match:
+            l3a_fcst_files[component] = match[0]
+        else:
+            l3a_fcst_files[component] = None
+
+    # emissions and output
+    output_file = utils.get_path(
+        output_file,
+        timestamp=time,
+    )
+
+    output_dir = os.path.dirname(output_file)
+    os.makedirs(output_dir, exist_ok=True)
+
+    emissions = Emissions(time, frp, frp_density, area, emission_factors_file)
+    emissions.calculate(species)
+    emissions.save(
+        output_file,
+        forecast=l3a_fcst_files,
+        ndays=ndays,
+        compress=compress,
+    )
 
 
 def main():
@@ -176,93 +297,28 @@ def main():
 
     output_grid = grid.Grid(resolution)
 
-    doy_s = args.doy[0]
-    doy_e = args.doy[1] + 1
+    obs = {platform: config['qfed']['output']['frp'][platform] for platform in args.obs}
+    output_file = config['qfed']['output']['emissions']['file']
 
-    for doy in range(doy_s, doy_e):
+    emission_factors_file = os.path.join(
+        os.path.dirname(sys.argv[0]), '..', 'etc', 'emission_factors.yaml'
+    )
 
-        d = datetime(args.year, 1, 1) + timedelta(days=(doy - 1)) + timedelta(hours=12)
+    species = ('co2', 'oc')
 
-        frp = {}
-        area = {}
-        frp_density = {}
+    start, end = get_entire_time_interval(args)
+    intervals = get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
-        for component in args.obs:
-            instrument, satellite = component.split('/')
-            platform = Instrument(instrument), Satellite(satellite)
-
-            search_path = utils.get_path(
-                config['qfed']['output']['frp'][component]['file'],
-                timestamp=d,
-            )
-
-            logging.debug(
-                f"Searching for QFED L3A file "
-                f"matching pattern '{os.path.basename(search_path)}' "
-                f"in directory '{os.path.dirname(search_path)}'."
-            )
-
-            l3a_file = search(search_path, logging)
-            if not l3a_file:
-                continue
-
-            logging.info(f"Reading QFED L3A file '{os.path.basename(l3a_file)}'.")
-            f = nc.Dataset(l3a_file, 'r')
-
-            area[platform] = {
-                v: np.transpose(f.variables[v][0, :, :])
-                for v in ('land', 'water', 'cloud', 'unknown')
-            }
-
-            frp[platform] = {
-                bb: np.transpose(f.variables[f'frp_{bb.type.value}'][0, :, :])
-                for bb in fire.BIOMASS_BURNING
-            }
-
-            frp_density[platform] = {
-                # TODO: read the predicted FRP
-                bb: np.zeros_like(frp[platform][bb])
-                for bb in fire.BIOMASS_BURNING
-            }
-
-        # TODO: FRP density forecast files
-        d_fcst = d + timedelta(days=1)
-        l3a_fcst_files = {}
-        for component in args.obs:
-            instrument, satellite = component.split('/')
-            platform = Instrument(instrument), Satellite(satellite)
-
-            search_path = utils.get_path(
-                config['qfed']['output']['frp'][component]['file'],
-                timestamp=d_fcst,
-            )
-
-            match = glob(search_path)
-            if match:
-                l3a_fcst_files[component] = match[0]
-            else:
-                l3a_fcst_files[component] = None
-
-        # emissions and output
-        output_file = utils.get_path(
-            config['qfed']['output']['emissions']['file'],
-            timestamp=d,
-        )
-
-        output_dir = os.path.dirname(output_file)
-        os.makedirs(output_dir, exist_ok=True)
-
-        emission_factors_file = os.path.join(
-            os.path.dirname(sys.argv[0]), '..', 'etc', 'emission_factors.yaml'
-        )
-
-        emissions = Emissions(d, frp, frp_density, area, emission_factors_file)
-        emissions.calculate(('co2', 'oc'))
-        emissions.save(
+    for t_start, t_end, timestamp in intervals:
+        process(
+            timestamp,
+            output_grid,
             output_file,
-            forecast=l3a_fcst_files,
-            ndays=args.ndays,
-            compress=args.compress,
+            obs,
+            emission_factors_file,
+            species,
+            args.ndays,
+            args.compress,
         )
 
 
