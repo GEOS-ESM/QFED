@@ -9,6 +9,7 @@ import sys
 import logging
 import argparse
 import yaml
+import textwrap
 from datetime import datetime, timedelta
 from glob import glob
 
@@ -30,7 +31,20 @@ def parse_arguments(default, version):
     parser = argparse.ArgumentParser(
         prog='qfed_l3b.py',
         description='Create QFED Level 3B files',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog=textwrap.dedent(
+            '''
+            examples:
+              generate emissions for a single date using MODIS and VIIRS L3A data
+              $ %(prog)s --obs modis/aqua modis/terra viirs/npp viirs/jpss-1 2021-08-21
+
+              generate and persist emissions for 7 consecutive days
+              $ %(prog)s --obs viirs/jpss-1 --ndays 7 2021-08-21
+
+              generate emissions for several months of VIIRS/JPSS1 L3A data and compress the output files
+              $ %(prog)s --obs viirs/jpss-1 --compress 2020-08-01 2021-04-01
+            '''
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
@@ -45,7 +59,7 @@ def parse_arguments(default, version):
         '--config',
         dest='config',
         default=default['config'],
-        help='config file',
+        help='config file (default: %(default)s)',
     )
 
     parser.add_argument(
@@ -60,13 +74,6 @@ def parse_arguments(default, version):
     )
 
     parser.add_argument(
-        '--compress',
-        dest='compress',
-        action='store_true',
-        help='compress output files (default: %(default)s)',
-    )
-
-    parser.add_argument(
         '-n',
         '--ndays',
         dest='ndays',
@@ -77,11 +84,18 @@ def parse_arguments(default, version):
 
     parser.add_argument(
         '-l',
-        '--log',
+        '--log-level',
         dest='log_level',
         default=default['log_level'],
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        help='logging level',
+        help='logging level (default: %(default)s)',
+    )
+
+    parser.add_argument(
+        '--compress',
+        dest='compress',
+        action='store_true',
+        help='compress output files (default: %(default)s)',
     )
 
     parser.add_argument(
