@@ -13,7 +13,7 @@ import textwrap
 
 import netCDF4 as nc
 
-from qfed import utils
+from qfed import cli_utils
 from qfed import grid
 from qfed import geolocation_products
 from qfed import classification_products
@@ -126,42 +126,6 @@ def get_auxiliary_watermask(file):
     return watermask
 
 
-def get_entire_time_interval(args):
-    """
-    Parses args and returns the start and end
-    of the entire time interval that needs to be
-    processed.
-    """
-    time_start = args.date_start
-    time_end = args.date_end
-
-    if time_end is None:
-        time_end = time_start
-
-    return time_start, time_end
-
-
-def get_timestamped_time_intervals(time_start, time_end, time_window):
-    """
-    Returns a list of timestamped time intervals.
-
-    Use with caution. This code is very basic... sub-intervals may
-    end up outside of the complete time interval.
-    """
-    result = []
-
-    t = time_start
-    while t <= time_end:
-        t_s = t
-        t_e = t + time_window
-        t_stamp = t + 0.5 * time_window
-
-        result.append((t, t_e, t_stamp))
-        t = t + time_window
-
-    return result
-
-
 def process(
     t_start,
     t_end,
@@ -182,13 +146,13 @@ def process(
         platform = Instrument(instrument), Satellite(satellite)
 
         # input files
-        gp_file = utils.get_path(obs_system[component]['geolocation']['file'])
-        fp_file = utils.get_path(obs_system[component]['fires']['file'])
+        gp_file = cli_utils.get_path(obs_system[component]['geolocation']['file'])
+        fp_file = cli_utils.get_path(obs_system[component]['fires']['file'])
 
         vg_dir = igbp
 
         # output file
-        output_file = utils.get_path(output[component]['file'], timestamp)
+        output_file =cli_utils.get_path(output[component]['file'], timestamp)
 
         # product readers
         finder = Finder(gp_file, fp_file, vg_dir)
@@ -233,10 +197,10 @@ def main():
     )
 
     args = parse_arguments(defaults, VERSION)
-    config = utils.read_config(args.config)
+    config = cli_utils.read_config(args.config)
 
     logging.getLogger().setLevel(args.log_level)
-    utils.display_description(VERSION, 'QFED Level 3A - Gridded FRP and Areas')
+    cli_utils.display_description(VERSION, 'QFED Level 3A - Gridded FRP and Areas')
 
     resolution = config['qfed']['output']['grid']['resolution']
     if resolution not in grid.CLI_ALIAS_CHOICES:
@@ -258,8 +222,8 @@ def main():
         platform: config['qfed']['output']['frp'][platform] for platform in args.obs
     }
 
-    start, end = get_entire_time_interval(args)
-    intervals = get_timestamped_time_intervals(start, end, timedelta(hours=24))
+    start, end = cli_utils.get_entire_time_interval(args)
+    intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
     for t_start, t_end, timestamp in intervals:
         process(

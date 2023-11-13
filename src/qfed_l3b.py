@@ -16,7 +16,7 @@ from glob import glob
 import numpy as np
 import netCDF4 as nc
 
-from qfed import utils
+from qfed import cli_utils
 from qfed import grid
 from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
@@ -153,42 +153,6 @@ def search(file_l3a, logging):
     return match[0]
 
 
-def get_entire_time_interval(args):
-    """
-    Parses args and returns the start and end
-    of the entire time interval that needs to be
-    processed.
-    """
-    time_start = args.date_start
-    time_end = args.date_end
-
-    if time_end is None:
-        time_end = time_start
-
-    return time_start, time_end
-
-
-def get_timestamped_time_intervals(time_start, time_end, time_window):
-    """
-    Returns a list of timestamped time intervals.
-
-    Use with caution. This code is very basic... sub-intervals may
-    end up outside of the complete time interval.
-    """
-    result = []
-
-    t = time_start
-    while t <= time_end:
-        t_s = t
-        t_e = t + time_window
-        t_stamp = t + 0.5 * time_window
-
-        result.append((t, t_e, t_stamp))
-        t = t + time_window
-
-    return result
-
-
 def process(
     time,
     output_grid,
@@ -212,7 +176,7 @@ def process(
         instrument, satellite = component.split('/')
         platform = Instrument(instrument), Satellite(satellite)
 
-        search_path = utils.get_path(
+        search_path = cli_utils.get_path(
             obs_system[component]['file'],
             timestamp=time,
         )
@@ -253,7 +217,7 @@ def process(
         instrument, satellite = component.split('/')
         platform = Instrument(instrument), Satellite(satellite)
 
-        search_path = utils.get_path(
+        search_path = cli_utils.get_path(
             obs_system[component]['file'],
             timestamp=d_fcst,
         )
@@ -265,7 +229,7 @@ def process(
             l3a_fcst_files[component] = None
 
     # emissions and output
-    output_file = utils.get_path(
+    output_file = cli_utils.get_path(
         output_file,
         timestamp=time,
     )
@@ -304,10 +268,10 @@ def main():
     )
 
     args = parse_arguments(defaults, VERSION)
-    config = utils.read_config(args.config)
+    config = cli_utils.read_config(args.config)
 
     logging.getLogger().setLevel(args.log_level)
-    utils.display_description(VERSION, 'QFED Level 3B - Gridded Emissions')
+    cli_utils.display_description(VERSION, 'QFED Level 3B - Gridded Emissions')
 
     resolution = config['qfed']['output']['grid']['resolution']
     if resolution not in grid.CLI_ALIAS_CHOICES:
@@ -329,8 +293,8 @@ def main():
 
     species = ('co2', 'oc')
 
-    start, end = get_entire_time_interval(args)
-    intervals = get_timestamped_time_intervals(start, end, timedelta(hours=24))
+    start, end = cli_utils.get_entire_time_interval(args)
+    intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
     for t_start, t_end, timestamp in intervals:
         process(
