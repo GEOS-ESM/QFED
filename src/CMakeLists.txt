@@ -10,3 +10,8 @@ install (
   PROGRAMS qfed_l3a.py qfed_l3b.py 
   DESTINATION bin
   )
+
+install (
+  FILES config.yaml emission_factors.yaml
+  DESTINATION etc
+  )
