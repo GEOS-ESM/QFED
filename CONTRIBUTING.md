@@ -1,6 +1,6 @@
-# Contributing to GEOSadas
+# Contributing to QFED
 
-Contributing code to GEOSadas should be done via a Pull Request to this repository.
+Contributing code to QFED should be done via a Pull Request to this repository.
 
 ## Contributor License Agreement (CLA)
 
