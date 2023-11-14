@@ -1,175 +1,244 @@
 #!/usr/bin/env python3
 
-
 """
-  A Python script to create QFED Level 3a files.
+A script that creates QFED Level 3A files.
 """
 
 import os
-import warnings
+import logging
+from datetime import datetime, timedelta
+import yaml
 import argparse
+import textwrap
 
-from datetime import date, timedelta
+import netCDF4 as nc
 
-from qfed.version import __version__
-from qfed.mxd14_l3 import MxD14_L3
+from qfed import cli_utils
+from qfed import grid
+from qfed import geolocation_products
+from qfed import classification_products
+from qfed import fire_products
+from qfed.inventory import Finder
+from qfed.instruments import Instrument, Satellite
+from qfed.frp import GriddedFRP
+from qfed import VERSION
 
 
+def parse_arguments(default, version):
+    """
+    Parse command line arguments.
+    """
+    parser = argparse.ArgumentParser(
+        prog='qfed_l3a.py',
+        description='Create QFED Level 3A files',
+        epilog=textwrap.dedent(
+            '''
+            examples:
+              process single date of MODIS and VIIRS fire observations
+              $ %(prog)s --obs modis/aqua modis/terra viirs/npp viirs/jpss-1 2021-08-21
 
-def parse_arguments(default_values):
-    '''
-    Parse command line options
-    '''
+              process several months of VIIRS/JPSS1 fire observations and compress the output files
+              $ %(prog)s --obs viirs/jpss-1 --compress 2020-08-01 2021-04-01
+            '''
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
 
-    parser = argparse.ArgumentParser(prog='QFED', description='Creates QFED Level 3a files')
+    parser.add_argument(
+        '-v',
+        '--version',
+        action='version',
+        version=f'QFED {version} (%(prog)s)',
+    )
 
-    parser.add_argument('-V', '--version', action='version', 
-                        version='%(prog)s {version:s}'.format(version=__version__))
+    parser.add_argument(
+        '-c',
+        '--config',
+        dest='config',
+        default=default['config'],
+        help='config file (default: %(default)s)',
+    )
 
-    parser.add_argument('-f', '--mxd14', dest='level2_dir', 
-                        default=default_values['level2_dir'],
-                        help='directory for MOD14/MYD14 fire files (default=%s)'\
-                            %default_values['level2_dir'])
+    parser.add_argument(
+        '-s',
+        '--obs',
+        nargs='+',
+        metavar='platform',
+        dest='obs',
+        default=default['obs'],
+        choices=('modis/terra', 'modis/aqua', 'viirs/npp', 'viirs/jpss-1'),
+        help='fire observing system (default: %(default)s)',
+    )
 
-    parser.add_argument('-g', '--mxd03', dest='level1_dir', 
-                        default=default_values['level1_dir'],
-                        help='directory for MOD03/MYD03 geolocaltion files (default=%s)'\
-                            %default_values['level1_dir'])
+    parser.add_argument(
+        '-l',
+        '--log-level',
+        dest='log_level',
+        default=default['log_level'],
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='logging level (default: %(default)s)',
+    )
 
-    parser.add_argument('-i', '--igbp', dest='igbp_dir', 
-                        default=default_values['igbp_dir'],
-                        help='directory for IGBP vegetation database (default=%s)'\
-                            %default_values['igbp_dir'])
-    
-    parser.add_argument('-o', '--output', dest='level3_dir', 
-                        default=default_values['level3_dir'],
-                        help='directory for output files (default=%s)'\
-                            %default_values['level3_dir'])
+    parser.add_argument(
+        '--compress',
+        dest='compress',
+        action='store_true',
+        help='compress output files (default: %(default)s)',
+    )
 
-    parser.add_argument('-p', '--products', dest='products', 
-                        default=default_values['products'],
-                        help='CSV list of MODIS fire products (default=%s)'\
-                            %default_values['products'])
-    
-    parser.add_argument('-r', '--resolution', dest='res', 
-                        default=default_values['res'],
-                        help='horizontal resolution: a for 4x5, b for 2x2.5, etc. (default=%s)'\
-                            %default_values['res'])
-    
-    parser.add_argument('-x', '--expid', dest='expid', 
-                        default=default_values['expid'],
-                        help='experiment id (default=%s)'\
-                            %default_values['expid'])
+    parser.add_argument(
+        '--dry-run',
+        dest='dry_run',
+        action='store_true',
+        help='perform a trial run without modifying output files (default: %(default)s)',
+    )
 
-    parser.add_argument('-q', '--disable-qc', 
-                        action='store_true', dest='disable_qc',
-                        help='disable quality control procedures (default=False)')
+    parser.add_argument(
+        'date_start',
+        type=datetime.fromisoformat,
+        metavar='start',
+        help='start date in the format YYYY-MM-DD',
+    )
 
-    parser.add_argument('-b', '--bootstrap', 
-                        action='store_true', dest='bootstrap',
-                        help='initialize FRP forecast (default=False)')
-
-    parser.add_argument('-u', '--uncompressed',
-                        action='store_true', 
-                        help='do not compress output files (default=False)')
-
-    parser.add_argument('-v', '--verbose',
-                        action='count', default=0, help='verbose')
-
-    parser.add_argument('year', type=int, 
-                        help="year specified in 'yyyy' format")
-
-    parser.add_argument('doy', nargs='+', type=int,
-                        help='single DOY, or start and end DOYs')
-
+    parser.add_argument(
+        'date_end',
+        type=datetime.fromisoformat,
+        nargs='?',
+        metavar='end',
+        help='end date in the format YYYY-MM-DD',
+    )
 
     args = parser.parse_args()
-
-    # modify the Namespace object to set the 'doy' argument value
-    if len(args.doy) == 1:
-        doy_beg = args.doy[0]
-        doy_end = doy_beg
-    elif len(args.doy) == 2:
-        doy_beg = min(args.doy[0], args.doy[1])
-        doy_end = max(args.doy[0], args.doy[1])
-    else:
-        parser.error("must have one or two DOY arguments: doy | 'start doy' 'end doy'")
-
-    args.doy = [doy_beg, doy_end]
-
     return args
 
 
-def display_banner():
-    print('')
-    print('QFED Level 3A Processing')
-    print('------------------------')
-    print('')
+def get_auxiliary_watermask(file):
+    """
+    Reads auxiliary watermask from a file.
+    """
+    logging.info(f"Reading auxiliary watermask from file '{file}'.")
+    f = nc.Dataset(file)
+    watermask = f.variables['watermask'][...]
+    f.close()
+    logging.debug(
+        f'The auxiliary watermask uses {1e-6*watermask.nbytes:.1f} MB of RAM.'
+    )
+    return watermask
 
 
+def process(
+    t_start,
+    t_end,
+    timestamp,
+    output_grid,
+    output,
+    obs_system,
+    igbp,
+    watermask,
+    compress,
+    dry_run,
+):
+    """
+    Processes single timestamped time interval.
+    """
+    for component in obs_system.keys():
+        instrument, satellite = component.split('/')
+        platform = Instrument(instrument), Satellite(satellite)
 
-if __name__ == "__main__":
+        # input files
+        gp_file = cli_utils.get_path(obs_system[component]['geolocation']['file'])
+        fp_file = cli_utils.get_path(obs_system[component]['fires']['file'])
 
-    default_values = dict(expid      = 'qfed2',
-                          level1_dir = '/nobackup/2/MODIS/Level1',
-                          level2_dir = '/nobackup/2/MODIS/Level2',
-                          level3_dir = '/nobackup/2/MODIS/Level3',
-                          products   = 'MOD14,MYD14',
-                          igbp_dir   = '/nobackup/Emissions/Vegetation/GL_IGBP_INPE',
-                          res        = 'e')
+        vg_dir = igbp
 
+        # output file
+        output_file =cli_utils.get_path(output[component]['file'], timestamp)
 
-    args = parse_arguments(default_values)
+        # product readers
+        finder = Finder(gp_file, fp_file, vg_dir)
+        gp_reader = geolocation_products.create(*platform)
+        fp_reader = fire_products.create(*platform)
+        cp_reader = classification_products.create(*platform)
 
-    if args.verbose > 0: 
-        display_banner()
+        cp_reader.set_auxiliary(watermask=watermask)
 
-    Products = args.products.split(',')
-
-#   Grid FRP and observed area
-#   --------------------------
-    for doy in range(args.doy[0], args.doy[1] + 1):
-        d = date(args.year, 1, 1) + timedelta(days=(doy - 1))
-        d_= d + timedelta(days=1)
-
-#       Loop over products
-#       ------------------
-        for MxD14 in Products:
-
-            Path = os.path.join(args.level2_dir, MxD14, '%04d'%d.year, '%03d'%doy)
-
-#           Do the gridding for this product
-#           --------------------------------
-            fires = MxD14_L3(Path,
-                             args.level1_dir,
-                             args.igbp_dir,
-                             res=args.res,
-                             Verb=args.verbose)
-
-#           Create directory for output file
-#           --------------------------------
-            dir_a = os.path.join(args.level3_dir, MxD14, 'Y%04d'%d.year, 'M%02d'%d.month)
-            dir_f = os.path.join(args.level3_dir, MxD14, 'Y%04d'%d_.year, 'M%02d'%d_.month)
-
-            dir = {'ana': dir_a, 'bkg': dir_f}
-            for k in list(dir.keys()):
-                rc  = os.system("/bin/mkdir -p %s"%dir[k])
-                if rc:
-                    raise(IOError, "Cannot create output directory '%s'" % dir[k])
+        # generate gridded FRP and areas
+        frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
+        frp.ingest(t_start, t_end)
+        frp.save(
+            output_file,
+            timestamp,
+            qc=False,
+            compress=compress,
+            source=f'{instrument}/{satellite}'.upper(),
+            instrument=instrument.upper(),
+            satellite=satellite.upper(),
+            fill_value=1e20,
+            diskless=dry_run,
+        )
 
 
-#           Quality Control
-#           ---------------
-            qc = not args.disable_qc
+def main():
+    """
+    Processes QFED L3A files according to command line arguments,
+    and a configuration file.
+    """
+    defaults = dict(
+        obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1'],
+        config='config.yaml',
+        log_level='INFO',
+    )
 
-#           Write output file
-#           -----------------
-            fires.write(dir=dir, expid=args.expid+'_'+MxD14, qc=qc, bootstrap=args.bootstrap)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s  %(levelname)-8s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        # filename='qfed_l3a.log',
+    )
 
-#           Compress it unless the user disabled it
-#           ---------------------------------------
-            if not args.uncompressed and fires.doy != None:
-                rc = os.system("n4zip %s"%fires.filename)
-                if rc:
-                    warnings.warn('cannot compress output file <%s>'%fires.filename)
+    args = parse_arguments(defaults, VERSION)
+    config = cli_utils.read_config(args.config)
 
+    logging.getLogger().setLevel(args.log_level)
+    cli_utils.display_description(VERSION, 'QFED Level 3A - Gridded FRP and Areas')
+
+    resolution = config['qfed']['output']['grid']['resolution']
+    if resolution not in grid.CLI_ALIAS_CHOICES:
+        logging.critical(
+            f"Invalid choice of resolution: '{resolution}' "
+            f"(choose from {str(grid.CLI_ALIAS_CHOICES).strip('()')} "
+            f"in '{args.config}')."
+        )
+        return
+
+    output_grid = grid.Grid(resolution)
+
+    watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
+    igbp = config['qfed']['with']['igbp']
+
+    obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
+
+    output = {
+        platform: config['qfed']['output']['frp'][platform] for platform in args.obs
+    }
+
+    start, end = cli_utils.get_entire_time_interval(args)
+    intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
+
+    for t_start, t_end, timestamp in intervals:
+        process(
+            t_start,
+            t_end,
+            timestamp,
+            output_grid,
+            output,
+            obs,
+            igbp,
+            watermask,
+            args.compress,
+            args.dry_run,
+        )
+
+
+if __name__ == '__main__':
+    main()

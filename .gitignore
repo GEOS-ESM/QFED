@@ -9,3 +9,5 @@
 parallel_build.o*
 log.*
 CMakeUserPresets.json
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
