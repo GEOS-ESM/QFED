@@ -288,10 +288,10 @@ def main():
     output_file = config['qfed']['output']['emissions']['file']
 
     emission_factors_file = os.path.join(
-        os.path.dirname(sys.argv[0]), '..', 'etc', 'emission_factors.yaml'
+        os.path.dirname(sys.argv[0]), 'emission_factors.yaml'
     )
 
-    species = ('co2', 'oc')
+    species = ('co2', 'oc', 'so2', 'nh3', 'bc')
 
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))

@@ -1,5 +1,5 @@
 define:
-    qfed_base_dir: &qfed_base_dir ./validation/v3.0.0-geos-esm/calibration/v3.0.0-dev1/
+    qfed_base_dir: &qfed_base_dir test/
     modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis/ 
 
 qfed:
@@ -9,9 +9,9 @@ qfed:
         emissions:
             file: [
                 *qfed_base_dir, 
-                "QFED", "vj1",
+                "QFED",
                 "Y{0:%Y}/M{0:%m}", 
-                "qfed.emis_{{species}}.{0:%Y%m%d}.{0:%H%M}.300-wip.nc4"
+                "qfed_vxx.emis_{{species}}.{0:%Y%m%d}.{0:%H%M}.300-wip.nc4"
             ]
         frp:
             modis/terra:
@@ -37,7 +37,7 @@ qfed:
                 ]
             viirs/jpss-1:
                 file: [
-                    "./validation/v3.0.0-geos-esm/calibration/v3.0.0-dev1",
+                    *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
                     "qfed.frp.vj1.{0:%Y%m%d}.{0:%H%M}.300.nc4"
@@ -65,5 +65,4 @@ qfed:
                 file: /css/viirs/data/Level2/VJ114IMG/{0:%Y}/{0:%j}/VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
 
         igbp: /discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/
-        watermask: watermask-700m.nc4
-
+        watermask: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/watermask/watermask-700m.no_coast.nc4
