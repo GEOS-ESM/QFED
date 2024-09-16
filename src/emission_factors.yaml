@@ -75,11 +75,11 @@ emission_factors:
             crop_residue:         [ 5.70,   6.00]
         mek:
             name: 'Methyl Ethyl Ketone (C4H8O)'
-            tropical_forest:      [ 0.43,   0.22]
-            extratropical_forest: [ 0.45,   0.28]
-            savanna:              [ 0.26,   0.13]
-            grassland:            [ 0.26,   0.13]
-            crop_residue:         [-0.00,  -0.00]
+            tropical_forest:      [ 0.50,  -0.00]
+            extratropical_forest: [ 0.23,   0.21]
+            savanna:              [ 0.13,   0.10]
+            grassland:            [ 0.13,   0.10]
+            crop_residue:         [ 0.58,   0.31]
         c3h6:
             name: 'Propylene (C3H6)'
             tropical_forest:      [ 0.86,   0.41]
