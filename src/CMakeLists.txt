@@ -1,4 +1,4 @@
-esma_add_subdirectory (Shared)
+esma_add_subdirectory (Shared plumerise)
 
 file (GLOB qfed_files qfed/*.py)
 install (
