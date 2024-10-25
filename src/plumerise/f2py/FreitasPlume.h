@@ -1,11 +1,11 @@
 !
-! This include file is meant to associate the main PlumeRise object with flat
+! This include file is meant to associate the main FreitasPlume object with flat
 ! arrays/scalars in the original thread unsafe implementation.
 !
 
 ! The PlumeRise object
 ! --------------------
-  Type(PlumeRise), target    ::  this
+  Type(FreitasPlume), target    ::  this
 
 !  The flattened variables
 !  -----------------------
