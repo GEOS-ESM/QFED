@@ -32,8 +32,8 @@ esma_set_this ( OVERRIDE plumerise )
    )
    add_dependencies(FreitasPlume_ ${this})
 
-# Module: Freitas
-# --------------------
+# Module: Locke
+# -------------
   esma_add_f2py3_module(LockePlume_
      SOURCES        LockePlume_py.F90
      DESTINATION    lib/Python/plumerise
