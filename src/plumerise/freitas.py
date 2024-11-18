@@ -1,12 +1,10 @@
 """
-A Python interface to CPTEC's Plume Rise Model.
+A Python interface to the Freitas' Plume Rise Model.
 
 """
 
-from numpy      import zeros, ones, meshgrid, linspace, any, \
-                       pi, sin, cos, arccos, arange, array, \
-                       savez, NaN, isnan
-
+import numpy as np
+                       
 from scipy import optimize as opt
 
 from datetime   import date, timedelta
@@ -15,7 +13,6 @@ from glob       import glob
 from dozier     import DOZIER
 from VegType    import IGBP
 from PlumeRise_ import *       # f2py extension
-from gfio       import GFIO
 
 from pyobs           import NPZ
 from pyobs.binObs_   import binareas
@@ -24,8 +21,7 @@ from MAPL.constants  import *
 
 import eta
 
-__VERSION__ = 2.1
-__CVSTAG__  = '@CVSTAG'
+__VERSION__ = 3.0
 __AMISS__   = 1.E+20
 
 Bioma = [ 'Tropical Forest',
@@ -109,7 +105,7 @@ class MINXs_PR(MINXs):
         delp = self.sample.delp[i]
 
         if delp.min()<=0 or T.min()<=0:
-            return NaN
+            return np.NaN
 
         # Ensure arrays are top-down as in GEOS-5
         # ---------------------------------------
@@ -124,14 +120,14 @@ class MINXs_PR(MINXs):
         # --------------------
         p,z,k,rc = plume(u,v,T,q,delp,ptop,hflux_kW,area)
         if rc:
-            raise ValueError, "error on return from <plume>, rc = %d"%rc
+            raise ValueError("error on return from <plume>, rc = %d"%rc)
 
         if z==-1.:
-            z = NaN  # self.sample.pblh[i]
+            z = np.NaN  # self.sample.pblh[i]
             
         if Verbose:
-            print " ", self.tyme[i], "| %8.2f | %8.2f %8.2f | %8.2f"%\
-                (self.mod14.fdist[i], area/1e4, hflux_kW, z)
+            print(" ", self.tyme[i], "| %8.2f | %8.2f %8.2f | %8.2f"%\
+                (self.mod14.fdist[i], area/1e4, hflux_kW, z))
 
         return z
 
@@ -141,21 +137,21 @@ class MINXs_PR(MINXs):
         Runs the Plume Rise extension to compute the extent of the plume.
 	"""
 
-        z_plume = __AMISS__ * ones(self.N)
+        z_plume = __AMISS__ * np.ones(self.N)
 
-        R = arange(self.N)
+        R = np.arange(self.N)
         if I is not None:
             R = R[I]
 
         if Verbose:
-            print ""
-            print "                    Plume Height Estimates"
-            print ""
-            print "  --------------------|----------|-------------------|----------"
-            print "                      | Distance |   Fire Properties |  Plume"
-            print "    MINX Date/Time    |  to Fire |   Area   Heat Flx |  Height"
-            print "                      |    km    |    ha      kW     |    km"
-            print "  --------------------|----------|-------------------|----------"
+            print("")
+            print("                    Plume Height Estimates")
+            print("")
+            print("  --------------------|----------|-------------------|----------")
+            print("                      | Distance |   Fire Properties |  Plume")
+            print("    MINX Date/Time    |  to Fire |   Area   Heat Flx |  Height")
+            print("                      |    km    |    ha      kW     |    km")
+            print("  --------------------|----------|-------------------|----------")
             
 
 #       Loop over time
@@ -163,9 +159,9 @@ class MINXs_PR(MINXs):
         for i in R:
             z_plume[i] = self.getPlume1(i,Verbose=Verbose,**kwopts)
         if Verbose:
-            print "  --------------------|----------|-------------------|----------"
+            print("  --------------------|----------|-------------------|----------")
 
-        return array(z_plume)
+        return np.array(z_plume)
 
     def getOptBrute(self,I=None,Verbose=True,**kwopts):
  
@@ -175,28 +171,28 @@ class MINXs_PR(MINXs):
 	"""
 
         z_opt = __AMISS__ * ones(self.N)
-        h_opt = __AMISS__ * ones(self.N)
-        a_opt = __AMISS__ * ones(self.N)
+        h_opt = __AMISS__ * np.ones(self.N)
+        a_opt = __AMISS__ * np.ones(self.N)
         
-        R = arange(self.N)
+        R = np.arange(self.N)
         if I is not None:
             R = R[I]
 
-        Hflux_kW = linspace(1,100,10)
-        Area = linspace(0.1e4,2e4,10)
+        Hflux_kW = np.linspace(1,100,10)
+        Area = np.linspace(0.1e4,2e4,10)
 
-        print Hflux_kW
-        print Area
+        print(Hflux_kW)
+        print(Area)
 
         if Verbose:
-            print ""
-            print "                    Plume Height Estimates"
-            print ""
-            print "  --------------------|----------|-------------------|----------"
-            print "                      | Observed |    Opt Properties |  Optimal "
-            print "    MINX Date/Time    |  Height  |   Area   Heat Flx |  Height"
-            print "                      |    km    |    ha      kW     |    km"
-            print "  --------------------|----------|-------------------|----------"
+            print("")
+            print("                    Plume Height Estimates")
+            print("")
+            print("  --------------------|----------|-------------------|----------")
+            print("                      | Observed |    Opt Properties |  Optimal ")
+            print("    MINX Date/Time    |  Height  |   Area   Heat Flx |  Height")
+            print("                      |    km    |    ha      kW     |    km")
+            print("  --------------------|----------|-------------------|----------")
             
 
 #       Loop over time
@@ -207,7 +203,7 @@ class MINXs_PR(MINXs):
             for hflux_kW in Hflux_kW:
                 for area in Area:
                     z_ = self.getPlume1(i,Verbose=False,hflux_kW=hflux_kW,area=area)
-                    if isnan(z)==False:
+                    if np.isnan(z)==False:
                         e_ = (z-z_)**2
                         if e_<e:
                             e = e_
@@ -216,11 +212,11 @@ class MINXs_PR(MINXs):
                             a_opt[i] = area
             if e<1e20:
                 if Verbose:
-                    print " ", self.tyme[i], "| %8.2f | %8.2f %8.2f | %8.2f"%\
-                          (z, a_opt[i]/1e4, h_opt[i], z_opt[i])
+                    print(" ", self.tyme[i], "| %8.2f | %8.2f %8.2f | %8.2f"%\
+                          (z, a_opt[i]/1e4, h_opt[i], z_opt[i]))
                                         
         if Verbose:
-            print "  --------------------|----------|-------------------|----------"
+            print("  --------------------|----------|-------------------|----------")
 
         return (z_opt,h_opt,a_opt)
 
@@ -234,21 +230,21 @@ class MINXs_PR(MINXs):
         from dozier import DOZIER
 
         self.mod14 = []
-        d2r = pi / 180.
+        d2r = np.pi / 180.
         a = MAPL_RADIUS/1000. # Earth radius in km
         dt = timedelta(seconds=5*60)
 
         self.mod14 = MOD14(self.N)
         
         if Verbose:
-            print ""
-            print "                   Fire Heat Flux Estimates"
-            print ""
-            print "  --------------------|----------|-------------------|----------"
-            print "                      | Distance |    FRP Estimates  |   Fire"
-            print "    MINX Date/Time    |  to Fire |   MINX      MODIS | Heat Flux"
-            print "                      |    km    |    MW         MW  |  kW/m2"
-            print "  --------------------|----------|-------------------|----------"
+            print("")
+            print("                   Fire Heat Flux Estimates")
+            print("")
+            print("  --------------------|----------|-------------------|----------")
+            print("                      | Distance |    FRP Estimates  |   Fire")
+            print("    MINX Date/Time    |  to Fire |   MINX      MODIS | Heat Flux")
+            print("                      |    km    |    MW         MW  |  kW/m2")
+            print("  --------------------|----------|-------------------|----------")
 
         for i in range(self.N):
 
@@ -260,13 +256,13 @@ class MINXs_PR(MINXs):
 
             # Select closest fires
             # --------------------
-            x0 = cos(d2r*self.lat_f[i]) * cos(d2r*self.lon_f[i])
-            y0 = cos(d2r*self.lat_f[i]) * sin(d2r*self.lon_f[i])
-            z0 = sin(d2r*self.lat_f[i])
-            dx = x0*cos(d2r*m.lat) * cos(d2r*m.lon)
-            dy = y0*cos(d2r*m.lat) * sin(d2r*m.lon)
-            dz = z0*sin(d2r*m.lat) 
-            s  = a * arccos(dx+dy+dz) # great circle distance
+            x0 = np.cos(d2r*self.lat_f[i]) * np.cos(d2r*self.lon_f[i])
+            y0 = np.cos(d2r*self.lat_f[i]) * np.sin(d2r*self.lon_f[i])
+            z0 = np.sin(d2r*self.lat_f[i])
+            dx = x0*np.cos(d2r*m.lat) * np.cos(d2r*m.lon)
+            dy = y0*np.cos(d2r*m.lat) * np.sin(d2r*m.lon)
+            dz = z0*np.sin(d2r*m.lat) 
+            s  = a * arcnp.cos(dx+dy+dz) # great circle distance
             j = s.argmin()
 
             # Estimate fire heat flux
@@ -279,17 +275,17 @@ class MINXs_PR(MINXs):
             self.mod14.farea[i] = m.farea[j]
             self.mod14.qa[i] = m.m[j] # bolean
             if Verbose:
-                print " ", t, "| %8.2f | %8.2f %8.2f | %8.2f"%\
+                print(" ", t, "| %8.2f | %8.2f %8.2f | %8.2f"%\
                     (self.mod14.fdist[i], self.mod14.frp[i], self.mod14.frp[i], \
-                     self.mod14.hflux[i] )
+                     self.mod14.hflux[i] ))
 
         # Save fire properties in NPZ file for later
         # ------------------------------------------
         if npzFile!=None:
-            savez(npzFile,**self.mod14.__dict__)
+            np.savez(npzFile,**self.mod14.__dict__)
                   
         if Verbose:
-            print "  --------------------|----------|-------------------|----------"
+            print("  --------------------|----------|-------------------|----------")
 
 #---
     def getOptF(self,Verbose=True):
@@ -298,30 +294,30 @@ class MINXs_PR(MINXs):
         """
 
         if Verbose:
-            print ""
-            print "    Fire Modified bstar Optimization"
-            print ""
-            print "Plume | f_opt  |    J     |  Ni | Nf"
-            print "------|--------|----------|-----|-----"
+            print("")
+            print("    Fire Modified bstar Optimization")
+            print("")
+            print("Plume | f_opt  |    J     |  Ni | Nf")
+            print("------|--------|----------|-----|-----")
 
-        self.f_opt = ones(self.N)
-        self.z_opt = ones(self.N)
+        self.f_opt = np.ones(self.N)
+        self.z_opt = np.ones(self.N)
         for i in range(self.N):
 #            xmin, fval, iter, fcalls = opt.brent(CostFuncF,args=(self,i),brack=(1.,4),full_output=True)
             xmin, fval, iter, fcalls = opt.brent(CostFuncF,args=(self,i),full_output=True)
-            if isnan(fval):
-                self.f_opt[i] = NaN
-                self.z_opt[i] = NaN
+            if np.isnan(fval):
+                self.f_opt[i] = np.NaN
+                self.z_opt[i] = np.NaN
             else:
                 ffac = xmin**2
                 self.f_opt[i] = ffac
                 self.z_opt[i] = self.getPlume1(i,ffac=self.f_opt[i])
 
             if Verbose:
-                print "%5d | %6.2f | %8.2f | %3d | %3d "%(i, ffac, fval, iter, fcalls)
+                print("%5d | %6.2f | %8.2f | %3d | %3d "%(i, ffac, fval, iter, fcalls))
 
         if Verbose:
-            print "------|--------|----------|-----|-----"
+            print("------|--------|----------|-----|-----")
 
 #---
     def getOptA(self,Verbose=True):
@@ -330,11 +326,11 @@ class MINXs_PR(MINXs):
         """
 
         if Verbose:
-            print ""
-            print "    Fire Modified bstar Optimization"
-            print ""
-            print "Plume | f_opt  |    J     |  Ni | Nf"
-            print "------|--------|----------|-----|-----"
+            print("")
+            print("    Fire Modified bstar Optimization")
+            print("")
+            print("Plume | f_opt  |    J     |  Ni | Nf")
+            print("------|--------|----------|-----|-----")
 
         self.f_opt = ones(self.N)
         self.z_opt = ones(self.N)
@@ -344,10 +340,10 @@ class MINXs_PR(MINXs):
             self.f_opt[i] = afac
             self.z_opt[i] = self.getPlume1(i,afac=self.f_opt[i])
             if Verbose:
-                print "%5d | %6.2f | %8.2f | %3d | %3d "%(i, afac, fval, iter, fcalls)
+                print("%5d | %6.2f | %8.2f | %3d | %3d "%(i, afac, fval, iter, fcalls))
 
         if Verbose:
-            print "------|--------|----------|-----|-----"
+            print("------|--------|----------|-----|-----")
 
 #---
     def getOptFanneal(self,Verbose=True):
@@ -356,24 +352,24 @@ class MINXs_PR(MINXs):
         """
 
         if Verbose:
-            print ""
-            print "    Fire Modified bstar Optimization"
-            print ""
-            print "Plume | f_opt  |    J     |  Ni | Nf"
-            print "------|--------|----------|-----|-----"
+            print("")
+            print("    Fire Modified bstar Optimization")
+            print("")
+            print("Plume | f_opt  |    J     |  Ni | Nf")
+            print("------|--------|----------|-----|-----")
 
-        self.f_opt = ones(self.N)
-        self.z_opt = ones(self.N)
+        self.f_opt = np.ones(self.N)
+        self.z_opt = np.ones(self.N)
         for i in range(self.N):
             xmin, fval, T, fcalls, iter, accept, retval = opt.anneal(CostFuncF,1.0,args=(self,i),full_output=True)
             ffac = xmin**2
             self.f_opt[i] = ffac
             self.z_opt[i] = self.getPlume1(i,ffac=self.f_opt[i])
             if Verbose:
-                print "%5d | %6.2f | %8.2f | %3d | %3d "%(i, ffac, fval, iter, fcalls)
+                print("%5d | %6.2f | %8.2f | %3d | %3d "%(i, ffac, fval, iter, fcalls))
 
         if Verbose:
-            print "------|--------|----------|-----|-----"
+            print("------|--------|----------|-----|-----")
 
 #---
     def getOptFbnd(self,Verbose=True):
@@ -382,24 +378,24 @@ class MINXs_PR(MINXs):
         """
 
         if Verbose:
-            print ""
-            print "    Fire Modified bstar Optimization"
-            print ""
-            print "Plume | f_opt  |    J     |  Ni | Nf"
-            print "------|--------|----------|-----|-----"
+            print("")
+            print("    Fire Modified bstar Optimization")
+            print("")
+            print("Plume | f_opt  |    J     |  Ni | Nf")
+            print("------|--------|----------|-----|-----")
 
-        self.f_opt = ones(self.N)
-        self.z_opt = ones(self.N)
+        self.f_opt = np.ones(self.N)
+        self.z_opt = np.ones(self.N)
         for i in range(self.N):
             xmin,fval,ier,fcalls  = opt.fminbound(CostFuncF,0.,2.,args=(self,i),full_output=True)
             ffac = xmin**2
             self.f_opt[i] = ffac
             self.z_opt[i] = self.getPlume1(i,ffac=self.f_opt[i])
             if Verbose:
-                print "%5d | %6.2f | %8.2f | %3d | %3d "%(i, ffac, fval, fcalls, fcalls)
+                print("%5d | %6.2f | %8.2f | %3d | %3d "%(i, ffac, fval, fcalls, fcalls))
 
         if Verbose:
-            print "------|--------|----------|-----|-----"
+            print("------|--------|----------|-----|-----")
 
 #----
 def CostFuncF(f,m,i):
@@ -417,12 +413,12 @@ class MOD14(object):
         """
         Simple container class for fire properties.
         """
-        self.hflux = __AMISS__ * ones(N)  # fire heat flux estimate
-        self.fdist = __AMISS__ * ones(N)  # distance to detected fire
-        self.frp   = __AMISS__ * ones(N)  # nearest MODIS FRP
-        self.pixar = __AMISS__ * ones(N)  # pixel area
-        self.farea = __AMISS__ * ones(N)  # fire area
-        self.qa    = __AMISS__ * ones(N)  # quality flag
+        self.hflux = __AMISS__ * np.ones(N)  # fire heat flux estimate
+        self.fdist = __AMISS__ * np.ones(N)  # distance to detected fire
+        self.frp   = __AMISS__ * np.ones(N)  # nearest MODIS FRP
+        self.pixar = __AMISS__ * np.ones(N)  # pixel area
+        self.farea = __AMISS__ * np.ones(N)  # fire area
+        self.qa    = __AMISS__ * np.ones(N)  # quality flag
         return
     
 #----------------------------------------------------------------------------------------------
@@ -448,19 +444,19 @@ class PLUME_L2(IGBP,DOZIER):
 	"""
 
         if self.algo != 'dozier':
-            raise ValueError, 'only Dozier algorithm supported for now'
+            raise ValueError('only Dozier algorithm supported for now')
 
         if self.veg is None:
-            raise ValueError, 'veg attribute with biome type has not been defined'
+            raise ValueError('veg attribute with biome type has not been defined')
 
 
 #       Initialize Plume Rise ranges
 #       ----------------------------
         ntd = met.ntd
         N = self.lon.size
-        self.p_plume = zeros((ntd,N,2))
-        self.k_plume = zeros((ntd,N,2))
-        self.z_plume = zeros((ntd,N,2))
+        self.p_plume = np.zeros((ntd,N,2))
+        self.k_plume = np.zeros((ntd,N,2))
+        self.z_plume = np.zeros((ntd,N,2))
         yyyy = self.yyyy[N/2]
         jjj = self.jjj[N/2]
 
@@ -544,9 +540,9 @@ class PLUME_L3(object):
         jm = int(180. / dy + 1)
         self.im = im
         self.jm = jm
-        self.glon = linspace(-180.,180.,im,endpoint=False)
-        self.glat = linspace(-90.,90.,jm)
-        Lat, Lon  = meshgrid(self.glat,self.glon)  # shape should be (im,jm)
+        self.glon = np.linspace(-180.,180.,im,endpoint=False)
+        self.glat = np.linspace(-90.,90.,jm)
+        Lat, Lon  = np.meshgrid(self.glat,self.glon)  # shape should be (im,jm)
 
         self.yyyy = plume.yyyy[N/2]
         self.jjj  = plume.jjj[N/2]
@@ -577,11 +573,11 @@ class PLUME_L3(object):
 
 #           Compute average area in gridbox for this biome
 #           ----------------------------------------------
-            Frac = zeros((im,jm))
-            Area = zeros((im,jm))
-            FRP  = zeros((im,jm))
+            Frac = np.zeros((im,jm))
+            Area = np.zeros((im,jm))
+            FRP  = np.zeros((im,jm))
             i = (plume.veg==b)
-            if any(i):
+            if np.any(i):
                 blon = plume.lon[i]
                 blat = plume.lat[i]
                 bfrac = plume.r_F[i] * plume.pow[i] 
@@ -591,14 +587,14 @@ class PLUME_L3(object):
                 Frac +=  binareas(blon,blat,bfrac,im,jm) # to be normalized
                 FRP  +=  binareas(blon,blat,bfrp, im,jm)
                 I = (FRP>0.0)
-                if any(I):
+                if np.any(I):
                     Area[I] = Area[I] / FRP[I]
                     Frac[I] = Frac[I] / FRP[I]
 
 #           Use sparse matrix storage scheme
 #           --------------------------------
             I = Area.nonzero()
-            if any(I):
+            if np.any(I):
                 self.area[b-1] = Area[I]
                 self.r_F[b-1]  = Frac[I] # average flaming/total energy fraction
                 self.lon[b-1]  = Lon[I]
@@ -627,21 +623,21 @@ class PLUME_L3(object):
 #           -------------------------------------
             if self.idx[i] is None:
                 if self.verb>0:
-                    print "[x] no data for %s"%Bioma[i] 
+                    print("[x] no data for %s"%Bioma[i]) 
                 continue
 
             lon = self.lon[i]
             lat = self.lat[i]
             area = self.area[i]
             N = lon.size
-            veg = self.bioma[i] * ones(N)
+            veg = self.bioma[i] * np.ones(N)
 
-            p_plume = zeros((ntd,2,N))
-            z_plume = zeros((ntd,2,N))
-            k_plume = zeros((ntd,2,N))
+            p_plume = np.zeros((ntd,2,N))
+            z_plume = np.zeros((ntd,2,N))
+            k_plume = np.zeros((ntd,2,N))
                             
             if self.verb>0:
-                print "[ ] got %d burning gridboxes in %s"%(N,Bioma[i]) 
+                print("[ ] got %d burning gridboxes in %s"%(N,Bioma[i])) 
 
 #           Loop over time 
 #           --------------
@@ -704,10 +700,10 @@ class PLUME_L3(object):
        Vname  = []
        Vtitle = []
        Vunits = []
-       for v in vtitle.keys():
+       for v in list(vtitle.keys()):
            vt = vtitle[v]
            vu = vunits[v]
-           for b in btitle.keys(): 
+           for b in list(btitle.keys()): 
                bt = btitle[b]
                Vname.append(v+'_'+b)
                Vtitle.append(vt+' ('+bt+')')
@@ -722,15 +718,15 @@ class PLUME_L3(object):
 #      Time/date handling
 #      ------------------
        if self.date is None:
-           print "[x] did not find matching files, skipped writing an output file"
+           print("[x] did not find matching files, skipped writing an output file")
            return
 
        if 24%self.ntd != 0:
-           raise ValueError,"invalid number of times per day (%d),"%self.ntd\
-                 +"it must be a divisor of 24."
+           raise ValueError("invalid number of times per day (%d),"%self.ntd\
+                 +"it must be a divisor of 24.")
        else:
            dT = 240000/self.ntd # timestep in hhmmss format
-           NHMS = range(0,240000,dT)
+           NHMS = list(range(0,240000,dT))
 
        nymd = 10000*self.date.year + 100*self.date.month + self.date.day
        nhms = NHMS[0]
@@ -754,7 +750,7 @@ class PLUME_L3(object):
        for t in range(self.ntd):
            nhms = NHMS[t]
            b = 0
-           for bn in btitle.keys():
+           for bn in list(btitle.keys()):
                I = self.idx[b]
                f_area  = self.area[b]
                f_frac  = self.r_F[b]
@@ -778,7 +774,7 @@ class PLUME_L3(object):
            pass
 
        if self.verb >=1:
-           print "[w] Wrote file "+filename
+           print("[w] Wrote file "+filename)
 
 #..............................................................................
 
@@ -791,14 +787,14 @@ def _writeOne(f,vname,nymd,nhms,I,S,t,k,d):
     """
     Write one sparse variable to a GFIO file.
     """
-    A = zeros(d) + __AMISS__
+    A = np.zeros(d) + __AMISS__
     if I is not None:
         if len(S.shape)==3:
             A[I] = S[t,k,:]
         elif len(S.shape)==1:
             A[I] = S[:]
         else:
-            raise ValueError, 'invalid S rank = %d'%len(S.shape)
+            raise ValueError('invalid S rank = %d'%len(S.shape))
             
     f.write(vname,nymd,nhms,A)
 
@@ -826,24 +822,24 @@ def getPlume(farea,veg,met,t,ntd,Verb=0):
 
     if Verb:
         if N>100:
-            Np = range(0,N,N/10)
+            Np = list(range(0,N,N/10))
         elif N>10:
-            Np = range(0,N,N/10)
+            Np = list(range(0,N,N/10))
         else:
-            Np = range(N)
-        print ""
-        print "                   Plume Rise Estimation for t=%d"%t
-        print "                   ------------------------------"
-        print ""
-        print "  %  |    Lon    Lat  b |   p_bot    p_top  |  z_bot z_top  |  k   k"     
-        print "     |    deg    deg    |    mb       mb    |   km     km   | bot top"
-        print "---- |  ------ ------ - | -------- -------- | ------ ------ | --- ---"
+            Np = list(range(N))
+        print("")
+        print("                   Plume Rise Estimation for t=%d"%t)
+        print("                   ------------------------------")
+        print("")
+        print("  %  |    Lon    Lat  b |   p_bot    p_top  |  z_bot z_top  |  k   k")     
+        print("     |    deg    deg    |    mb       mb    |   km     km   | bot top")
+        print("---- |  ------ ------ - | -------- -------- | ------ ------ | --- ---")
 
 #   Allocate space
 #   --------------
-    p_plume = zeros((N,2))
-    k_plume = zeros((N,2))
-    z_plume = zeros((N,2))
+    p_plume = np.zeros((N,2))
+    k_plume = np.zeros((N,2))
+    z_plume = np.zeros((N,2))
         
 #   Compute plume extent, one fire at a time
 #   ----------------------------------------
@@ -885,9 +881,9 @@ def getPlume(farea,veg,met,t,ntd,Verb=0):
         if Verb:
             if i in Np:
                 ip = int(0.5+100.*i/N)
-                print "%3d%% | %7.2f %6.2f %d | %8.2f %8.2f | %6.2f %6.2f | %3d %3d "%\
+                print("%3d%% | %7.2f %6.2f %d | %8.2f %8.2f | %6.2f %6.2f | %3d %3d "%\
                       (ip,met.lon[i],met.lat[i],veg[i], \
-                       p2/100,p1/100,z2/1000,z1/1000,k2,k1)
+                       p2/100,p1/100,z2/1000,z1/1000,k2,k1))
 
     return (p_plume, z_plume, k_plume)
 

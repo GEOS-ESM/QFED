@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 3.13)
 cmake_policy (SET CMP0053 NEW)
 cmake_policy (SET CMP0054 NEW)
+cmake_policy (SET CMP0132 NEW)
 
 project (
   QFED
@@ -36,8 +37,7 @@ foreach (dir IN LISTS ESMA_CMAKE_DIRS)
   endif ()
 endforeach ()
 
-#include (esma)
-include (plain)
+include (esma)
 
 ecbuild_declare_project()
 

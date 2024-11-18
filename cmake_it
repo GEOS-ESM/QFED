@@ -7,7 +7,6 @@
 mkdir -p build
 cd build
 ##cmake .. -DBASEDIR=$BASEDIR/`uname -s` \
-cmake .. -DBASEDIR=$BASEDIR/`uname -s` \
-         -DCMAKE_Fortran_COMPILER=gfortran \
+cmake .. -DCMAKE_Fortran_COMPILER=gfortran \
          -DCMAKE_INSTALL_PREFIX=../install
       
