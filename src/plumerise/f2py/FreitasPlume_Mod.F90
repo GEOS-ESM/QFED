@@ -109,7 +109,7 @@ subroutine FreitasPlume_Initialize ( This )
 subroutine FreitasPlume_Finalize ( This )
    use rconstants
    implicit none
-#  include "FreitasPlume.h"   
+#  include "FreitasPlume.h"
  end subroutine FreitasPlume_Finalize
 
 

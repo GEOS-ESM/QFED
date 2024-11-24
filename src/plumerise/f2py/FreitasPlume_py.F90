@@ -4,6 +4,7 @@
 !
 ! **********************************************
 
+ 
 subroutine plume ( km, u, v, T, q, delp, ptop, hflux_kW, area, & 
                    p, z, k, rc)
 
@@ -56,6 +57,54 @@ subroutine plume ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
 
  end subroutine plume
 
+subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, & 
+                       z_i, z_d, z_a, z_f, rc)
+
+   implicit none
+
+!  !ARGUMENTS:
+
+   integer, intent(in)  :: km                ! number of vertical layers
+   integer, intent(in)  :: nf                ! number of fires
+
+   real,    intent(in)  :: u(km,nf)          ! zonal wind (m/s)
+   real,    intent(in)  :: v(km,nf)          ! meridional wind (m/s)
+   real,    intent(in)  :: T(km,nf)          ! potential temperature [K]
+   real,    intent(in)  :: q(km,nf)          ! specific humidity [kg/kg]
+   real,    intent(in)  :: delp(km,nf)       ! pressure thickness [Pa]
+   real,    intent(in)  :: ptop              ! top edge pressure [Pa]
+   real,    intent(in)  :: area(nf)          ! fire area [m^2]
+   real,    intent(in)  :: hflux_kW(nf)      ! fire heat flux [kW/m2]
+   
+   real,    intent(out) :: z_i(nf)  ! height of maximum W (bottom of plume)
+   real,    intent(out) :: z_d(nf)  ! height of maximum detrainment
+   real,    intent(out) :: z_a(nf)  ! average height in (z_i,z_f), weighted by -dw/dz
+   real,    intent(out) :: z_f(nf)  ! height where w<1 (top of plume)
+
+   integer, intent(out) :: rc(nf)
+
+ !                       ----
+
+   integer n
+
+!$OMP PARALLEL DO           &
+!$OMP    PRIVATE(n,km,ptop) &
+!$OMP    SHARED(u,v,T,q,delp,hflux_kW,area,z_i,z_d,z_a,z_f,rc)
+   
+   do n = 1, nf
+
+      call plumeVMD ( km, &
+                      u(:,n), v(:,n), T(:,n), q(:,n), delp(:,n), ptop, &
+                      hflux_kW(n), area(n), & 
+                      z_i(n), z_d(n), z_a(n), z_f(n), rc(n) )
+
+   end do
+
+!$OMP END PARALLEL DO
+                 
+end subroutine PlumesVMD
+
+!---
 subroutine plumeVMD ( km, u, v, T, q, delp, ptop, hflux_kW, area, & 
                       z_i, z_d, z_a, z_f, rc)
 
@@ -84,6 +133,7 @@ subroutine plumeVMD ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
    integer, intent(out) :: rc
 
  !                       ----
+
 
 !  Local variables
 !  ---------------
@@ -160,8 +210,8 @@ subroutine getVMD(km,z,z_c,delta,v)
 
 !..................................................................................
 
-subroutine biome ( km, u, v, T, q, delp, ptop, area, ibiome, & 
-                   p1, p2, z1, z2, k1, k2, rc)
+subroutine plumeBiome ( km, u, v, T, q, delp, ptop, area, ibiome, & 
+                        p1, p2, z1, z2, k1, k2, rc)
 
    use FreitasPlume_Mod
 
@@ -188,7 +238,7 @@ subroutine biome ( km, u, v, T, q, delp, ptop, area, ibiome, &
    integer, intent(out) :: k2             ! lower plume vertical index
    integer, intent(out) :: rc             ! error code
 
- !                       ----
+!                       ----
 
 !  Local variables
 !  ---------------
@@ -225,8 +275,8 @@ subroutine biome ( km, u, v, T, q, delp, ptop, area, ibiome, &
 !  ---
    call FreitasPlume_Run (pr, km, u, v, T, q, delp, ptop, areas, &
                        z1_plume=z1_p, z2_plume=z2_p,    &
-                       p1_plume=p1_p ,p2_plume=p2_p,    &
-                       k1_plume=k1s, k2_plume=k2s)
+                       p1_plume=p1_p, p2_plume=p2_p,    &
+                       k1_plume=k1s,  k2_plume=k2s)
                            
 !  Finalize
 !  ---------
@@ -237,14 +287,15 @@ subroutine biome ( km, u, v, T, q, delp, ptop, area, ibiome, &
    z1 = z1_p(ibiome)
    z2 = z2_p(ibiome)
    k1 = k1s(ibiome) 
-   k2 = k2s(ibiome)  
+   k2 = k2s(ibiome)
+   
    rc = 0
 
 !  write(*,'(a,2F10.2,2I4,2F10.2)') 'f2py: p, k, z = ', p1, p2, k1, k2, z1, z2 
 
- end subroutine Biome
+ end subroutine plumeBiome
 
-!..................................................................................
+ !..................................................................................
 
   subroutine kPBL( k_pbl, km, T, q, delp, ptop, pblh )
 
@@ -312,3 +363,45 @@ subroutine biome ( km, u, v, T, q, delp, ptop, area, ibiome, &
    end do
 
  end subroutine kPBL
+
+ !----------------------------------------------------------------------------
+
+ subroutine ompTest(N,parallel,result)
+
+  integer, intent(in) :: N         ! problem size
+  logical, intent(in) :: parallel  ! whether do paralle calculation or not
+
+  real, intent(out)   :: result(N)
+  
+  !   ---
+
+  real :: x, dx
+
+
+!ams  print *, '*** Num threads: ', OMP_get_num_threads()
+!ams  print *, '*** Max threads: ', OMP_get_max_threads()
+  
+  dx = 3.141515 / (N-a)
+  if (parallel) then
+
+!$OMP PARALLEL DO           &
+!$OMP    PRIVATE(i,n,x) &
+!$OMP    SHARED(result)
+  
+   do i = 1, N
+      x = (i-1) * dx
+      result(i) = sin(x) * cos(x) / (sin(x)**2 + cos(x)**2)
+   end do
+
+!$OMP END PARALLEL DO
+     
+else
+
+   do i = 1, N
+      x = (i-1) * dx
+      result(i) = sin(x) * cos(x) / (sin(x)**2 + cos(x)**2)
+   end do   
+
+  end if
+
+end subroutine ompTest

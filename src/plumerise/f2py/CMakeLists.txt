@@ -26,6 +26,7 @@ esma_set_this ( OVERRIDE plumerise )
   esma_add_f2py3_module(FreitasPlume_
      SOURCES        FreitasPlume_py.F90
      DESTINATION    lib/Python/plumerise
+     LIBRARIES      plumerise
      INCLUDEDIRS    ${CMAKE_CURRENT_BINARY_DIR}
                     ${CMAKE_BINARY_DIR}/lib
                     ${include_${this}}
@@ -37,6 +38,7 @@ esma_set_this ( OVERRIDE plumerise )
   esma_add_f2py3_module(LockePlume_
      SOURCES        LockePlume_py.F90
      DESTINATION    lib/Python/plumerise
+     LIBRARIES      plumerise
      INCLUDEDIRS    ${CMAKE_CURRENT_BINARY_DIR}
                     ${CMAKE_BINARY_DIR}/lib
                     ${include_${this}}
@@ -44,4 +46,3 @@ esma_set_this ( OVERRIDE plumerise )
    add_dependencies(LockePlume_ ${this})
 
    
-
