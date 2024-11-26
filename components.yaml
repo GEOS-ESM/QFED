@@ -5,7 +5,7 @@ QFED:
 env:
   local: ./@env
   remote: ../ESMA_env.git
-  tag: v3.13.0
+  tag: v4.29.1
   develop: main
 
 cmake:
