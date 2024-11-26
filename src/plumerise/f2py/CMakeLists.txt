@@ -30,6 +30,7 @@ esma_set_this ( OVERRIDE plumerise )
      INCLUDEDIRS    ${CMAKE_CURRENT_BINARY_DIR}
                     ${CMAKE_BINARY_DIR}/lib
                     ${include_${this}}
+#     USE_OPENMP DOUBLE_PRECISION 
    )
    add_dependencies(FreitasPlume_ ${this})
 
@@ -42,6 +43,7 @@ esma_set_this ( OVERRIDE plumerise )
      INCLUDEDIRS    ${CMAKE_CURRENT_BINARY_DIR}
                     ${CMAKE_BINARY_DIR}/lib
                     ${include_${this}}
+ #    USE_OPENMP DOUBLE_PRECISION 
    )
    add_dependencies(LockePlume_ ${this})
 

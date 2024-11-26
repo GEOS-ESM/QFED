@@ -87,9 +87,9 @@ subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, &
 
    integer n
 
-!$OMP PARALLEL DO           &
-!$OMP    PRIVATE(n,km,ptop) &
-!$OMP    SHARED(u,v,T,q,delp,hflux_kW,area,z_i,z_d,z_a,z_f,rc)
+!ams $OMP PARALLEL DO           &
+!ams $OMP    PRIVATE(n,km,ptop) &
+!ams $OMP    SHARED(u,v,T,q,delp,hflux_kW,area,z_i,z_d,z_a,z_f,rc)
    
    do n = 1, nf
 
@@ -100,7 +100,7 @@ subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, &
 
    end do
 
-!$OMP END PARALLEL DO
+!ams $OMP END PARALLEL DO
                  
 end subroutine PlumesVMD
 
@@ -384,16 +384,16 @@ subroutine plumeBiome ( km, u, v, T, q, delp, ptop, area, ibiome, &
   dx = 3.141515 / (N-a)
   if (parallel) then
 
-!$OMP PARALLEL DO           &
-!$OMP    PRIVATE(i,n,x) &
-!$OMP    SHARED(result)
+!ams $OMP PARALLEL DO           &
+!ams $OMP    PRIVATE(i,n,x) &
+!ams $OMP    SHARED(result)
   
    do i = 1, N
       x = (i-1) * dx
       result(i) = sin(x) * cos(x) / (sin(x)**2 + cos(x)**2)
    end do
 
-!$OMP END PARALLEL DO
+!ams $OMP END PARALLEL DO
      
 else
 
