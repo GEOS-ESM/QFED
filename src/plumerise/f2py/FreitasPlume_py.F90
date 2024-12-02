@@ -60,7 +60,9 @@ subroutine plume ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
 subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, & 
                        z_i, z_d, z_a, z_f, rc)
 
-   implicit none
+   use omp_lib
+   
+   implicit none  
 
 !  !ARGUMENTS:
 
@@ -85,11 +87,13 @@ subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, &
 
  !                       ----
 
-   integer n
+   integer :: n
 
-!ams $OMP PARALLEL DO           &
-!ams $OMP    PRIVATE(n,km,ptop) &
-!ams $OMP    SHARED(u,v,T,q,delp,hflux_kW,area,z_i,z_d,z_a,z_f,rc)
+   print *, 'PlumesVMD: Open MP maximum number of threads: ', OMP_get_max_threads()
+
+!$OMP PARALLEL DO   &
+!$OMP    PRIVATE(n) &
+!$OMP    SHARED(km,nf,ptop,u,v,T,q,delp,hflux_kW,area,z_i,z_d,z_a,z_f,rc)
    
    do n = 1, nf
 
@@ -100,7 +104,7 @@ subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, &
 
    end do
 
-!ams $OMP END PARALLEL DO
+!$OMP END PARALLEL DO
                  
 end subroutine PlumesVMD
 
@@ -181,31 +185,59 @@ subroutine plumeVMD ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
 
 !..................................................................................
 
-subroutine getVMD(km,z,z_c,delta,v) 
+subroutine getVMD(km,nf,z,z_c,delta,v) 
 
 !
 ! Computes normalized vertical mass distribution (VMD) given z_c and delta. Assumes a gaussian.
 !
    implicit NONE
-   integer, intent(in)  :: km             ! number of vertical layers
-   real,    intent(in)  :: z(km) ! height above surface
-   real,    intent(in)  :: z_c   ! level of maximum detrainment (center of plume)
-   real,    intent(in)  :: delta ! width of vertical mass distribution
-   real,    intent(out) :: v(km) ! normalized vertical mass distribution
+   integer, intent(in)  :: km        ! number of vertical layers
+   integer, intent(in)  :: nf        ! number of fires
+   real,    intent(in)  :: z(km,nf)  ! height above surface [m]
+   real,    intent(in)  :: z_c(nf)   ! level of maximum detrainment (center of plume)
+   real,    intent(in)  :: delta(nf) ! width of vertical mass distribution
+   
+   real,    intent(out) :: v(km,nf)  ! normalized vertical mass distribution
 !                   ---
+
+  integer :: n
+  real*8  :: v_(km), z_(km), dz_(km)
+  real*8  :: vnorm
+
+  v = 0.0
+
+!$OMP PARALLEL DO         &
+!$OMP    PRIVATE(n,z_,v_,vnorm) &
+!$OMP    SHARED(v,z,z_c,delta,nf)
 
 !  Analytic function
 !  -----------------
-   where ( abs(z-z_c) <= delta )
-         v = 3.*(delta**2 - (z-z_c)**2)/(4.*delta**3) 
-   elsewhere
-         v = 0.0
-   end where
+   do n = 1, nf
+   
+    v_ = 0.0
+    z_ = z(:,n)
+    dz_ = abs(z_ - z_c(n))
+    where ( dz_ <= delta(n) )
+            v_ = 3.*(delta(n)**2 - dz_**2)/(4.*delta(n)**3) 
+    end where
 
-!  Ensure normalization on grid
-!  ----------------------------
-   v = v / sum(v)
+!   Ensure normalization on grid
+!   ----------------------------
+    vnorm = sum(v_)
+    if ( vnorm > 0.0 ) then
+         v(:,n) = v_ / vnorm
+    end if
 
+   end do
+
+!$OMP END PARALLEL DO
+
+!ams  print *, 'km, nf = ', km, nf
+!ams  print *, '     z = ', minval(z), maxval(z)
+!ams  print *, '   z_c = ', minval(z_c), maxval(z_c)
+!ams  print *, ' delta = ', minval(delta), maxval(delta)
+!ams  print *, '     v = ', minval(v), maxval(v)
+  
  end subroutine getVMD
 
 !..................................................................................
@@ -366,10 +398,19 @@ subroutine plumeBiome ( km, u, v, T, q, delp, ptop, area, ibiome, &
 
  !----------------------------------------------------------------------------
 
- subroutine ompTest(N,parallel,result)
+subroutine setNumThreads ( num_threads )
+  use omp_lib
+  integer(kind = OMP_integer_kind), intent(in) :: num_threads 
+  call OMP_set_num_threads(num_threads)
+  print *, 'Open MP maximum number of threads: ', OMP_get_max_threads()
+end subroutine setNumThreads
 
-  integer, intent(in) :: N         ! problem size
-  logical, intent(in) :: parallel  ! whether do paralle calculation or not
+ subroutine ompTest(N,num_threads,result)
+
+  use omp_lib
+  
+  integer, intent(in) :: N             ! problem size
+  integer(kind = OMP_integer_kind), intent(in) :: num_threads 
 
   real, intent(out)   :: result(N)
   
@@ -378,22 +419,22 @@ subroutine plumeBiome ( km, u, v, T, q, delp, ptop, area, ibiome, &
   real :: x, dx
 
 
-!ams  print *, '*** Num threads: ', OMP_get_num_threads()
-!ams  print *, '*** Max threads: ', OMP_get_max_threads()
+   call OMP_set_num_threads(num_threads)
+   print *, '*** Num threads: ', OMP_get_num_threads()
+   print *, '*** Max threads: ', OMP_get_max_threads()
   
-  dx = 3.141515 / (N-a)
-  if (parallel) then
+  dx = 3.141515 / (N-1)
+  if (num_threads>1) then
 
-!ams $OMP PARALLEL DO           &
-!ams $OMP    PRIVATE(i,n,x) &
-!ams $OMP    SHARED(result)
-  
+!$OMP PARALLEL DO           &
+!$OMP    PRIVATE(i,x)       &
+!$OMP    SHARED(n,result)
    do i = 1, N
       x = (i-1) * dx
       result(i) = sin(x) * cos(x) / (sin(x)**2 + cos(x)**2)
    end do
 
-!ams $OMP END PARALLEL DO
+!$OMP END PARALLEL DO
      
 else
 

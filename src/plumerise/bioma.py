@@ -121,7 +121,7 @@ def getHeatFlux ( aggregateBiome, Power, area ):
     
     # Valid biome indices
     # -------------------
-    I = (b>=0)&(b<==3) 
+    I = (b>=0)&(b<=3) 
     
     Power_F[I] =    FLAMING_FRACTION[b[I]]  * Power[I]
     Power_S[I] = (1-FLAMING_FRACTION[b[I]]) * Power[I]
