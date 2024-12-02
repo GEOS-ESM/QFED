@@ -20,6 +20,16 @@ FLAMING_FRACTION = [ 0.45, 0.45, 0.75, 0.97 ]
 HEAT_FLUX_MIN  =   [  30,    80,   4.,  3.  ]  # kW/m2
 HEAT_FLUX_MAX  =   [  80,    80,  23.,  3.  ]  # kW/m2 
 
+
+# INPE's Aggregation Table (from VegType_Mod)
+# Tropical forest: 2 & 4
+# Extra tropical forest: 1, 3, 5
+# Cerrado/woody savanna: 6 to 9
+# ------------------------------------------
+AGGREGATED_BIOME = [ 2, 1, 2, 2,                  # floresta tropical 2 and 4 / extra trop fores 1,3,5
+                     2, 3, 3, 3, 3,               # cerrado/woody savanna :6 a 9
+                     4, 4, 4, 4, 4, -15, 4, -17 ]
+
 def getAggregateBiome ( detailedBiome, lat ):
     """
     Uses the classic biome aggregation criterion as implemented in QFED 3.1 and earlier
@@ -27,15 +37,8 @@ def getAggregateBiome ( detailedBiome, lat ):
     
          biome = aggregateBiome(detailedBiome, lat)
          
-    ehre aggregateBiome takes the values:
+    where aggregateBiome takes the values defined in table AGGREEGATED_BIOME.
     
-         1  Tropical Forests        IGBP  2, 30S < lat < 30N
-         2  Extra-tropical Forests  IGBP  1, 2(lat <=30S or lat >= 30N), 
-                                          3, 4, 5
-         3  cerrado/woody savanna   IGBP  6 thru  9
-         4  Grassland/cropland      IGBP 10 thru 17
-         
-     On input we have the detailed IGBP land types:
      
    IGBP Land Cover Legend:
 
@@ -63,32 +66,23 @@ def getAggregateBiome ( detailedBiome, lat ):
     
          
     """
+    
     # Aggregated biome
     # ----------------
     biome = np.zeros(detailedBiome.shape, dtype=int)
     
-    # Tropical Forests
-    # ----------------
-    I = (detailedBiome==2)&(np.abs(lat)<30.)
-    biome[I] = TROPICAL
+    for i in range(len(AGGREGATED_BIOME)):
+        b = AGGREGATED_BIOME[i]
+        d = i+1
+        biome[detailedBiome==d] = b
     
-    # Extra-tropical forests
-    # ----------------------
-    I = ( (detailedBiome==2)&(np.abs(lat)>=30.) )|( (detailedBiome>2)&(detailedBiome<6) )
+    # Latitude correction: forests poleward of 30 are EXTRA_TRPOPICAL...
+    # ------------------------------------------------------------------
+    I = (np.abs(lat)>30.) & (biome==TROPICAL)
     biome[I] = EXTRA_TROPICAL
     
-    # Savanna
-    # -------
-    I = (detailedBiome>5)&(detailedBiome<10)
-    biome[I] = SAVANNA 
-    
-    # Grassland
-    # ---------
-    I = (detailedBiome==0)|( (detailedBiome>9)&(detailedBiome<17) )
-    biome[I] = GRASSLAND  
-    
     return biome
-    
+
 def _prop(b,PROP):
     return np.array([ PROP[i] for i in b ] )
     
