@@ -27,7 +27,7 @@ def omp_set_num_threads(num_threads):
     """
     fp.setnumthreads(num_threads)
 
-def getPlumesVMD(heatFlux_F, area_F, met, ktop=30, Verb=False):
+def getPlumesVMD(heatFlux_F, area_F, met, rad2conv=5, ktop=30, Verb=False):
     
     """
     Runs the Plume Rise extension to compute the paramerers of the 
@@ -37,11 +37,12 @@ def getPlumesVMD(heatFlux_F, area_F, met, ktop=30, Verb=False):
 
     where 
     
-    heatFlux_F --- (flaming) heat flux (kW/m2)
+    heatFlux_F --- radiative (flaming) heat flux (kW/m2)
     area_F     --- (flaming) fire area, units of m2
     met        --- meteorological environment (xarray dataset)
     ktop       --- top vertical index of met fields; indices above these 
                    will be trimmed off of met fields.
+    rad2conv   --- factor to convert radiative het flux to convective head flux.
     
     On otput, z_i, z_d, z_a, z_f are nd-arrays of shape(N),   
     
@@ -59,7 +60,7 @@ def getPlumesVMD(heatFlux_F, area_F, met, ktop=30, Verb=False):
 #   ------------        
     N, km = met.U.shape
     pe = eta.getPe(km)     # make sure eta supports this number of levels
-    ptop = pe(ktop)
+    ptop = pe[ktop]
     
 #   Trim top of met fields, as fortran arrays to avoid f2py copy-in
 #   ---------------------------------------------------------------
@@ -67,37 +68,38 @@ def getPlumesVMD(heatFlux_F, area_F, met, ktop=30, Verb=False):
     v = np.asfortranarray(met.V[:,ktop:].values.T)
     T = np.asfortranarray(met.T[:,ktop:].values.T)
     q = np.asfortranarray(met.QV[:,ktop:].values.T)
-    delp = np.asfortranarray(met.delp[:,ktop:].values.T)
+    delp = np.asfortranarray(met.DELP[:,ktop:].values.T)
 
 #   Units:
 #       heatFlux_F - kw/m2 as required by plume rise model
 #       area - m2 as required by plume rise model
 #   ------------------------------------------------------  
-    heatFlux_kW = heatFlux_F * 1000  # MW/m2 to kW/m2
+    mode = 1 # index of  mode stat
+    hflux_kW = rad2conv * heatFlux_F[:,mode] * 1000  # Convective HF, MW/m2 to kW/m2
+    area_m2 = area_F[:,mode] # in m2
     
 
 #   Run plume rise model basing heat flux
 #   -------------------------------------
-    z_i,z_d,z_a,z_f,rc = plumesvmd(u,v,t,q,delp,ptop,hflux_kw,area_F)
+    z_i,z_d,z_a,z_f,rc = fp.plumesvmd(u,v,T,q,delp,ptop,hflux_kW,area_m2)
 
     if Verb:
         if N>1000:
-            Np = list(range(0,N,N/100))
+            Np = list(range(0,N,N//100))
         elif N>100:
-            Np = list(range(0,N,N/10))
+            Np = list(range(0,N,N//10))
         else:
             Np = list(range(N))
             
         print("")
-        print("                   Plume Rise Estimation for t=%d"%t)
-        print("                   ------------------------------")
+        print("                   Plume Rise Estimation")
+        print("                   ----------------------")
         print("")
-        print("         |    Lon    Lat  |    z_i      z_f   |   z_a   z_d   |  rc")     
-        print("  index  |    deg    deg  |     km       km   |    km    km   | ")
-        print("-------- |  ------ ------ | -------- -------- | ------ ------ | ---")
+        print("          |    Lon    Lat  |    z_i      z_f   |   z_a      z_d    |  rc")     
+        print("  index   |    deg    deg  |     km       km   |    km       km    | ")
+        print("--------- |  ------ ------ | -------- -------- | -------- -------- | ---")
 
-
-        if i in Np:
+        for i in Np:
             print("%8d  | %7.2f %6.2f | %8.2f %8.2f | %8.2f %8.2f | %3d"%\
                   (i,met.lon[i],met.lat[i], \
                    z_i[i]/1000,z_f[i]/1000, \
@@ -163,7 +165,7 @@ def getVMD ( z_i, z_d, z_a, z_f, met, ktop=30, option='centered' ):
 
     vmd = fp.getvmd(z,z_c,delta)
     
-    print('vmd = ', vmd.shape, vmd.min(), vmd.max())
+    #print('vmd = ', vmd.shape, vmd.min(), vmd.max())
     
     # Construct xarray Dataset
     # ------------------------

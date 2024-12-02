@@ -65,7 +65,7 @@ def getAggregateBiome ( detailedBiome, lat ):
     """
     # Aggregated biome
     # ----------------
-    biome = np.zeros(detailedBiome.shape, astype='int')
+    biome = np.zeros(detailedBiome.shape, dtype=int)
     
     # Tropical Forests
     # ----------------
@@ -74,7 +74,7 @@ def getAggregateBiome ( detailedBiome, lat ):
     
     # Extra-tropical forests
     # ----------------------
-    I = (detailedBiome==2)&(np.abs(lat)>=30.)&(detailedBiome>2)&(detailedBiome<6)
+    I = ( (detailedBiome==2)&(np.abs(lat)>=30.) )|( (detailedBiome>2)&(detailedBiome<6) )
     biome[I] = EXTRA_TROPICAL
     
     # Savanna
@@ -84,12 +84,15 @@ def getAggregateBiome ( detailedBiome, lat ):
     
     # Grassland
     # ---------
-    I = (detailedBiome==0)&(detailedBiome>9)&(detailedBiome<17)
+    I = (detailedBiome==0)|( (detailedBiome>9)&(detailedBiome<17) )
     biome[I] = GRASSLAND  
     
     return biome
     
-def getHeatFlux ( aggregateBiome, Power, area ):
+def _prop(b,PROP):
+    return np.array([ PROP[i] for i in b ] )
+    
+def getHeatFlux ( aggregateBiome, Power ):
     """
     Given the IGBP land cover type, fire radiative Power in MW and pixel area in m2,
     it computes
@@ -98,11 +101,11 @@ def getHeatFlux ( aggregateBiome, Power, area ):
     
     where,
     
-    Power_F(:)      --- Flaming portion of the FRP
-    Power_S(:)      --- Smoldering/residual portion of the FRP
-    HeatFlux_F(:,3) --- Flaming heat flux kW/m2, uniform distribution
+    Power_f(:)      --- Flaming portion of the FRP
+    Power_s(:)      --- Smoldering/residual portion of the FRP
+    HeatFlux_f(:,3) --- Flaming heat flux MW/m2, uniform distribution
                         F0:lower bound, 1:mode/mean, 2:upper bound
-    area_F(:,3)     --- Area of flaming portion of fire
+    Area_f(:,3)     --- Area of flaming portion of fire
     
     The estimates are based on the assumption that flaming fraction and 
     heat fluxes are deternined by the aggregate biome type, the classic assumption
@@ -114,24 +117,29 @@ def getHeatFlux ( aggregateBiome, Power, area ):
     
     # Initialize output to nan
     # ------------------------
-    Power_F = np.zeros(b.shape)         + np.nan
-    Power_S = np.zeros(b.shape)         + np.nan
-    HeatFlux_F = np.zeros(b.shape+(3,)) + np.nan
-    area_F = np.zeros(b.shape+(3,))     + np.nan
-    
+    Power_f = np.zeros(b.shape)         + np.nan
+    Power_s = np.zeros(b.shape)         + np.nan
+    HeatFlux_f = np.zeros(b.shape+(3,)) + np.nan
+    Area_f = np.zeros(b.shape+(3,))     + np.nan
+   
     # Valid biome indices
     # -------------------
     I = (b>=0)&(b<=3) 
     
-    Power_F[I] =    FLAMING_FRACTION[b[I]]  * Power[I]
-    Power_S[I] = (1-FLAMING_FRACTION[b[I]]) * Power[I]
+    fraction = _prop(b[I],FLAMING_FRACTION)
+    hf_min   = _prop(b[I],HEAT_FLUX_MIN)/1000. # MW/m2
+    hf_max   = _prop(b[I],HEAT_FLUX_MAX)/1000. # MW/m2      
         
-    HeatFlux_F[I,0] = HEAT_FLUX_MIN[b[I]] # kW/m2, lower bound
-    HeatFlux_F[I,1] = (HEAT_FLUX_MAX[b[I]] + HEAT_FLUX_MIN[b[I]]) / 2. # kW/m2, mean
-    HeatFlux_F[I,2] = HEAT_FLUX_MAX[b[I]] # kW/m2, upper bound
+    Power_f[I] =    fraction  * Power[I]
+    Power_s[I] = (1-fraction) * Power[I]
+        
+    HeatFlux_f[I,0] = hf_min             # MW/m2, lower bound
+    HeatFlux_f[I,1] = (hf_min+hf_max)/2  # MW/m2, mean
+    HeatFlux_f[I,2] = hf_max             # MW/m2, upper bound
     
-    area_F = 1000. * Power_F / HeatFlux_F # m2
+    for i in range(3):
+        Area_f[I,i] = Power_f[I] / HeatFlux_f[I,i] # m2
     
-    return (Power_F, Power_S, HeatFlux_F, area_F)
+    return (Power_f, Power_s, HeatFlux_f, Area_f)
     
     

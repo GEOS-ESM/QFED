@@ -1,10 +1,10 @@
 !
 ! This is the the main Plume Rise code base without any ESMF code. It is
-! essentially the same code I got from Saulo, except that it has been
+! essentially the same code I got from Saulo Freitas, except that it has been
 ! made more object oriented by eliminating static data segments and
 ! making it thread safe.
 !
-! Arlindo da Silva (October, 2006)
+! Arlindo da Silva (October, 2006-2024)
 !..........................................................................
 
 Module FreitasPlume_Mod
@@ -31,7 +31,7 @@ character(len=15), parameter :: veg_name(N_BIOME) = (/ &
 
 ! Hardwired problem size for now
 ! ------------------------------
-  integer, parameter :: nkp = 200, ntime = 200
+  integer, public, parameter :: nkp = 200, ntime = 200
 
 ! The FreitasPlume Object
 ! --------------------
@@ -401,10 +401,11 @@ end subroutine FreitasPlume_Run_HF
 
 !..........................................................................
 
-subroutine FreitasPlume_Run_VMD ( this, km,     &
+subroutine FreitasPlume_Run_VMD ( this, km,                &
                               u_, v_, T_, q_, delp_, ptop, &
-                              fire_area, heat_flux_kW,   &
-                              z_i, z_d, z_a, z_f )
+                              fire_area, heat_flux_kW,     &
+                              z_i, z_d, z_a, z_f,          &
+                              z_plume, w_plume)
 
    use rconstants
    implicit none
@@ -425,6 +426,8 @@ subroutine FreitasPlume_Run_VMD ( this, km,     &
    real, intent(out) :: z_a    ! average height in (z_i,z_f), weighted by -dw/dz
    real, intent(out) :: z_f    ! level when w<1.
 
+   real, optional, intent(out) :: z_plume(nkp) ! native vertical levels
+   real, optional, intent(out) :: w_plume(nkp) ! native vertical velocity
 
 !                                    -------
 
@@ -501,6 +504,12 @@ subroutine FreitasPlume_Run_VMD ( this, km,     &
 ! Get plume extent parameters
 ! ---------------------------
   call get_VMD(z_i,z_d,z_a,z_f,this%w,this%zm,nkp)
+
+! Return native plume profile as well
+! -----------------------------------
+  if ( present(z_plume) ) z_plume = this%zm
+  if ( present(w_plume) ) w_plume = this%w
+
 
 end subroutine FreitasPlume_Run_VMD
 
@@ -986,7 +995,8 @@ subroutine get_VMD(z_i,z_d,z_a,z_f,w,zm,nkp)
 
 !  Could not find w_max, stop here
 !  -------------------------------
-   if ( (k_i==0) .or. (k_i==k_thresh) ) then
+!ams if ( (k_i==0) .or. (k_i==k_thresh) ) then
+   if ( (k_i==0) ) then
         z_i = -1.
         z_d = -1.
         z_a = -1.
@@ -1451,8 +1461,9 @@ rmaxtime = float(maxtime)
                                     
 !-- set timestep
     !dt = (zm(2)-zm(1)) / (tstpf * wmax)  
-    dt = min(5.,(zm(2)-zm(1)) / (tstpf * wmax))
-                                
+!ams dt = min(5.,(zm(2)-zm(1)) / (tstpf * wmax))
+    dt = min(1.,(zm(2)-zm(1)) / (tstpf * wmax))
+      
 !-- elapsed time, sec
     time = time+dt 
 !-- elapsed time, minutes                                      
