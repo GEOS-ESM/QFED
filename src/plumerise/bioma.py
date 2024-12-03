@@ -11,7 +11,7 @@ import numpy as np
 TROPICAL       = 1
 EXTRA_TROPICAL = 2
 SAVANNA        = 3
-GRASSLAND      = 4 
+GRASSLAND      = 4  
 
 # Fire Propertie per aggregated biome type
 #                      tf    xf   sv    gl
