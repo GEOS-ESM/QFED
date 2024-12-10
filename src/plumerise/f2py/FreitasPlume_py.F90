@@ -58,14 +58,17 @@ subroutine plume ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
  end subroutine plume
 
 subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, & 
-                       z_i, z_d, z_a, z_f, rc)
+                       z_i, z_d, z_a, z_f, z_plume, w_plume, rc)
 
+   use FreitasPlume_Mod
    use omp_lib
    
    implicit none  
 
 !  !ARGUMENTS:
 
+   integer, parameter :: nkp_ = 200          ! This must be explicit for f2py
+   
    integer, intent(in)  :: km                ! number of vertical layers
    integer, intent(in)  :: nf                ! number of fires
 
@@ -83,13 +86,23 @@ subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, &
    real,    intent(out) :: z_a(nf)  ! average height in (z_i,z_f), weighted by -dw/dz
    real,    intent(out) :: z_f(nf)  ! height where w<1 (top of plume)
 
+   real,    intent(out) :: z_plume(nkp_)    ! native vertical levels (same for all fires)
+   real,    intent(out) :: w_plume(nkp_,nf) ! native vertical velocity
+   
+   
    integer, intent(out) :: rc(nf)
 
  !                       ----
 
    integer :: n
 
-   print *, 'PlumesVMD: Open MP maximum number of threads: ', OMP_get_max_threads()
+   if ( nkp_ .ne. nkp ) then
+      print *, 'PlumesVMD: internal error, fix nkp', nkp, nkp_
+      rc = 1
+      return
+   endif
+
+   !ams print *, 'PlumesVMD: Open MP maximum number of threads: ', OMP_get_max_threads()
 
 !$OMP PARALLEL DO   &
 !$OMP    PRIVATE(n) &
@@ -97,10 +110,13 @@ subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, &
    
    do n = 1, nf
 
-      call plumeVMD ( km, &
+      !ams print *, n
+      
+      call plumeVMD ( km,                                              &
                       u(:,n), v(:,n), T(:,n), q(:,n), delp(:,n), ptop, &
-                      hflux_kW(n), area(n), & 
-                      z_i(n), z_d(n), z_a(n), z_f(n), rc(n) )
+                      hflux_kW(n), area(n),                            & 
+                      z_i(n), z_d(n), z_a(n), z_f(n),                  &
+                      z_plume, w_plume(:,n), rc(n) )
 
    end do
 
@@ -108,15 +124,18 @@ subroutine PlumesVMD ( km, nf, u, v, T, q, delp, ptop, hflux_kW, area, &
                  
 end subroutine PlumesVMD
 
+
 !---
 subroutine plumeVMD ( km, u, v, T, q, delp, ptop, hflux_kW, area, & 
-                      z_i, z_d, z_a, z_f, rc)
+                      z_i, z_d, z_a, z_f, z_plume, w_plume, rc)
 
    use FreitasPlume_Mod
-
+  
    implicit none
 
 !  !ARGUMENTS:
+
+   integer, parameter :: nkp_ = 200       ! This must be explicit for f2py
 
    integer, intent(in)  :: km             ! number of vertical layers
 
@@ -134,6 +153,9 @@ subroutine plumeVMD ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
    real,    intent(out) :: z_a  ! average height in (z_i,z_f), weighted by -dw/dz
    real,    intent(out) :: z_f  ! height where w<1 (top of plume)
 
+   real,    intent(out) :: z_plume(nkp_) ! native vertical levels
+   real,    intent(out) :: w_plume(nkp_) ! native vertical velocity
+   
    integer, intent(out) :: rc
 
  !                       ----
@@ -145,16 +167,24 @@ subroutine plumeVMD ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
    
 !                                ----
 
+   if ( nkp_ .ne. nkp ) then
+      print *, 'PlumeVMD: internal error, fix nkp', nkp, nkp_
+      rc = 1
+      return
+   endif
+        
+   
 !  Initialize
 !  ----------
    call FreitasPlume_Initialize(pr)
 
 !  Run
 !  ---
-   call FreitasPlume_Run (pr, km,     &
-                       u, v, T, q, delp, ptop, &
-                       area, hflux_kW,   &
-                       z_i, z_d, z_a, z_f )
+   call FreitasPlume_Run (pr, km,                 &
+                          u, v, T, q, delp, ptop, &
+                          area, hflux_kW,         &
+                          z_i, z_d, z_a, z_f,     &
+                          z_plume, w_plume )
 
 !
 !  Find bottom, mid and top plume height. If using the parabolic VMD as in getVMD() below,
@@ -182,6 +212,7 @@ subroutine plumeVMD ( km, u, v, T, q, delp, ptop, hflux_kW, area, &
    rc = 0
 
  end subroutine plumeVMD
+ 
 
 !..................................................................................
 

@@ -6,6 +6,10 @@ Implement biome-prescribed fire properties such as heat fluxe, fire areas.
 
 import numpy as np
 
+# As in QFED emission_factors yaml file
+# 0------------------------------------
+NAMES = [ 'tropical_forest', 'extratropical_forest', 'savanna', 'grassland' ]
+
 # Aggregated Vegetation types
 # ---------------------------
 TROPICAL       = 1
