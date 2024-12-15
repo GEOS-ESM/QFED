@@ -431,7 +431,7 @@ subroutine plumeBiome ( km, u, v, T, q, delp, ptop, area, ibiome, &
 
 subroutine setNumThreads ( num_threads )
   use omp_lib
-  integer(kind = OMP_integer_kind), intent(in) :: num_threads 
+  integer, intent(in) :: num_threads 
   call OMP_set_num_threads(num_threads)
   print *, 'Open MP maximum number of threads: ', OMP_get_max_threads()
 end subroutine setNumThreads
@@ -441,7 +441,7 @@ end subroutine setNumThreads
   use omp_lib
   
   integer, intent(in) :: N             ! problem size
-  integer(kind = OMP_integer_kind), intent(in) :: num_threads 
+  integer, intent(in) :: num_threads 
 
   real, intent(out)   :: result(N)
   
