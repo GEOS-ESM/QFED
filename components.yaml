@@ -8,19 +8,8 @@ env:
   tag: v4.29.1
   develop: main
 
-cmake:
-  local: ./@cmake
-  remote: ../ESMA_cmake.git
-  tag: v4.8.1
-  develop: develop
-
-ecbuild:
-  local: ./@cmake/@ecbuild
-  remote: ../ecbuild.git
-  tag: geos/v1.2.0
-
 GMAOpyobs:
   local: ./src/Shared/@GMAOpyobs
   remote: ../GMAOpyobs.git
-  tag: feature/#17/adasilva/plume_rise
+  branch: feature/mathomp4/plume-no-esma
 
