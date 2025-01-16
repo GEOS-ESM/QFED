@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 3.13)
 cmake_policy (SET CMP0053 NEW)
 cmake_policy (SET CMP0054 NEW)
+cmake_policy (SET CMP0132 NEW)
 
 project (
   QFED
@@ -35,6 +36,7 @@ foreach (dir IN LISTS ESMA_CMAKE_DIRS)
     list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/${dir}")
   endif ()
 endforeach ()
+
 include (esma)
 
 ecbuild_declare_project()
@@ -45,9 +47,9 @@ add_definitions(-Dsys${CMAKE_SYSTEM_NAME} -DESMA64)
 add_definitions(${MPI_Fortran_COMPILE_FLAGS})
 include_directories(${MPI_Fortran_INCLUDE_PATH})
 
-
 esma_mepo_style(env env_dir)
 esma_add_subdirectory (${env_dir})
+
 # Recursively build source tree
 esma_add_subdirectory (src)
 

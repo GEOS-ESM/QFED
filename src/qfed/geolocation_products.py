@@ -58,6 +58,9 @@ class MODIS(GeolocationProduct):
     MODIS geolocation product (MOD03, MYD03) reader.
     '''
 
+    lon_valid_range = (-180.0, 180.0)
+    lat_valid_range = ( -90.0,  90.0)
+
     # proper bounds can be obtained from the metadata:
     # [EAST|WEST|SOUTH|NORTH]BOUNDINGCOORDINATE
 
@@ -69,7 +72,17 @@ class MODIS(GeolocationProduct):
             return
 
         data = mxd03.select(variable).get()
-        min_val, max_val = mxd03.select(variable).getrange()
+        try:
+            min_val, max_val = mxd03.select(variable).getrange()
+        except: 
+            print(variable)
+            if variable == 'Longitude':
+                min_val, max_val = (-180.0, 180.0)
+            elif variable == 'Latitude':
+                min_val, max_val = ( -90.0,  90.0)
+            else:
+                min_val = max_val = None
+                assert min_val is not None
         return data, (min_val, max_val)
 
     def get_longitude(self, file, ):

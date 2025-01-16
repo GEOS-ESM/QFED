@@ -6,6 +6,8 @@
 /env/
 /env@/
 /.mepo/
+__pycache__
+.ipynb_checkpoints
 parallel_build.o*
 log.*
 CMakeUserPresets.json
