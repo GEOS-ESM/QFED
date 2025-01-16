@@ -291,7 +291,7 @@ def main():
         os.path.dirname(sys.argv[0]), 'emission_factors.yaml'
     )
 
-    species = ('co2', 'oc', 'so2', 'nh3', 'bc')
+    species = ('co2', 'oc', 'so2', 'nh3', 'bc', 'co')
 
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
