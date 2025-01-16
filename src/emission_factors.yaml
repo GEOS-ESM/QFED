@@ -115,7 +115,7 @@ emission_factors:
             savanna:              [ 0.84,   0.65]
             grassland:            [ 0.84,   0.65]
             crop_residue:         [ 1.80,   1.00]
-        ch2o
+        ch2o:
             name: 'Formaldehyde (HCHO)'
             tropical_forest:      [ 2.40,   0.63]
             extratropical_forest: [ 2.04,   0.70]
