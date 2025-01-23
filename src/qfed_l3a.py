@@ -153,6 +153,8 @@ def process(
 
         # output file
         output_file =cli_utils.get_path(output[component]['file'], timestamp)
+        output_dir = os.path.dirname(output_file)
+        os.makedirs(output_dir, exist_ok=True)
 
         # product readers
         finder = Finder(gp_file, fp_file, vg_dir)

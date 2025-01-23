@@ -1,17 +1,17 @@
 define:
-    qfed_base_dir: &qfed_base_dir test/
+    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/
     modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis/ 
 
 qfed:
     output:
         grid:
-            resolution: 'e'  # choose from ('c', 'd', 'e', 'f', '0.1x0.1')
+            resolution: '0.1x0.1'  # choose from ('c', 'd', 'e', 'f', '0.1x0.1')
         emissions:
             file: [
                 *qfed_base_dir, 
                 "QFED",
                 "Y{0:%Y}/M{0:%m}", 
-                "qfed_vxx.emis_{{species}}.{0:%Y%m%d}.{0:%H%M}.300-wip.nc4"
+                "qfed3_1.emis_{{species}}.{0:%Y%m%d}.nc4"
             ]
         frp:
             modis/terra:
@@ -19,28 +19,28 @@ qfed:
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed.frp.mod.{0:%Y%m%d}.{0:%H%M}.300-wip.nc4"
+                    "qfed3_1.frp.mod.{0:%Y%m%d}.{0:%H%M}.nc4"
                 ]
             modis/aqua:
                 file: [
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed.frp.myd.{0:%Y%m%d}.{0:%H%M}.300-wip.nc4"
+                    "qfed3_1.frp.myd.{0:%Y%m%d}.nc4"
                 ]
             viirs/npp:
                 file: [
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed.frp.vnp.{0:%Y%m%d}.{0:%H%M}.300-wip.nc4"
+                    "qfed3_1.frp.vnp.{0:%Y%m%d}.nc4"
                 ]
             viirs/jpss-1:
                 file: [
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed.frp.vj1.{0:%Y%m%d}.{0:%H%M}.300.nc4"
+                    "qfed3_1.frp.vj1.{0:%Y%m%d}.nc4"
                 ]
     with:
         modis/terra:
