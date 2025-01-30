@@ -399,10 +399,11 @@ class Emissions:
             begin_date = int(self.time.strftime('%Y%m%d'))
             begin_time = int(self.time.strftime('%H%M%S'))
             v.long_name = 'time'
-            v.standard_name = 'latitude'
+            v.standard_name = 'time'
             v.units = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.time)
             v.begin_date = np.array(begin_date, dtype=np.int32)
             v.begin_time = np.array(begin_time, dtype=np.int32)
+            v.time_increment = '240000'
 
             # data variables - attributes
             for _v in v_meta_data.values():
