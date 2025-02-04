@@ -5,23 +5,23 @@ QFED:
 env:
   local: ./@env
   remote: ../ESMA_env.git
-  tag: v3.13.0
+  tag: v4.34.1
   develop: main
 
 cmake:
   local: ./@cmake
   remote: ../ESMA_cmake.git
-  tag: v3.16.0
+  tag: v3.56.0
   develop: develop
 
 ecbuild:
   local: ./@cmake/@ecbuild
   remote: ../ecbuild.git
-  tag: geos/v1.2.0
+  tag: geos/v1.4.0
 
 GMAOpyobs:
   local: ./src/Shared/@GMAOpyobs
   remote: ../GMAOpyobs.git
-  hash: 7ad018f
+  tag: v1.2.0
   develop: develop
 
