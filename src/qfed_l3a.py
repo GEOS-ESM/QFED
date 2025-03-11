@@ -165,12 +165,12 @@ def process(
         cp_reader.set_auxiliary(watermask=watermask)
 
         # generate gridded FRP and areas
-        frp = GriddedFRP(output_grid, finder, gp_reader, fp_reader, cp_reader)
+        frp = GriddedFRP(component, output_grid, finder, gp_reader, fp_reader, cp_reader)
         frp.ingest(t_start, t_end)
         frp.save(
             output_file,
             timestamp,
-            qc=False,
+            qc=True,
             compress=compress,
             source=f'{instrument}/{satellite}'.upper(),
             instrument=instrument.upper(),

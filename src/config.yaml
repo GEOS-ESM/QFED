@@ -45,19 +45,19 @@ qfed:
     with:
         modis/terra:
             geolocation:
-                file: /discover/nobackup/dao_ops/intermediate/flk/modis/061/MOD03/{0:%Y}/{0:%j}/MOD03.A{0:%Y%j}.{0:%H%M}.061.NRT.hdf
+                file: /css/modis/Collection6.1/L1/MOD03/{0:%Y}/{0:%j}/MOD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
             fires:
-                file: /discover/nobackup/dao_ops/intermediate/flk/modis/0[60][16]/MOD14/{0:%Y}/{0:%j}/MOD14.A{0:%Y%j}.{0:%H%M}.0[60][16].*.hdf
+                file: /css/modis/Collection6.1/L2/MOD14_L2{0:%Y}/{0:%j}/MOD14.A{0:%Y%j}.{0:%H%M}.061.*.hdf
         modis/aqua:
             geolocation:
-                file: /discover/nobackup/dao_ops/intermediate/flk/modis/0[60][16]/MYD03/{0:%Y}/{0:%j}/MYD03.A{0:%Y%j}.{0:%H%M}.0[60][16].NRT.hdf
+                file: /css/modis/Collection6.1/L1/MYD03/{0:%Y}/{0:%j}/MYD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
             fires: 
-                file: /discover/nobackup/dao_ops/intermediate/flk/modis/0[60][16]/MYD14/{0:%Y}/{0:%j}/MYD14.A{0:%Y%j}.{0:%H%M}.0[60][16].*.hdf
+                file: /css/modis/Collection6.1/L2/MYD14_L2/{0:%Y}/{0:%j}/MYD14.A{0:%Y%j}.{0:%H%M}.*.hdf
         viirs/npp:
             geolocation:
                 file: /css/viirs/data/Level1/VNP03IMG.trimmed/{0:%Y}/{0:%j}/VNP03IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
             fires:
-                file: /css/viirs/data/Level2/VNP14IMG/{0:%Y}/{0:%j}/VNP14IMG.A{0:%Y%j}.{0:%H%M}.001.*.nc
+                file: /css/viirs/data/Level2/VNP14IMG/{0:%Y}/{0:%j}/VNP14IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
         viirs/jpss-1:
             geolocation:
                 file: /css/viirs/data/Level1/VJ103IMG.trimmed/{0:%Y}/{0:%j}/VJ103IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc

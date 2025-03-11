@@ -6,10 +6,9 @@ import os
 import logging
 from datetime import datetime, timedelta
 from glob import glob
-
+import yaml
 import numpy as np
 import netCDF4 as nc
-
 from binObs_ import binareas, binareasnr
 
 from qfed import grid
@@ -20,6 +19,7 @@ from qfed import classification_products
 from qfed import vegetation
 from qfed import fire
 from qfed import VERSION
+from qfed.emissions import Emissions
 
 
 class GriddedFRP:
@@ -30,6 +30,7 @@ class GriddedFRP:
 
     def __init__(
         self,
+        sat,    #string that indicates the satellite nameß
         grid,
         finder,
         geolocation_product_reader,
@@ -41,6 +42,8 @@ class GriddedFRP:
         self._gp_reader = geolocation_product_reader
         self._fp_reader = fire_product_reader
         self._cp_reader = classification_product_reader
+        self.sat = sat
+
 
     def _get_coordinates(self, geolocation_product_file):
         """
@@ -269,6 +272,7 @@ class GriddedFRP:
         lat = self._fp_reader.get_fire_latitude(fire_product_file)
         frp = self._fp_reader.get_fire_frp(fire_product_file)
         frp[frp < 0]=0
+        frp[frp > 40000]=np.nan #40000 was chosen as it is just above the max for all platforms using the equation FRP = A*sigma* (L4_fire - L4_background) / C
         line = self._fp_reader.get_fire_line(fire_product_file)
         sample = self._fp_reader.get_fire_sample(fire_product_file)
         area = self._fp_reader.get_fire_pixel_area(fire_product_file)
@@ -422,11 +426,61 @@ class GriddedFRP:
         Saves gridded Areas and FRP to file.
         """
         if qc == True:
-            raise NotImplementedError('QA is not implemented.')
-            # TODO
-            # self.qualityControl()
+# This section performs a quality control such that the AOD associated with biomass burning emissions
+#does not get too large. An arbitrary value of AOD=10, along with an empirical factor of 6 used to accound for
+#aerosol loss processes was implemented in QFED 2 and will be used here until/unless future work indicates these
+#values should be revised. A "back of the envelope caculation converts FRP to mass and then AOD to determine whether
+#a capping is needed. Alpha, emission scaling factors, and satellite factors, analogous to emissions.py are read in
+#from qcscalingfactors.yaml.
+#Constants used to compute emissions and cap the AOD
+            Alpha = 1.37e-6 # Combustion rate constant in kg(dry mater)/J
+            units_factor = 1.0e-3 # used to convert B_f from [g/kg] to [kg/kg]
+            f_phys = 6  # empirical factor - accounts for absence of removal processes
+            max_aod = 10 # max AOD used by QFED 2.5.2
+            oc_mass_ext_coeff = 4.0
+            pom_oc_ratio = 1.8 #1.4 was used by QFED 2.5.2 but this was changed to 1.8 to refect the value used by GOCART
+            with open('qcscalingfactors.yaml') as f:
+                qcscaling = yaml.safe_load(f)
 
-            pass
+# apply the 'sequential-b0' method to compute emissions
+            E = {bb: np.zeros((self.im, self.jm)) for bb in fire.BIOMASS_BURNING}
+            E_total = np.zeros((self.im, self.jm))
+            A_l = self.area_land
+            A_w = self.area_water
+            A_c = self.area_cloud
+            A_o = A_l + A_w
+            S_f=qcscaling[self.sat]['satellitefactor']
+            for b in fire.BIOMASS_BURNING:
+                B_f=qcscaling['oc'][b.description]
+                A_f=Alpha * qcscaling[self.sat][b.description]
+                E[b][:,:] += units_factor * A_f * S_f * B_f * self.frp[b][:, :]
+
+            i = (A_l > 0)
+            for b in fire.BIOMASS_BURNING:
+                E_b = E[b][:,:]
+                E_b[i] = E_b[i] / (A_o[i] + A_c[i]) * ((A_l[i] + 2*A_c[i]) / (A_l[i] + A_c[i]))
+                E[b][:,:] = E_b
+
+            for b in fire.BIOMASS_BURNING:
+                E_total += E[b][:, :]
+        
+
+    # column density of OC emitted for 24 hours, g m-2
+            M = (1e3 * E_total) * (24 * 3600) 
+    # cap FRP if the emissions are too strong
+            aod_oc = oc_mass_ext_coeff * (pom_oc_ratio * M)
+            max_aod_oc = f_phys * max_aod
+            i_cap = aod_oc > max_aod_oc
+            q = np.ones_like(aod_oc)
+            q[i_cap] = max_aod_oc / aod_oc[i_cap]
+            for b in fire.BIOMASS_BURNING:
+                FRP = q*self.frp[b][:,:]
+                self.frp[b][:,:] = FRP
+            n_cap = np.sum(i_cap)
+            if n_cap > 0:
+                p_cap = 100.0 * n_cap / (np.sum(E_total.ravel() > 0))
+            logging.info("FRPs in %d grid cells (%.1f%% of grid cells with fires) were capped." % (n_cap, p_cap))
+
         else:
             logging.info("Skipping modulation of FRP due to QC being disabled.")
 
@@ -464,7 +518,7 @@ class GriddedFRP:
         f.Conventions = "COARDS"
         f.institution = "NASA/GSFC, Global Modeling and Assimilation Office"
         f.title = f"QFED Gridded FRP (Level-3A, v{VERSION})"
-        f.contact = "Anton Darmenov <anton.s.darmenov@nasa.gov>"
+        f.contact = "http://gmao.gsfc.nasa.gov"
         f.version = VERSION
         f.source = f"{source}"
         f.instrument = f"{instrument}"
@@ -578,3 +632,13 @@ def _binareas(lon, lat, area, im, jm, grid_type):
         raise NotImplementedError("Data binning does not support this type of grid.")
 
     return result
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,31 @@
+oc:
+    name: 'Organic Carbon (OC)'
+    Tropical Forest: 5.20
+    Extra-tropical Forest: 9.14
+    Savanna: 3.40
+    Grassland: 3.40
+    crop_residue: 2.30
+modis/terra:
+    satellitefactor: 1.336
+    Tropical Forest: 1.09728882
+    Extra-tropical Forest: 1.12014982
+    Savanna: 1.22951496
+    Grassland: 1.21702972
+modis/aqua:
+    satellitefactor: 0.473
+    Tropical Forest: 1.09728882
+    Extra-tropical Forest: 1.12014982
+    Savanna: 1.22951496
+    Grassland: 1.21702972
+viirs/jpss-1:
+    satellitefactor: 0.49
+    Tropical Forest: 0.6096
+    Extra-tropical Forest: 0.9344
+    Savanna: 0.96696
+    Grassland: 0.8715
+viirs/npp:
+    satellitefactor: 0.54
+    Tropical Forest: 0.574
+    Extra-tropical Forest: 1.0001
+    Savanna: 0.90613
+    Grassland: 0.9219

@@ -355,7 +355,7 @@ class Emissions:
             f.Conventions = 'COARDS'
             f.institution = 'NASA/GSFC, Global Modeling and Assimilation Office'
             f.title = 'QFED Gridded Emissions (Level-3B, v{0:s})'.format(VERSION)
-            f.contact = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+            f.contact = 'http://gmao.gsfc.nasa.gov'
             f.version = VERSION
             f.source = ''
             f.processed = str(datetime.now())
