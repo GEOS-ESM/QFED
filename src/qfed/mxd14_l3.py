@@ -427,7 +427,7 @@ class MxD14_L3(object):
        f.Conventions = 'COARDS'
        f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
        f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__)
-       f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+       f.Contact     = 'https://gmao.gsfc.nasa.gov/'
        f.Version     = str(__version__)
        f.Processed   = str(datetime.now())
        f.History     = '' 
