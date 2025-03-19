@@ -479,7 +479,7 @@ class GriddedFRP:
             n_cap = np.sum(i_cap)
             if n_cap > 0:
                 p_cap = 100.0 * n_cap / (np.sum(E_total.ravel() > 0))
-            logging.info("FRPs in %d grid cells (%.1f%% of grid cells with fires) were capped." % (n_cap, p_cap))
+                logging.info("FRPs in %d grid cells (%.1f%% of grid cells with fires) were capped." % (n_cap, p_cap))
 
         else:
             logging.info("Skipping modulation of FRP due to QC being disabled.")
