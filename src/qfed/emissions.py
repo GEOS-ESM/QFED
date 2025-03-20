@@ -524,7 +524,7 @@ class Emissions(object):
            f.Conventions = 'COARDS'
            f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
            f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__)
-           f.Contact     = 'https://gmao.gsfc.nasa.gov/'
+           f.Contact     = 'qfed@lists.nasa.gov'
            f.Version     = str(__version__)
            f.Processed   = str(datetime.now())
            f.History     = '' 
