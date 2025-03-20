@@ -1,2 +1,2 @@
-__version__ = '2.5.r1-geos-esm'
+__version__ = '2.6.r2-geos-esm'
 __tag__     = 'n/a'

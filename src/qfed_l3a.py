@@ -136,7 +136,7 @@ if __name__ == "__main__":
 #       ------------------
         for MxD14 in Products:
 
-            Path = os.path.join(args.level2_dir, MxD14, '%04d'%d.year, '%03d'%doy)
+            Path = os.path.join(args.level2_dir, MxD14 + '_L2', '%04d'%d.year, '%03d'%doy)
 
 #           Do the gridding for this product
 #           --------------------------------
