@@ -198,7 +198,7 @@ class MxD14_L3(object):
                              'MW km-2', 'MW km-2', 'MW km-2', 'MW km-2'),
                   title   = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__),
                   source  = 'NASA/GSFC/GMAO GEOS Aerosol Group',
-                  contact = ('%s; %s') % ('arlindo.dasilva@nasa.gov', 'anton.darmenov@nasa.gov') 
+                  contact = 'qfed@lists.nasa.gov' 
                   )
 
 
@@ -240,7 +240,7 @@ class MxD14_L3(object):
            f.Conventions = 'COARDS'
            f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
            f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__)
-           f.Contact     = 'Anton Darmenov <anton.s.darmenov@nasa.gov>'
+           f.Contact     = 'qfed@lists.nasa.gov'
            f.Version     = str(__version__)
            f.Processed   = str(datetime.now())
            f.History     = '' 
@@ -427,7 +427,7 @@ class MxD14_L3(object):
        f.Conventions = 'COARDS'
        f.Source      = 'NASA/GSFC, Global Modeling and Assimilation Office'
        f.Title       = 'QFED Level3a v{version:s} Gridded FRP Estimates'.format(version=__version__)
-       f.Contact     = 'https://gmao.gsfc.nasa.gov/'
+       f.Contact     = 'qfed@lists.nasa.gov'
        f.Version     = str(__version__)
        f.Processed   = str(datetime.now())
        f.History     = '' 
