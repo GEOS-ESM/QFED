@@ -372,6 +372,9 @@ class Emissions:
             f.createVariable('lat', 'f8', dimensions='lat')
             f.createVariable('time', 'i4', dimensions='time')
 
+            # spatial reference variable (as needed by GDAL)
+            f.createVariable('spatial_ref', 'i8')
+
             # data variables
             for v in v_meta_data.values():
                 f.createVariable(
@@ -388,18 +391,35 @@ class Emissions:
             v.standard_name = 'longitude'
             v.units = 'degrees_east'
             v.comment = 'center_of_cell'
+            v.axis = 'X'
 
             v = f.variables['lat']
             v.long_name = 'latitude'
             v.standard_name = 'latitude'
             v.units = 'degrees_north'
             v.comment = 'center_of_cell'
+            v.axis = 'Y'
+
+            # Spatial reference variable attributes (as needed by GDAL)
+            # These are the default values for EPSG 4326 (lat-lon with WGS84 ellipsoid)
+            v = f.variables['spatial_ref']
+            v.crs_wkt = "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AXIS[\"Latitude\",NORTH],AXIS[\"Longitude\",EAST],AUTHORITY[\"EPSG\",\"4326\"]]"
+            v.semi_major_axis = 6378137.
+            v.semi_minor_axis = 6356752.31424518
+            v.inverse_flattening = 298.257223563
+            v.reference_ellipsoid_name = "WGS 84"
+            v.longitude_of_prime_meridian = 0.
+            v.prime_meridian_name = "Greenwich"
+            v.geographic_crs_name = "WGS 84"
+            v.horizontal_datum_name = "World Geodetic System 1984"
+            v.grid_mapping_name = "latitude_longitude"
+            v.spatial_ref = v.crs_wkt
 
             v = f.variables['time']
             begin_date = int(self.time.strftime('%Y%m%d'))
             begin_time = int(self.time.strftime('%H%M%S'))
             v.long_name = 'time'
-            v.standard_name = 'latitude'
+            v.standard_name = 'time'
             v.units = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.time)
             v.begin_date = np.array(begin_date, dtype=np.int32)
             v.begin_time = np.array(begin_time, dtype=np.int32)
@@ -413,6 +433,7 @@ class Emissions:
                 v.fmissing_value = np.array(fill_value, np.float32)
                 v.vmin = np.array(fill_value, np.float32)
                 v.vmax = np.array(fill_value, np.float32)
+                v.grid_mapping = "spatial_ref"
 
             # coordinate variables - data
             f.variables['time'][:] = np.array((0,))
