@@ -433,7 +433,7 @@ class Emissions:
                 v.fmissing_value = np.array(fill_value, np.float32)
                 v.vmin = np.array(fill_value, np.float32)
                 v.vmax = np.array(fill_value, np.float32)
-                v.coordinates = "spatial_ref"
+                v.grid_mapping = "spatial_ref"
 
             # coordinate variables - data
             f.variables['time'][:] = np.array((0,))
