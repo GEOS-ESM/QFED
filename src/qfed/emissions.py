@@ -352,20 +352,39 @@ class Emissions:
                 )
 
             # global attributes
-            f.Conventions = 'COARDS'
+            print(self.im)
             f.institution = 'NASA/GSFC, Global Modeling and Assimilation Office'
-            f.title = 'QFED Gridded Emissions (Level-3B, v{0:s})'.format(VERSION)
-            f.contact = 'http://gmao.gsfc.nasa.gov'
-            f.version = VERSION
+            f.title = 'Quick Fire Emissions Dataset Level 3 Gridded Emissions (v{0:s})'.format(VERSION)
+            f.contact = 'qfed@lists.nasa.gov'
+            f.VersionID = VERSION
             f.source = ''
-            f.processed = str(datetime.now())
             f.history = ''
-            # f.platform = 'TODO'
-
+            f.ShortName = 'QFEDEMIS' + species.upper() + '_' + str(self.im) + 'x' + str(self.jm)
+            f.LongName = 'Gridded biomass burning emissions of ' + species.upper()
+            f.GranuleID = os.path.basename(file)
+            f.Format = 'NetCDF-4'
+            f.RangeBeginningDate = self.time.strftime('%Y-%m-%d')
+            f.RangeBeginningTime = self.time.strftime('00:00:00.000000')
+            f.RangeEndingDate = self.time.strftime('%Y-%m-%d')
+            f.RangeEndingTime = self.time.strftime('23:59:59.000000')
+            f.IdentifierProductDOIAuthority = 'https://doi.org/'
+            f.IdentifierProductDOI = '10.5067/xxxxxx'
+            now=datetime.now()
+            f.ProductionDateTime = now.strftime("%Y-%m-%d T%H:%M:%SZ")
+            f.ProcessingLevel = '3'
+            f.Conventions = 'CF-1.8'
+            f.DataSetQuality = 'TBD'
+            f.SouthernmostLatitude=str(self.lat[0])
+            f.NorthernmostLatitude=str(self.lat[len(self.lat)-1])
+            f.WesternmostLongitude=str(self.lon[0])
+            f.EasternmostLongitude=str(self.lon[len(self.lon)-1])   
+            f.RelatedURL = 'https://gmao.gsfc.nasa.gov/'    
+                 
             # dimensions
             f.createDimension('lon', len(self.lon))
             f.createDimension('lat', len(self.lat))
             f.createDimension('time', None)
+
 
             # coordinate variables
             f.createVariable('lon', 'f8', dimensions='lon')
@@ -410,10 +429,10 @@ class Emissions:
                 v = f.variables[_v['name']]
                 v.long_name = _v['long_name']
                 v.units = _v['units']
-                v.missing_value = np.array(fill_value, np.float32)
-                v.fmissing_value = np.array(fill_value, np.float32)
-                v.vmin = np.array(fill_value, np.float32)
-                v.vmax = np.array(fill_value, np.float32)
+                #v.missing_value = np.array(fill_value, np.float32)
+                #v.fmissing_value = np.array(fill_value, np.float32)
+                #v.vmin = np.array(fill_value, np.float32)
+                #v.vmax = np.array(fill_value, np.float32)
 
             # coordinate variables - data
             f.variables['time'][:] = np.array((0,))
