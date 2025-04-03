@@ -352,7 +352,6 @@ class Emissions:
                 )
 
             # global attributes
-            print(self.im)
             f.institution = 'NASA/GSFC, Global Modeling and Assimilation Office'
             f.title = 'Quick Fire Emissions Dataset Level 3 Gridded Emissions (v{0:s})'.format(VERSION)
             f.contact = 'qfed@lists.nasa.gov'
