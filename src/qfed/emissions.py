@@ -56,7 +56,7 @@ class Emissions:
 
                       F['MODIS_TERRA'] = (f_tf,f_xf,f_sv,f_gl)
 
-          Area  ---   Dictionary keyed by satellite name
+          area  ---   Dictionary keyed by satellite name
                       with each element containing a
                       observed clear-land area [km2] for each gridbox
         """
@@ -91,11 +91,11 @@ class Emissions:
             d_lon = 360.0 / self.im
             d_lat = 180.0 / self.jm
 
-            o_lon = 0.5 * d_lon
-            o_lat = 0.5 * d_lat
+            self.o_lon = 0.5 * d_lon
+            self.o_lat = 0.5 * d_lat
 
-            self.lon = np.linspace(-180.0 + o_lon, 180.0 - o_lon, self.im)
-            self.lat = np.linspace(-90.0 + o_lat, 90.0 - o_lat, self.jm)
+            self.lon = np.linspace(-180.0 + self.o_lon, 180.0 - self.o_lon, self.im)
+            self.lat = np.linspace(-90.0 + self.o_lat, 90.0 - self.o_lat, self.jm)
 
     def set_emission_factors(self, emission_factors_file):
         """
@@ -315,7 +315,7 @@ class Emissions:
 
         return result
 
-    def _save_as_netcdf4(self, file, compress=False, fill_value=1e15, diskless=False):
+    def _save_as_netcdf4(self, file, doi, compress=False, fill_value=1e15, diskless=False):
         """
         Saves gridded emissions to a file.
         """
@@ -353,13 +353,13 @@ class Emissions:
 
             # global attributes
             f.institution = 'NASA/GSFC, Global Modeling and Assimilation Office'
-            f.title = 'Quick Fire Emissions Dataset Level 3 Gridded Emissions (v{0:s})'.format(VERSION)
+            f.title = 'Quick Fire Emissions Dataset (QFED) Level 3 Gridded Emissions (v{0:s})'.format(VERSION)
             f.contact = 'qfed@lists.nasa.gov'
             f.VersionID = VERSION
             f.source = ''
             f.history = ''
-            f.ShortName = 'QFEDEMIS' + species.upper() + '_' + str(self.im) + 'x' + str(self.jm)
-            f.LongName = 'Gridded biomass burning emissions of ' + species.upper()
+            f.ShortName = 'QFED_EMIS' + '_X' + str(self.im) + 'Y' + str(self.jm)
+            f.LongName = 'QFED Daily Level 3 Emissions at ' + str(360/self.im) + 'x' + str(np.round(180/self.jm,3)) + ' Degrees'
             f.GranuleID = os.path.basename(file)
             f.Format = 'NetCDF-4'
             f.RangeBeginningDate = self.time.strftime('%Y-%m-%d')
@@ -367,17 +367,17 @@ class Emissions:
             f.RangeEndingDate = self.time.strftime('%Y-%m-%d')
             f.RangeEndingTime = self.time.strftime('23:59:59.000000')
             f.IdentifierProductDOIAuthority = 'https://doi.org/'
-            f.IdentifierProductDOI = '10.5067/xxxxxx'
+            f.IdentifierProductDOI = str(doi)
             now=datetime.now()
-            f.ProductionDateTime = now.strftime("%Y-%m-%d T%H:%M:%SZ")
-            f.ProcessingLevel = '3'
+            f.ProductionDateTime = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+            f.ProcessingLevel = 'Level 3'
             f.Conventions = 'CF-1.8'
             f.DataSetQuality = 'TBD'
             f.SouthernmostLatitude=str(self.lat[0])
             f.NorthernmostLatitude=str(self.lat[len(self.lat)-1])
             f.WesternmostLongitude=str(self.lon[0])
             f.EasternmostLongitude=str(self.lon[len(self.lon)-1])   
-            f.RelatedURL = 'https://gmao.gsfc.nasa.gov/'    
+            f.RelatedURL = 'https://gmao.gsfc.nasa.gov/GMAO_products/qfed'    
                  
             # dimensions
             f.createDimension('lon', len(self.lon))
@@ -468,6 +468,7 @@ class Emissions:
     def save(
         self,
         file,
+        doi,
         forecast=None,
         ndays=1,
         compress=False,
@@ -486,7 +487,7 @@ class Emissions:
         # self._save_forecast(forecast, fill_value=1.0e20)
 
         for n in range(ndays):
-            self._save_as_netcdf4(file, compress in (True,), fill_value, diskless)
+            self._save_as_netcdf4(file, doi, compress in (True,), fill_value, diskless)
 
             if compress == 'n4zip':
                 self.compress_n4zip()

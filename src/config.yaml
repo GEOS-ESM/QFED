@@ -5,42 +5,43 @@ define:
 qfed:
     output:
         grid:
-            resolution: 'e'  # choose from ('c', 'd', 'e', 'f', '0.1x0.1')
+            resolution: '0.1x0.1'  # choose from ('c', 'd', 'e', 'f', '0.1x0.1')
         emissions:
             file: [
                 *qfed_base_dir, 
                 "QFED",
                 "Y{0:%Y}/M{0:%m}", 
-                "qfed_emis_{{species}}_1152x721.v3.1.1.{0:%Y%m%d}.nc4"
+                "qfed_emis_x3600y1800_{{species}}.v3_2.{0:%Y%m%d}.nc4"
             ]
+            doi: "10.5067/OA7JO5RLJCO2"
         frp:
             modis/terra:
                 file: [
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed3_1.p25.frp.mod.{0:%Y%m%d}.{0:%H%M}.nc4"
+                    "qfed3_2.frp.mod.{0:%Y%m%d}.nc4"
                 ]
             modis/aqua:
                 file: [
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed3_1.p25frp.myd.{0:%Y%m%d}.nc4"
+                    "qfed3_2.frp.myd.{0:%Y%m%d}.nc4"
                 ]
             viirs/npp:
                 file: [
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed3_1.p25frp.vnp.{0:%Y%m%d}.nc4"
+                    "qfed3_2.frp.vnp.{0:%Y%m%d}.nc4"
                 ]
             viirs/jpss-1:
                 file: [
                     *qfed_base_dir,
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
-                    "qfed3_1.p25frp.vj1.{0:%Y%m%d}.nc4"
+                    "qfed3_2.frp.vj1.{0:%Y%m%d}.nc4"
                 ]
     with:
         modis/terra:
