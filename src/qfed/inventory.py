@@ -112,8 +112,8 @@ class Finder:
                 (
                     f"Search for input files completed. "
                     f"However, no fire product files were identified "
-                    f"that meet the search criteria.\n"
+                    f"that meet the search criteria. No gridded FRP file created.\n"
                 )
             )
-
+            exit() 
         return result

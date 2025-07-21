@@ -250,6 +250,11 @@ class Emissions:
         A_w = np.zeros((self.im, self.jm))
         A_c = np.zeros((self.im, self.jm))
         A_u = np.zeros((self.im, self.jm))
+        
+        #Dampening used for sequential method
+        dt = 1.0    # days
+        tau = 3.0   # days
+        dampening_factor = np.exp(-dt/tau)
 
         for p in self.platform:
             A_l += self.area_land[p]
@@ -286,6 +291,7 @@ class Emissions:
                 E_b_ = E_[s][bb][:, :]
 
                 if (method == 'default') or (method == 'sequential'):
+                    E_b_[j]=E_b_[j] * dampening_factor
                     E_b[j] = ( (E_b[j]  / (A_o[j] + A_c[j])) * (1 + A_c[j] / (A_l[j] + A_c[j])) +
                                (E_b_[j] / (A_o[j] + A_c[j])) * (    A_c[j] / (A_l[j] + A_c[j])) )
 

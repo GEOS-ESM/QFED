@@ -163,6 +163,7 @@ def process(
     ndays,
     compress,
     dry_run,
+    doi,
 ):
     """
     Processes single time/date.
@@ -174,8 +175,9 @@ def process(
 
     for component in obs_system:
         instrument, satellite = component.split('/')
-        platform = Instrument(instrument), Satellite(satellite)
+        platform = (Instrument(instrument), Satellite(satellite))
 
+        # Load current day's data
         search_path = cli_utils.get_path(
             obs_system[component]['file'],
             timestamp=time,
@@ -192,41 +194,47 @@ def process(
             continue
 
         logging.info(f"Reading QFED L3A file '{os.path.basename(l3a_file)}'.")
-        f = nc.Dataset(l3a_file, 'r')
-
+        
+        import xarray as xr
+        
+        current_ds = xr.open_dataset(l3a_file)
+        
         area[platform] = {
-            v: np.transpose(f.variables[v][0, :, :])
+            v: current_ds[v][0, :, :].values.T
             for v in ('land', 'water', 'cloud', 'unknown')
         }
 
         frp[platform] = {
-            bb: np.transpose(f.variables[f'frp_{bb.type.value}'][0, :, :])
+            bb: current_ds[f'frp_{bb.type.value}'][0, :, :].values.T
             for bb in fire.BIOMASS_BURNING
         }
-
-        frp_density[platform] = {
-            # TODO: read the predicted FRP
-            bb: np.zeros_like(frp[platform][bb])
-            for bb in fire.BIOMASS_BURNING
-        }
-
-    # TODO: FRP density forecast files
-    d_fcst = time + timedelta(days=1)
-    l3a_fcst_files = {}
-    for component in obs_system:
-        instrument, satellite = component.split('/')
-        platform = Instrument(instrument), Satellite(satellite)
-
-        search_path = cli_utils.get_path(
+        
+        # Load previous day's FRP data for Background FRP
+        previous_day = time - timedelta(days=1)
+        previous_search_path = cli_utils.get_path(
             obs_system[component]['file'],
-            timestamp=d_fcst,
+            timestamp=previous_day,
         )
-
-        match = glob(search_path)
-        if match:
-            l3a_fcst_files[component] = match[0]
+        
+        previous_l3a_file = search(previous_search_path, logging)
+        
+        if previous_l3a_file:
+            logging.info(f"Reading previous day's FRP from '{os.path.basename(previous_l3a_file)}' for forecast.")
+            previous_ds = xr.open_dataset(previous_l3a_file)
+            frp_density[platform] = {
+                bb: previous_ds[f'frp_{bb.type.value}'][0, :, :].values.T
+                for bb in fire.BIOMASS_BURNING
+            }
+            
+            previous_ds.close()
         else:
-            l3a_fcst_files[component] = None
+            logging.warning(f"Previous day's L3A file not found for {component}. Using zeros for forecast.")
+            frp_density[platform] = {
+                bb: np.zeros_like(frp[platform][bb])
+                for bb in fire.BIOMASS_BURNING
+            }
+        
+        current_ds.close()
 
     # emissions and output
     output_file = cli_utils.get_path(
@@ -241,7 +249,8 @@ def process(
     emissions.calculate(species)
     emissions.save(
         output_file,
-        forecast=l3a_fcst_files,
+        doi,
+        forecast=None,
         ndays=ndays,
         compress=compress,
         diskless=dry_run,
@@ -286,6 +295,7 @@ def main():
 
     obs = {platform: config['qfed']['output']['frp'][platform] for platform in args.obs}
     output_file = config['qfed']['output']['emissions']['file']
+    doi = config['qfed']['output']['emissions']['doi']
 
     emission_factors_file = os.path.join(
         os.path.dirname(sys.argv[0]), 'emission_factors.yaml'
@@ -307,6 +317,7 @@ def main():
             args.ndays,
             args.compress,
             args.dry_run,
+            doi,
         )
 
 

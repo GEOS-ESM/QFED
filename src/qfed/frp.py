@@ -30,7 +30,7 @@ class GriddedFRP:
 
     def __init__(
         self,
-        sat,    #string that indicates the satellite nameß
+        sat,    #string that indicates the satellite name
         grid,
         finder,
         geolocation_product_reader,
