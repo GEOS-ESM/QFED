@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from glob import glob
 
 import numpy as np
-import netCDF4 as nc
+import xarray as xr
 
 from qfed import cli_utils
 from qfed import grid
@@ -172,6 +172,7 @@ def process(
     frp = {}
     area = {}
     frp_density = {}
+    l3a_files = {}
 
     for component in obs_system:
         instrument, satellite = component.split('/')
@@ -194,8 +195,7 @@ def process(
             continue
 
         logging.info(f"Reading QFED L3A file '{os.path.basename(l3a_file)}'.")
-        
-        import xarray as xr
+        l3a_files[platform] = l3a_file
         
         current_ds = xr.open_dataset(l3a_file)
         
@@ -209,7 +209,7 @@ def process(
             for bb in fire.BIOMASS_BURNING
         }
         
-        # Load previous day's FRP data for Background FRP
+        # Load previous day's FRP density for Background
         previous_day = time - timedelta(days=1)
         previous_search_path = cli_utils.get_path(
             obs_system[component]['file'],
@@ -219,16 +219,16 @@ def process(
         previous_l3a_file = search(previous_search_path, logging)
         
         if previous_l3a_file:
-            logging.info(f"Reading previous day's FRP from '{os.path.basename(previous_l3a_file)}' for forecast.")
+            logging.info(f"Reading previous day's dampened FRP density from '{os.path.basename(previous_l3a_file)}' for sequential method.")
             previous_ds = xr.open_dataset(previous_l3a_file)
             frp_density[platform] = {
-                bb: previous_ds[f'frp_{bb.type.value}'][0, :, :].values.T
+                bb: previous_ds[f'fb_{bb.type.value}'][0, :, :].values.T
                 for bb in fire.BIOMASS_BURNING
             }
             
             previous_ds.close()
         else:
-            logging.warning(f"Previous day's L3A file not found for {component}. Using zeros for forecast.")
+            logging.warning(f"Previous day's L3A file or background not found for {component}. Using zeros for background state.")
             frp_density[platform] = {
                 bb: np.zeros_like(frp[platform][bb])
                 for bb in fire.BIOMASS_BURNING
@@ -247,6 +247,7 @@ def process(
 
     emissions = Emissions(time, frp, frp_density, area, emission_factors_file)
     emissions.calculate(species)
+    emissions.save_forecast_density(l3a_files)
     emissions.save(
         output_file,
         doi,

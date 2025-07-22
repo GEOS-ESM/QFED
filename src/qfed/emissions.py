@@ -56,7 +56,7 @@ class Emissions:
 
                       F['MODIS_TERRA'] = (f_tf,f_xf,f_sv,f_gl)
 
-          area  ---   Dictionary keyed by satellite name
+          Area  ---   Dictionary keyed by satellite name
                       with each element containing a
                       observed clear-land area [km2] for each gridbox
         """
@@ -91,11 +91,11 @@ class Emissions:
             d_lon = 360.0 / self.im
             d_lat = 180.0 / self.jm
 
-            self.o_lon = 0.5 * d_lon
-            self.o_lat = 0.5 * d_lat
+            o_lon = 0.5 * d_lon
+            o_lat = 0.5 * d_lat
 
-            self.lon = np.linspace(-180.0 + self.o_lon, 180.0 - self.o_lon, self.im)
-            self.lat = np.linspace(-90.0 + self.o_lat, 90.0 - self.o_lat, self.jm)
+            self.lon = np.linspace(-180.0 + o_lon, 180.0 - o_lon, self.im)
+            self.lat = np.linspace(-90.0 + o_lat, 90.0 - o_lat, self.jm)
 
     def set_emission_factors(self, emission_factors_file):
         """
@@ -168,7 +168,6 @@ class Emissions:
                 b: (Alpha * v) for (b, v) in enhance_factor.items()
             }
 
-
         alpha_JPSS1 = {
             'tropical_forest': 1.524*0.40, # 1.524: [1.300, 1.865]
             'extratropical_forest': 0.640*1.46, # 0.640: [0.485, 0.771]
@@ -195,7 +194,6 @@ class Emissions:
             self._A_f[(Instrument.VIIRS, Satellite.NPP)][s] = {
                 b: (Alpha * v * alpha_NPP[b]) for (b, v) in enhance_factor.items()
             }
-
 
         # satellite factors
         self._S_f = {}
@@ -250,11 +248,6 @@ class Emissions:
         A_w = np.zeros((self.im, self.jm))
         A_c = np.zeros((self.im, self.jm))
         A_u = np.zeros((self.im, self.jm))
-        
-        #Dampening used for sequential method
-        dt = 1.0    # days
-        tau = 3.0   # days
-        dampening_factor = np.exp(-dt/tau)
 
         for p in self.platform:
             A_l += self.area_land[p]
@@ -291,7 +284,6 @@ class Emissions:
                 E_b_ = E_[s][bb][:, :]
 
                 if (method == 'default') or (method == 'sequential'):
-                    E_b_[j]=E_b_[j] * dampening_factor
                     E_b[j] = ( (E_b[j]  / (A_o[j] + A_c[j])) * (1 + A_c[j] / (A_l[j] + A_c[j])) +
                                (E_b_[j] / (A_o[j] + A_c[j])) * (    A_c[j] / (A_l[j] + A_c[j])) )
 
@@ -310,6 +302,27 @@ class Emissions:
                     E_b[i] = E_b[i] / A_o[i]
 
         self.estimate = E
+        
+        # Update forecast of FRP density based on current emissions
+        dt = 1.0    # days
+        tau = 3.0    # days
+
+        # Select first species to use for calculating forecast
+        s = list(species)[0]
+
+        for p in self.platform:
+            S_f = self.satellite_factor(p)
+            
+            for bb in self.biomass_burning:
+                B_f, eB_f = self.emission_factor(s, bb)
+                A_f = self.effective_combustion_rate(p, s, bb)
+                
+                # Calculate F using the first species as reference (similar to old code)
+                self.F[p][bb][:,:] = (self.estimate[s][bb][:,:] / 
+                                    (units_factor * A_f * S_f * B_f)) * np.exp(-dt/tau)
+                
+                # Apply cloud correction
+                self.F[p][bb][j] = self.F[p][bb][j] * ((A_o[j] + A_c[j]) / (A_l[j] + A_c[j]))
 
     def total(self, species):
         """
@@ -390,7 +403,6 @@ class Emissions:
             f.createDimension('lat', len(self.lat))
             f.createDimension('time', None)
 
-
             # coordinate variables
             f.createVariable('lon', 'f8', dimensions='lon')
             f.createVariable('lat', 'f8', dimensions='lat')
@@ -454,6 +466,59 @@ class Emissions:
 
             logging.info(f"Successfully saved gridded emissions to file '{file}'.")
 
+    def save_forecast_density(self, l3a_files, fill_value=1.0e15):
+        """
+        Save the forecast FRP density (F) values to existing L3A files.
+        
+        Parameters:
+        -----------
+        l3a_files : dict
+            Dictionary keyed by platform with L3A filenames to update
+        fill_value : float, default=1.0e15
+            Fill value for missing data
+        """
+        for platform, l3a_file in l3a_files.items():
+            if platform not in self.F:
+                logging.warning(f"No forecast data for platform {platform}")
+                continue
+            
+            # Check if file exists
+            if not os.path.exists(l3a_file):
+                logging.warning(f"L3A file {l3a_file} does not exist. Cannot add forecast variables.")
+                continue
+            
+            logging.info(f"Adding forecast FRP density variables to {os.path.basename(l3a_file)}")
+            
+            # Open existing file in read/write mode
+            f = nc.Dataset(l3a_file, 'r+')
+            
+            # Add FRP density forecast variables (only if they don't already exist)
+            for bb in self.biomass_burning:
+                bb_type = bb.type.value
+                fb_var_name = f'fb_{bb_type}'
+                
+                # Check if variable already exists
+                if fb_var_name not in f.variables:
+                    # Create the variable
+                    v = f.createVariable(fb_var_name, 'f4', dimensions=('time', 'lat', 'lon'), fill_value=fill_value)
+                    
+                    # Set attributes
+                    bb_name = bb.type.name.title().replace('_', ' ')
+                    v.long_name = f"Background FRP Density ({bb_name})"
+                    v.units = "MW km-2"
+                    v.missing_value = np.array(fill_value, np.float32)
+                    v.fmissing_value = np.array(fill_value, np.float32)
+                    
+                    logging.info(f"Added variable {fb_var_name} to {os.path.basename(l3a_file)}")
+                else:
+                    logging.debug(f"Variable {fb_var_name} already exists in {os.path.basename(l3a_file)}")
+                
+                # Write the forecast data
+                f.variables[fb_var_name][0,:,:] = np.transpose(self.F[platform][bb])
+            
+            f.close()
+            logging.info(f"Successfully updated forecast FRP density in {os.path.basename(l3a_file)}")
+
     def compress_n4zip(self):
         """
         Compress output files with n4zip.
@@ -487,11 +552,29 @@ class Emissions:
         If the argument ndays is larger than 1,
         the estimated emissions will be persisted
         over the specified number of days.
+        
+        Parameters:
+        -----------
+        file : str
+            Filename template for emission files
+        doi : str
+            DOI for the dataset
+        forecast : dict, optional
+            Dictionary mapping platforms to forecast filenames
+        ndays : int, default=1
+            Number of days to persist the emissions
+        compress : bool or str, default=False
+            Whether to compress files (True or 'n4zip')
+        fill_value : float, default=1e20
+            Fill value for missing data
+        diskless : bool, default=False
+            If True, create NetCDF files in memory first
         """
+        # Save forecast files if provided
+        if forecast:
+            self._save_forecast(forecast, fill_value=fill_value)
 
-        # TODO:
-        # self._save_forecast(forecast, fill_value=1.0e20)
-
+        # Save emission files for current and future days
         for n in range(ndays):
             self._save_as_netcdf4(file, doi, compress in (True,), fill_value, diskless)
 
@@ -500,4 +583,3 @@ class Emissions:
 
             # increment time to persist emissions
             self.time = self.time + timedelta(hours=24)
-
