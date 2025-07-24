@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A second emission factors yaml file with values from Andreae 2019
 - time_increment was added as an attribute to the emissions output files as it is needed to compute monthly means
 - QC for erroneously large values of FRP in the input files (max value selected is 24000 MW)
+- Capability to include dampened FRP density in tomorrow's emissions calculation in obscured pixels
 	
 ### Changed 
 - Contact information in netcdf output files from Anton to the GMAO website

@@ -251,7 +251,6 @@ def process(
     emissions.save(
         output_file,
         doi,
-        forecast=None,
         ndays=ndays,
         compress=compress,
         diskless=dry_run,

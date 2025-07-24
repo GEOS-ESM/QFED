@@ -538,7 +538,6 @@ class Emissions:
         self,
         file,
         doi,
-        forecast=None,
         ndays=1,
         compress=False,
         fill_value=1e20,
