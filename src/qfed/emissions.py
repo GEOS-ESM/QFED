@@ -56,7 +56,7 @@ class Emissions:
 
                       F['MODIS_TERRA'] = (f_tf,f_xf,f_sv,f_gl)
 
-          Area  ---   Dictionary keyed by satellite name
+          area  ---   Dictionary keyed by satellite name
                       with each element containing a
                       observed clear-land area [km2] for each gridbox
         """
@@ -320,8 +320,6 @@ class Emissions:
                 # Calculate F using the first species as reference (similar to old code)
                 self.F[p][bb][:,:] = (self.estimate[s][bb][:,:] / 
                                     (units_factor * A_f * S_f * B_f)) * np.exp(-dt/tau)
-                
-                # Apply cloud correction
                 self.F[p][bb][j] = self.F[p][bb][j] * ((A_o[j] + A_c[j]) / (A_l[j] + A_c[j]))
 
     def total(self, species):
