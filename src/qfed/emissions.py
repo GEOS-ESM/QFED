@@ -568,10 +568,6 @@ class Emissions:
         diskless : bool, default=False
             If True, create NetCDF files in memory first
         """
-        # Save forecast files if provided
-        if forecast:
-            self._save_forecast(forecast, fill_value=fill_value)
-
         # Save emission files for current and future days
         for n in range(ndays):
             self._save_as_netcdf4(file, doi, compress in (True,), fill_value, diskless)
