@@ -518,7 +518,7 @@ class GriddedFRP:
         f.Conventions = "COARDS"
         f.institution = "NASA/GSFC, Global Modeling and Assimilation Office"
         f.title = f"QFED Gridded FRP (Level-3A, v{VERSION})"
-        f.contact = "http://gmao.gsfc.nasa.gov"
+        f.contact = "qfed@lists.nasa.gov"
         f.version = VERSION
         f.source = f"{source}"
         f.instrument = f"{instrument}"
