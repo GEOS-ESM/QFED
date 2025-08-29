@@ -34,11 +34,28 @@ class GeolocationProduct(ABC):
 
         lon, lon_range = self.get_longitude(file)
         lat, lat_range = self.get_latitude(file)
+        
+        # finite mask (filter out NaNs)
+        finite = np.isfinite(lon) & np.isfinite(lat)
+        
+        # MZ, When a swath crosses the anti-meridian (International Date Line), 
+        # the longitude values shift from positive to negative. 
+        # This discontinuity breaks the assumption that larger 
+        # longitude values always correspond to locations farther east.        
+        if lon_range[0] < lon_range[1]:
+            # no anti-meridian crossing
+            lon_ok = (lon >= lon_range[0]) & (lon <= lon_range[1])
+        else:
+            # anti-meridian crossing: normalize to [0, 360)
+            lon360 = np.mod(lon + 360.0, 360.0)
+            lo360  = (lon_range[0] + 360.0) % 360.0
+            hi360  = (lon_range[1] + 360.0) % 360.0
+            # wrap interval: valid if >= lo360 OR <= hi360
+            lon_ok = (lon360 >= lo360) | (lon360 <= hi360)
 
-        valid = (lon >= lon_range[0]) & (lon <= lon_range[1]) & \
-                (lat >= lat_range[0]) & (lat <= lat_range[1])
+        lat_ok = (lat >= lat_range[0]) & (lat <= lat_range[1])
 
-        return lon, lat, valid, lon_range, lat_range
+        valid = finite & lon_ok & lat_ok 
 
     def message_on_file_error(self, file):
         logging.warning(f"Cannot open the geolocation file '{file}' - excluding it.")

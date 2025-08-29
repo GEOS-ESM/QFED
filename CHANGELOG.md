@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v3debug] - 2025-08-28
 
 ### Fixed 
-
+- This fix ensures that fire detections across the anti-meridian are retained correctly without accidental exclusion
+ 
 ### Added 
 
 ### Changed 
