@@ -46,11 +46,28 @@ def simplified_vegetation(lon, lat, Path, nonVeg=None):
     return veg
 
 
-def get_category(lon, lat, Path, nonVeg=None):
+# def get_category(lon, lat, Path, nonVeg=None):
+#     veg = simplified_vegetation(lon, lat, Path, nonVeg)
+# 
+#     category = {}
+#     for c in VegetationCategory:
+#         category[c] = veg == c.value
+# 
+#     return category
+
+# MZ Sept 2025, let get_category optionally return the codes too (back-compatible)
+# for fixing accidental exclusion of wetlands fires
+def get_category(lon, lat, Path, nonVeg=None, return_codes=False):
+    """
+    Returns:
+      - category: dict {VegetationCategory: bool mask}
+      - veg (optional): 1D/ND array of simplified veg codes (1..4) aligned with lon/lat
+    """
     veg = simplified_vegetation(lon, lat, Path, nonVeg)
 
     category = {}
     for c in VegetationCategory:
-        category[c] = veg == c.value
+        category[c] = (veg == c.value)
 
-    return category
+    return (category, veg) if return_codes else category
+    
