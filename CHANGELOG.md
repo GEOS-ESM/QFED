@@ -5,10 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v3debug] - 2025-08-28
+## [v3debug] - 2025-09-03
 
 ### Fixed 
-- This fix ensures that fire detections across the anti-meridian are retained correctly without accidental exclusion
+
+- This fix ensures the syntax compatibility across different python version [2025-09-03]
+
+- This fix ensures that fire detections across the anti-meridian are retained correctly without accidental exclusion [2025-08-28]
  
 ### Added 
 

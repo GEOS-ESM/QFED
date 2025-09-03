@@ -214,4 +214,3 @@ def create(instrument, satellite, NPPv1=False):
     msg = ("Unrecognized satellite observing system platform: "
            "{0:s} on board of {1:s}.".format(instrument, satellite))
     raise ValueError(msg)
-
