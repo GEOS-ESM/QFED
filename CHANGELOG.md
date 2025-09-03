@@ -10,9 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed 
 
 - This fix issue accidental exclusion of wetlands fires. [2025-09-03]
-
 - This fix ensures the syntax compatibility across different python version [2025-09-03]
-
 - This fix ensures that fire detections across the anti-meridian are retained correctly without accidental exclusion [2025-08-28]
  
 ### Added 
@@ -20,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed 
 
 - modify **get_category** in vegetation.py to allow the list of biome type for all the fire detection [2025-09-03]
-- helper function **_process_fire**, **_process_fire_water**, **_process_fire_coast**, and **_process_fire_land** in frp.py to use open water information in IGBP for land pixel restoring [2025-09-03]
+- modify helper function **_process_fire**, **_process_fire_water**, **_process_fire_coast**, and **_process_fire_land** in frp.py to use open water information in IGBP for land pixel restoring [2025-09-03]
+- modify helper function **_fire_place** in classification_products.py to support VIIRS processing [2025-09-03]
+- modify helper function **_place** in classification_products.py to support MODIS processing [2025-09-03]
 
 ### Removed 
 

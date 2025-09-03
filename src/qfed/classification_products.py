@@ -168,6 +168,12 @@ class MODIS(PixelClassifier):
         result['land' ] = pixel & self._is_over_land()
         result['coast'] = pixel & self._is_over_coast()
         result['water'] = pixel & self._is_over_water()
+        
+        # MZ, Sept 2025, API parity keys
+        result['valid'] = pixel   # for MODIS, 'valid' is simply the selected pixels
+        # keep the key for cross-sensor uniformity (always True for MODIS)
+        result['not_residual_bowtie'] = np.ones_like(pixel, dtype=bool)
+        
         return result
 
     def get_surface_type(self):
@@ -407,6 +413,10 @@ class VIIRS(PixelClassifier):
         result['coast'] = self._is_fire_over_coast() & not_residual_bowtie
         result['water'] = self._is_fire_over_water() & not_residual_bowtie
         result['unknown'] = self._no_such_classification() & not_residual_bowtie
+        
+        # MZ Sept 2025, expose masks for downstream gating
+        result['valid'] = not_residual_bowtie # same shape as swath
+        result['not_residual_bowtie'] = self._is_fire_not_residual_bowtie() # full-swath info
         return result  
 
     def _place_as_unknown(self, pixel):
