@@ -45,18 +45,6 @@ def simplified_vegetation(lon, lat, Path, nonVeg=None):
 
     return veg
 
-
-# def get_category(lon, lat, Path, nonVeg=None):
-#     veg = simplified_vegetation(lon, lat, Path, nonVeg)
-# 
-#     category = {}
-#     for c in VegetationCategory:
-#         category[c] = veg == c.value
-# 
-#     return category
-
-# MZ Sept 2025, let get_category optionally return the codes too (back-compatible)
-# for fixing accidental exclusion of wetlands fires
 def get_category(lon, lat, Path, nonVeg=None, return_codes=False):
     """
     Returns:

@@ -169,8 +169,8 @@ class MODIS(PixelClassifier):
         result['coast'] = pixel & self._is_over_coast()
         result['water'] = pixel & self._is_over_water()
         
-        # MZ, Sept 2025, API parity keys
-        result['valid'] = pixel   # for MODIS, 'valid' is simply the selected pixels
+        # for MODIS, 'valid' is simply the selected pixels
+        result['valid'] = pixel   
         # keep the key for cross-sensor uniformity (always True for MODIS)
         result['not_residual_bowtie'] = np.ones_like(pixel, dtype=bool)
         
@@ -414,7 +414,6 @@ class VIIRS(PixelClassifier):
         result['water'] = self._is_fire_over_water() & not_residual_bowtie
         result['unknown'] = self._no_such_classification() & not_residual_bowtie
         
-        # MZ Sept 2025, expose masks for downstream gating
         result['valid'] = not_residual_bowtie # same shape as swath
         result['not_residual_bowtie'] = self._is_fire_not_residual_bowtie() # full-swath info
         return result  
@@ -489,8 +488,6 @@ class VIIRS(PixelClassifier):
         '''
         pixel = (self._fire_mask == VIIRS.CLOUD)
 
-#         if self._watermask != ():
-        # MZ, Sept 2025, Fix syntax compatibility across different python version
         if self._watermask.size > 0:
             AUX_WATER = 0
             AUX_COAST = 1

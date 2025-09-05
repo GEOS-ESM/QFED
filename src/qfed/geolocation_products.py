@@ -38,7 +38,7 @@ class GeolocationProduct(ABC):
         # finite mask (filter out NaNs)
         finite = np.isfinite(lon) & np.isfinite(lat)
         
-        # MZ, When a swath crosses the anti-meridian (International Date Line), 
+        # When a swath crosses the anti-meridian (International Date Line), 
         # the longitude values shift from positive to negative. 
         # This discontinuity breaks the assumption that larger 
         # longitude values always correspond to locations farther east.        

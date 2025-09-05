@@ -284,13 +284,6 @@ class GriddedFRP:
         # assert np.allclose(lat, self._lat[line, sample])
         # assert np.allclose(area, self._area[line, sample])
 
-        # MZ, Sept 2025, comment out 
-#         logging.debug("Processing areas with fires.")
-#         self._process_fire_water(lon, lat, line, sample, frp, area)
-#         self._process_fire_coast(lon, lat, line, sample, frp, area)
-#         self._process_fire_land(lon, lat, line, sample, frp, area)
-
-        # MZ, Sept 2025, modify the following to fix the issue of accidental exclusion of wetlands fires
         # get the biome types for all the detections based on IGBP classification (before QA)
         veg_masks, veg_codes = vegetation.get_category(lon, lat, self._igbp_dir, return_codes=True)
         # Restore rule with simplified codes, veg_codes!=0 -> treat as land
@@ -308,10 +301,6 @@ class GriddedFRP:
         self._process_fire_coast(lon, lat, line, sample, frp, area, restore_to_land)
         self._process_fire_land(lon, lat, line, sample, frp, area, restore_to_land, veg_masks)
 
-
-
-#     def _process_fire_water(self, lon, lat, line, sample, frp, area):
-    # MZ, Sept 2025, add restore_to_land parameter... 
     def _process_fire_water(self, lon, lat, line, sample, frp, area, restore_to_land):
         """
         Fires pixels in areas categorized as water.
@@ -327,8 +316,7 @@ class GriddedFRP:
             | self._is_fire_high_confidence['water']
         )[line, sample]
 
-#         i = i_water & i_valid
-        # now the index considers water pixel in AQ, promotes water pixels in QA 
+        # the index considers water pixel in AQ, promotes water pixels in QA 
         # back to land if they are land in IGBP, and includes only coordinates valid pixel
         i = i_water & ~restore_to_land & i_valid
 
@@ -337,8 +325,7 @@ class GriddedFRP:
             lon[i], lat[i], area[i], self.im, self.jm, self.grid_type
         )
         logging.debug(f"Added {len(area[i])} fire(water) pixels to water area.")
-        
-    # MZ, Sept 2025, add restore_to_land parameter... 
+
     def _process_fire_coast(self, lon, lat, line, sample, frp, area, restore_to_land):
         """
         Fires pixels in areas categorized as coast.
@@ -354,8 +341,7 @@ class GriddedFRP:
             | self._is_fire_high_confidence['coast']
         )[line, sample]
 
-#         i = i_coast & i_valid
-        # MZ, Sept 2025, now the index considers coast pixel in AQ, promotes water pixels 
+        # the index considers coast pixel in AQ, promotes water pixels 
         # in QA back to land if they are land in IGBP, and includes only coordinates valid pixel
         i = i_coast & ~restore_to_land & i_valid
         
@@ -365,8 +351,6 @@ class GriddedFRP:
         )
         logging.debug(f"Added {len(area[i])} fire(coast) pixels to water area.")
 
-#     def _process_fire_land(self, lon, lat, line, sample, frp, area):
-      # MZ, Sept 2025, add restore_to_land and vegetation_category parameter... 
     def _process_fire_land(self, lon, lat, line, sample, frp, area, restore_to_land, vegetation_category):
         """
         Fires pixels in areas categorized as land.
@@ -390,8 +374,8 @@ class GriddedFRP:
             | self._is_fire_high_confidence['land']
         )[line, sample]
 
-#         i = i_land & i_valid
-        # MZ, Sept 2025, now the index considers land pixel in AQ, promotes water pixels 
+
+        # the index considers land pixel in AQ, promotes water pixels 
         # in QA back to land if they are land in IGBP, and includes only coordinates valid pixel
         i = (i_land | restore_to_land) & i_valid
 
@@ -412,15 +396,6 @@ class GriddedFRP:
             return
 
         # bin FRP from fires in each of the considered biomes
-#         vegetation_category = vegetation.get_category(lon[i], lat[i], self._igbp_dir)
-# 
-#         for bb in fire.BIOMASS_BURNING:
-#             j = vegetation_category[bb.vegetation]
-#             self.frp[bb][:, :] += _binareas(
-#                 lon[i][j], lat[i][j], frp[i][j], self.im, self.jm, self.grid_type
-#             )
-
-        # MZ, Sept 2025, modify the bin logic
         for bb in fire.BIOMASS_BURNING:
             # vegetation_category[bb.vegetation] matches lon/lat length (detections)
             j = vegetation_category[bb.vegetation] & i     # per-detection land-biome mask
