@@ -38,24 +38,44 @@ class GeolocationProduct(ABC):
         # finite mask (filter out NaNs)
         finite = np.isfinite(lon) & np.isfinite(lat)
         
-        # When a swath crosses the anti-meridian (International Date Line), 
-        # the longitude values shift from positive to negative. 
-        # This discontinuity breaks the assumption that larger 
-        # longitude values always correspond to locations farther east.        
+        # longitude mask (handles anti-meridian crossing internally)
+        lon_ok = self._longitude_mask(lon, lon_range)
+
+        lat_ok = (lat >= lat_range[0]) & (lat <= lat_range[1])
+
+        valid = finite & lon_ok & lat_ok 
+        
+        return lon, lat, valid, lon_range, lat_range
+
+    @staticmethod
+    def _longitude_mask(lon, lon_range):
+        """
+        Return a boolean mask for valid longitudes, handling anti-meridian crossings.
+	
+        Parameters
+        ----------
+        lon : ndarray
+            Longitude array.
+        lon_range : tuple(float, float)
+            Expected longitude range (min, max). If min < max, assumes no crossing.
+            If min > max, assumes the swath crosses the anti-meridian.
+	
+		Returns
+		-------
+		lon_ok : ndarray of bool
+            Mask of valid longitude points.
+        """
         if lon_range[0] < lon_range[1]:
             # no anti-meridian crossing
-            lon_ok = (lon >= lon_range[0]) & (lon <= lon_range[1])
+            return (lon >= lon_range[0]) & (lon <= lon_range[1])
         else:
             # anti-meridian crossing: normalize to [0, 360)
             lon360 = np.mod(lon + 360.0, 360.0)
             lo360  = (lon_range[0] + 360.0) % 360.0
             hi360  = (lon_range[1] + 360.0) % 360.0
             # wrap interval: valid if >= lo360 OR <= hi360
-            lon_ok = (lon360 >= lo360) | (lon360 <= hi360)
+            return (lon360 >= lo360) | (lon360 <= hi360)
 
-        lat_ok = (lat >= lat_range[0]) & (lat <= lat_range[1])
-
-        valid = finite & lon_ok & lat_ok 
 
     def message_on_file_error(self, file):
         logging.warning(f"Cannot open the geolocation file '{file}' - excluding it.")

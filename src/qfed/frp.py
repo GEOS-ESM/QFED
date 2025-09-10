@@ -287,7 +287,7 @@ class GriddedFRP:
         # get the biome types for all the detections based on IGBP classification (before QA)
         veg_masks, veg_codes = vegetation.get_category(lon, lat, self._igbp_dir, return_codes=True)
         # Restore rule with simplified codes, veg_codes!=0 -> treat as land
-        restore_to_land = (veg_codes != 0)
+        overwrite_to_land = (veg_codes != 0)
 
         # Gate the restore vector so it CANNOT re-introduce residual bow-tie:
         # Build a “not-bowtie” mask using the classifier (exclude_residual_bowtie=True by default)
@@ -295,13 +295,13 @@ class GriddedFRP:
         # already excludes residual bow-tie
         not_bowtie = fire_any['valid'][line, sample]    
         # Final restore mask (prevents any bow-tie leakage):
-        restore_to_land &= not_bowtie
+        overwrite_to_land &= not_bowtie
 
-        self._process_fire_water(lon, lat, line, sample, frp, area, restore_to_land)
-        self._process_fire_coast(lon, lat, line, sample, frp, area, restore_to_land)
-        self._process_fire_land(lon, lat, line, sample, frp, area, restore_to_land, veg_masks)
+        self._process_fire_water(lon, lat, line, sample, frp, area, overwrite_to_land)
+        self._process_fire_coast(lon, lat, line, sample, frp, area, overwrite_to_land)
+        self._process_fire_land(lon, lat, line, sample, frp, area, overwrite_to_land, veg_masks)
 
-    def _process_fire_water(self, lon, lat, line, sample, frp, area, restore_to_land):
+    def _process_fire_water(self, lon, lat, line, sample, frp, area, overwrite_to_land):
         """
         Fires pixels in areas categorized as water.
 
@@ -318,7 +318,7 @@ class GriddedFRP:
 
         # the index considers water pixel in AQ, promotes water pixels in QA 
         # back to land if they are land in IGBP, and includes only coordinates valid pixel
-        i = i_water & ~restore_to_land & i_valid
+        i = i_water & ~overwrite_to_land & i_valid
 
         logging.info(f"Found {len(area[i])} water pixels with active fires.")
         self.area_water += _binareas(
@@ -326,7 +326,7 @@ class GriddedFRP:
         )
         logging.debug(f"Added {len(area[i])} fire(water) pixels to water area.")
 
-    def _process_fire_coast(self, lon, lat, line, sample, frp, area, restore_to_land):
+    def _process_fire_coast(self, lon, lat, line, sample, frp, area, overwrite_to_land):
         """
         Fires pixels in areas categorized as coast.
 
@@ -343,7 +343,7 @@ class GriddedFRP:
 
         # the index considers coast pixel in AQ, promotes water pixels 
         # in QA back to land if they are land in IGBP, and includes only coordinates valid pixel
-        i = i_coast & ~restore_to_land & i_valid
+        i = i_coast & ~overwrite_to_land & i_valid
         
         logging.info(f"Found {len(area[i])} coast pixels with active fires.")
         self.area_water += _binareas(
@@ -351,7 +351,7 @@ class GriddedFRP:
         )
         logging.debug(f"Added {len(area[i])} fire(coast) pixels to water area.")
 
-    def _process_fire_land(self, lon, lat, line, sample, frp, area, restore_to_land, vegetation_category):
+    def _process_fire_land(self, lon, lat, line, sample, frp, area, overwrite_to_land, vegetation_category):
         """
         Fires pixels in areas categorized as land.
         """
@@ -377,7 +377,7 @@ class GriddedFRP:
 
         # the index considers land pixel in AQ, promotes water pixels 
         # in QA back to land if they are land in IGBP, and includes only coordinates valid pixel
-        i = (i_land | restore_to_land) & i_valid
+        i = (i_land | overwrite_to_land) & i_valid
 
         n_fires = np.sum(i)
         logging.info(f"Found {n_fires} land pixels with active fires.")
@@ -429,6 +429,9 @@ class GriddedFRP:
         for i in input_data:
             self._igbp_dir = i.vegetation
             self._process(i.geolocation, i.fire)
+
+        # store n_files as a class attribute during ingest, so it’s available when writing:
+        self.n_input_files = len(input_data)
 
     def save(
         self,
@@ -632,6 +635,9 @@ class GriddedFRP:
         for bb, frp in self.frp.items():
             biome = bb.type.value
             f.variables[f'frp_{biome}'][0, :, :] = np.transpose(frp)
+
+        # number of input files used
+        f.setncattr("number_of_input_files", self.n_input_files)
 
         f.close()
         logging.info(f"Successfully saved gridded FRP and areas to file '{file}'.\n\n")
