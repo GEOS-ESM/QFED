@@ -5,7 +5,7 @@ Satellites and instruments
 from enum import Enum, unique
 
 import numpy as np
-
+from typing import Dict
 
 @unique
 class Instrument(Enum):
@@ -19,13 +19,44 @@ class Satellite(Enum):
 
     JPSS1 = 'jpss-1'
     NOAA20 = 'noaa-20'
+    VJ1 = 'vj1'
 
     JPSS2  = 'jpss-2'
     NOAA21 = 'noaa-21'
+    VJ2 = 'vj2'
 
     NPP = 'npp'
     SNPP = 's-npp'
     SuomiNPP = 'suomi-npp'
+    VNP = 'vnp'
+
+# Canonical codes for variable naming
+canonical_instrument: Dict[Instrument, str] = {
+    Instrument.MODIS: "modis",
+    Instrument.VIIRS: "viirs",
+}
+
+# Map ALL satellite enum members (including aliases) to the desired short code
+canonical_satellite: Dict[Satellite, str] = {
+    Satellite.TERRA:    "terra",
+    Satellite.AQUA:     "aqua",
+
+    # SNPP family -> npp
+    Satellite.NPP:      "vnp",
+    Satellite.SNPP:     "vnp",
+    Satellite.SuomiNPP: "vnp",
+    Satellite.VNP:      "vnp",
+
+    # JPSS-1 / NOAA-20 family → vj1
+    Satellite.JPSS1:    "vj1",
+    Satellite.NOAA20:   "vj1",
+    Satellite.VJ1:      "vj1",
+
+    # JPSS-2 / NOAA-21 family → vj2
+    Satellite.JPSS2:    "vj2",
+    Satellite.NOAA21:   "vj2",
+    Satellite.VJ2:      "vj2",
+}
 
 # VIIRS SDR User Guide: The bow-tie effect leads to 
 # scan-to-scan overlap, which start to show visibly at 

@@ -13,9 +13,10 @@ import numpy as np
 import netCDF4 as nc
 
 from qfed import grid
-from qfed.instruments import Instrument, Satellite
+from qfed.instruments import Instrument, Satellite, canonical_instrument, canonical_satellite
 from qfed import VERSION
 
+import re
 
 def read_emission_factors(file):
     with open(file) as f:
@@ -168,6 +169,13 @@ class Emissions:
                 b: (Alpha * v) for (b, v) in enhance_factor.items()
             }
 
+        alpha_JPSS2 = {
+            'tropical_forest': 1.524*0.40, # 1.524: [1.300, 1.865]
+            'extratropical_forest': 0.640*1.46, # 0.640: [0.485, 0.771]
+            'savanna': 1.224*0.79, # 1.224: [1.075, 1.323]
+            'grassland': 0.830*1.05, # 0.830: [0.770, 0.934]
+        }
+
         alpha_JPSS1 = {
             'tropical_forest': 1.524*0.40, # 1.524: [1.300, 1.865]
             'extratropical_forest': 0.640*1.46, # 0.640: [0.485, 0.771]
@@ -181,6 +189,7 @@ class Emissions:
             'grassland': 0.878*1.05, # 0.878: [0.776, 0.977]
         }
         self._A_f[(Instrument.VIIRS, Satellite.JPSS1)] = {}
+        self._A_f[(Instrument.VIIRS, Satellite.JPSS2)] = {}
         self._A_f[(Instrument.VIIRS, Satellite.NPP)] = {}
         for s in self._EF.keys():
             if s in AEROSOL_SPECIES:
@@ -188,6 +197,9 @@ class Emissions:
             else:
                 enhance_factor = enhance_gas_C5
 
+            self._A_f[(Instrument.VIIRS, Satellite.JPSS2)][s] = {
+                b: (Alpha * v * alpha_JPSS2[b]) for (b, v) in enhance_factor.items()
+            }
             self._A_f[(Instrument.VIIRS, Satellite.JPSS1)][s] = {
                 b: (Alpha * v * alpha_JPSS1[b]) for (b, v) in enhance_factor.items()
             }
@@ -204,6 +216,7 @@ class Emissions:
 
         self._S_f[(Instrument.MODIS, Satellite.TERRA)] = self._S_f['MODIS_TERRA']
         self._S_f[(Instrument.MODIS, Satellite.AQUA)] = self._S_f['MODIS_AQUA']
+        self._S_f[(Instrument.VIIRS, Satellite.JPSS2)] = 0.49 #0.384  # TODO: TBD
         self._S_f[(Instrument.VIIRS, Satellite.JPSS1)] = 0.49 #0.384  # TODO: TBD
         self._S_f[(Instrument.VIIRS, Satellite.NPP)] = 0.54   #0.384    # TODO: TBD
 
@@ -332,10 +345,27 @@ class Emissions:
 
         return result
 
+    # helper function to add the l3a source 
+    def _platform_label(self, inst_enum, sat_enum):
+        inst_label = canonical_instrument.get(inst_enum, inst_enum.value.lower())
+        sat_label  = canonical_satellite.get(sat_enum,  sat_enum.value.lower())
+        return inst_label, sat_label, f"{inst_label}/{sat_label}"
+
     def _save_as_netcdf4(self, file, doi, compress=False, fill_value=1e15, diskless=False):
         """
         Saves gridded emissions to a file.
         """
+        
+        platforms = list(self.F.keys())
+        platform_labels = set()
+        for platform in platforms:
+            try:
+                inst_enum, sat_enum = platform
+                inst_label, sat_label, label = self._platform_label(inst_enum, sat_enum)
+                platform_labels.add(label)
+            except Exception:
+                logging.warning(f"Platform key is not (Instrument, Satellite): {platform!r}; skipping.")
+                continue
 
         # map species to output files
         self.file = {
@@ -373,7 +403,7 @@ class Emissions:
             f.title = 'Quick Fire Emissions Dataset (QFED) Level 3 Gridded Emissions (v{0:s})'.format(VERSION)
             f.contact = 'qfed@lists.nasa.gov'
             f.VersionID = VERSION
-            f.source = ''
+            f.source = ', '.join(sorted(platform_labels))
             f.history = ''
             f.ShortName = 'QFED_EMIS' + '_X' + str(self.im) + 'Y' + str(self.jm)
             f.LongName = 'QFED Daily Level 3 Emissions at ' + str(360/self.im) + 'x' + str(np.round(180/self.jm,3)) + ' Degrees'
@@ -463,59 +493,165 @@ class Emissions:
             f.close()
 
             logging.info(f"Successfully saved gridded emissions to file '{file}'.")
+            
 
-    def save_forecast_density(self, l3a_files, fill_value=1.0e15):
+    def _save_forecast(self, l3a_density_file, compress=False, fill_value=1.0e15, diskless=False):
         """
-        Save the forecast FRP density (F) values to existing L3A files.
-        
-        Parameters:
-        -----------
-        l3a_files : dict
-            Dictionary keyed by platform with L3A filenames to update
-        fill_value : float, default=1.0e15
+        Create a single L3A FRP density forecast file and write FRP density (F) for
+        all available platforms into it. Each (platform, bb_type) pair becomes a
+        distinct variable: fb_{platform}_{bbtype}.
+    
+        Parameters
+        ----------
+        l3a_density_file : str
+            Output NetCDF filename for the combined forecast density
+        compress : bool, default False
+            If True, enable zlib compression on variables
+        fill_value : float, default 1.0e15
             Fill value for missing data
+        diskless : bool, default False
+            If True, create NetCDF in-memory first
         """
-        for platform, l3a_file in l3a_files.items():
+        
+        if not hasattr(self, "F") or not self.F:
+            logging.warning("No forecast field 'F' found on this object.")
+            return
+
+        # Collect (platform, bb) pairs actually present
+        platforms = list(self.F.keys())
+        if not platforms:
+            logging.warning("Forecast 'F' is empty—nothing to save.")
+            return
+
+        # Helper to make safe variable name segments
+        def _safe(s: str) -> str:
+            return re.sub(r'[^0-9a-zA-Z_]+', '_', str(s).lower())
+        
+
+        # --------------------------
+        # Create / overwrite the file
+        # --------------------------
+        f = nc.Dataset(l3a_density_file, "w", format="NETCDF4", diskless=diskless)
+
+        # Global attributes
+        f.institution  = 'NASA/GSFC, Global Modeling and Assimilation Office'
+        f.title        = f'QFED Level 3 FRP Density Forecast (v{VERSION})'
+        f.contact      = 'qfed@lists.nasa.gov'
+        f.VersionID    = VERSION
+        f.history      = ''
+        f.ShortName    = 'QFED_FRP_F' + '_X' + str(self.im) + 'Y' + str(self.jm)
+        f.LongName     = 'QFED Daily Level 3 FRP Density Forecast at ' + \
+                         f"{360/self.im}x{np.round(180/self.jm,3)} Degrees"
+        f.GranuleID    = os.path.basename(l3a_density_file)
+        f.Format       = 'NetCDF-4'
+        f.RangeBeginningDate = self.time.strftime('%Y-%m-%d')
+        f.RangeBeginningTime = self.time.strftime('00:00:00.000000')
+        f.RangeEndingDate    = self.time.strftime('%Y-%m-%d')
+        f.RangeEndingTime    = self.time.strftime('23:59:59.000000')
+        f.ProcessingLevel    = 'Level 3'
+        f.Conventions        = 'CF-1.8'
+        f.DataSetQuality     = 'TBD'
+        f.SouthernmostLatitude = str(self.lat[0])
+        f.NorthernmostLatitude = str(self.lat[len(self.lat)-1])
+        f.WesternmostLongitude = str(self.lon[0])
+        f.EasternmostLongitude = str(self.lon[len(self.lon)-1])
+        f.RelatedURL         = 'https://gmao.gsfc.nasa.gov/GMAO_products/qfed'
+
+        now = datetime.now()
+        f.ProductionDateTime = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # --------------------------
+        # Dimensions
+        # --------------------------
+        f.createDimension('lon',  len(self.lon))
+        f.createDimension('lat',  len(self.lat))
+        f.createDimension('time', None)
+
+        # --------------------------
+        # Coordinate variables
+        # --------------------------
+        v = f.createVariable('lon', 'f8', dimensions=('lon',))
+        v.long_name     = 'longitude'
+        v.standard_name = 'longitude'
+        v.units         = 'degrees_east'
+        v.comment       = 'center_of_cell'
+        f.variables['lon'][:] = np.array(self.lon)
+
+        v = f.createVariable('lat', 'f8', dimensions=('lat',))
+        v.long_name     = 'latitude'
+        v.standard_name = 'latitude'
+        v.units         = 'degrees_north'
+        v.comment       = 'center_of_cell'
+        f.variables['lat'][:] = np.array(self.lat)
+
+        v = f.createVariable('time', 'i4', dimensions=('time',))
+        begin_date = int(self.time.strftime('%Y%m%d'))
+        begin_time = int(self.time.strftime('%H%M%S'))
+        v.long_name       = 'time'
+        v.standard_name   = 'time'
+        v.units           = 'minutes since {:%Y-%m-%d %H:%M:%S}'.format(self.time)
+        v.begin_date      = np.array(begin_date, dtype=np.int32)
+        v.begin_time      = np.array(begin_time, dtype=np.int32)
+        v.time_increment  = np.array(240000, dtype=np.int32)
+        f.variables['time'][:] = np.array((0,))
+
+        # --------------------------
+        # Create and write fb_{platform}_{bbtype} variables
+        # --------------------------
+        platform_labels = set()
+        for platform in platforms:
+            try:
+                inst_enum, sat_enum = platform
+                inst_label, sat_label, label = self._platform_label(inst_enum, sat_enum)
+                platform_labels.add(label)
+            except Exception:
+                logging.warning(f"Platform key is not (Instrument, Satellite): {platform!r}; skipping.")
+                continue
             if platform not in self.F:
-                logging.warning(f"No forecast data for platform {platform}")
+                logging.debug(f"Platform {platform} missing in self.F; skipping.")
                 continue
-            
-            # Check if file exists
-            if not os.path.exists(l3a_file):
-                logging.warning(f"L3A file {l3a_file} does not exist. Cannot add forecast variables.")
-                continue
-            
-            logging.info(f"Adding forecast FRP density variables to {os.path.basename(l3a_file)}")
-            
-            # Open existing file in read/write mode
-            f = nc.Dataset(l3a_file, 'r+')
-            
-            # Add FRP density forecast variables (only if they don't already exist)
+
+
+
+            plat_seg = _safe(platform)
+
             for bb in self.biomass_burning:
                 bb_type = bb.type.value
-                fb_var_name = f'fb_{bb_type}'
-                
-                # Check if variable already exists
-                if fb_var_name not in f.variables:
-                    # Create the variable
-                    v = f.createVariable(fb_var_name, 'f4', dimensions=('time', 'lat', 'lon'), fill_value=fill_value)
-                    
-                    # Set attributes
-                    bb_name = bb.type.name.title().replace('_', ' ')
-                    v.long_name = f"Background FRP Density ({bb_name})"
-                    v.units = "MW km-2"
-                    v.missing_value = np.array(fill_value, np.float32)
-                    v.fmissing_value = np.array(fill_value, np.float32)
-                    
-                    logging.info(f"Added variable {fb_var_name} to {os.path.basename(l3a_file)}")
+                bb_name = bb.type.name.title().replace('_', ' ')
+                var_name = self._make_var_name(inst_enum, sat_enum, bb.type.value)
+            # Create variable
+                v = f.createVariable(
+                    var_name,
+                    'f4',
+                    dimensions=('time', 'lat', 'lon'),
+                    fill_value=fill_value,
+                    zlib=bool(compress),
+                )
+                v.long_name = f"Background FRP Density ({bb_name}) for platform {inst_enum.value} {sat_enum.value}"
+                v.units     = "MW km-2"
+                # v.missing_value  = np.array(fill_value, np.float32)
+                # v.fmissing_value = np.array(fill_value, np.float32)
+
+                # Write data (transpose to match (time, lat, lon))
+                if bb in self.F[platform]:
+                    f.variables[var_name][0, :, :] = np.transpose(self.F[platform][bb])
                 else:
-                    logging.debug(f"Variable {fb_var_name} already exists in {os.path.basename(l3a_file)}")
-                
-                # Write the forecast data
-                f.variables[fb_var_name][0,:,:] = np.transpose(self.F[platform][bb])
-            
-            f.close()
-            logging.info(f"Successfully updated forecast FRP density in {os.path.basename(l3a_file)}")
+                    logging.debug(f"Forecast missing for {platform}/{bb}; filling with fill_value.")
+                    f.variables[var_name][0, :, :] = fill_value
+                    
+        # at last, add the data source
+        f.source = ', '.join(sorted(platform_labels))
+        f.close()
+        logging.info(f"Successfully created combined forecast FRP density file '{l3a_density_file}'.")
+        
+
+    def _make_var_name(self, inst: Instrument, sat: Satellite, biome_code: str) -> str:
+        """Build a safe variable name like vj1_viirs_gl"""
+        inst_code = canonical_instrument[inst]
+        sat_code  = canonical_satellite[sat]
+        biome = re.sub(r"[^0-9a-z_]+", "_", str(biome_code).lower())
+        biome = re.sub(r"_+", "_", biome).strip("_")
+        return f"{inst_code}_{sat_code}_{biome}"
 
     def compress_n4zip(self):
         """

@@ -43,6 +43,13 @@ qfed:
                     "Y{0:%Y}/M{0:%m}",
                     "qfed3_2.frp.vj1.{0:%Y%m%d}.nc4"
                 ]
+        frp_fcs:
+                file: [
+                    *qfed_base_dir,
+                    "FRP_FCS",
+                    "Y{0:%Y}/M{0:%m}",
+                    "qfed3_2.frp_fcs.{0:%Y%m%d}.nc4"
+                ]
     with:
         modis/terra:
             geolocation:

@@ -16,18 +16,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  
 ### Added 
 
-- Add metadata of **number_of_input_files** in the l3a gridded FRP output
+- Added the configuration to provide the path and the naming convention for the forecast FRP density in config.yaml
+- Added several functions in emissions.py [2025-09-18]
+  - Added `Emissions._save_forecast(l3a_density_file, compress=False, fill_value=1e15, diskless=False)` in emissions.py to save the FRP density
+  - Added helpers function `_make_var_name(inst, sat, biome_code)` to build safe, canonical var names and `_platform_label(...)` to produce per-variable provenance strings like `viirs/vj1`
+- Added several maps `canonical_instrument` and `canonical_satellite` in instruments.py
+- Added Emissions._save_forecast(l3a_density_file, compress=False, fill_value=1e15, diskless=False) in emissions.py to save the FRP density [2025-09-18]
+- Added metadata of **number_of_input_files** in the l3a gridded FRP output
 
 ### Changed 
-
-- modify **get_category** in vegetation.py to allow the list of biome type for all the fire detection [2025-09-03]
-- modify helper function **_process_fire**, **_process_fire_water**, **_process_fire_coast**, and **_process_fire_land** in frp.py to use open water information in IGBP for land pixel restoring [2025-09-03]
-- modify helper function **_fire_place** in classification_products.py to support VIIRS processing [2025-09-03]
-- modify helper function **_place** in classification_products.py to support MODIS processing [2025-09-03]
+- Streamlined process() preamble for forecast backgrounds [2025-09-18]
+  - Background FRP density loading replaced with a small helper `load_frp_density` that prefers today’s forecast combined file, else zeros
+  - Writing combined forecast into a **qfedvxx.frp_fcs.YYYYMMDD.nc4**
+- modified **get_category** in vegetation.py to allow the list of biome type for all the fire detection [2025-09-03]
+- modified helper function **_process_fire**, **_process_fire_water**, **_process_fire_coast**, and **_process_fire_land** in frp.py to use open water information in IGBP for land pixel restoring [2025-09-03]
+- modified helper function **_fire_place** in classification_products.py to support VIIRS processing [2025-09-03]
+- modified helper function **_place** in classification_products.py to support MODIS processing [2025-09-03]
 
 ### Removed 
 
-- remove the commented line made during the developments [2025-09-04]
+- removeD the commented line made during the developments [2025-09-04]
 
 ### Deprecated 
 
