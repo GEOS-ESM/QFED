@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  
 ### Added 
 
+- Added NOAA-21/VJ2 option in `classification_products.py`, `fire_products.py`, `geolocation_products.py`, `config.yaml`, and `qcscalingfactors.yaml`
 - Added the configuration to provide the path and the naming convention for the forecast FRP density in config.yaml
 - Added several functions in emissions.py [2025-09-18]
   - Added `Emissions._save_forecast(l3a_density_file, compress=False, fill_value=1e15, diskless=False)` in emissions.py to save the FRP density
@@ -25,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added metadata of **number_of_input_files** in the l3a gridded FRP output
 
 ### Changed 
+
 - Streamlined process() preamble for forecast backgrounds [2025-09-18]
   - Background FRP density loading replaced with a small helper `load_frp_density` that prefers today’s forecast combined file, else zeros
   - Writing combined forecast into a **qfedvxx.frp_fcs.YYYYMMDD.nc4**

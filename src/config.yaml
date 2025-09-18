@@ -71,6 +71,11 @@ qfed:
                 file: /css/viirs/data/Level1/VJ103IMG.trimmed/{0:%Y}/{0:%j}/VJ103IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
             fires:
                 file: /css/viirs/data/Level2/VJ114IMG/{0:%Y}/{0:%j}/VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
+        viirs/jpss-2:
+            geolocation:
+                file: /css/viirs/data/Level1/VJ203IMG.trimmed/{0:%Y}/{0:%j}/VJ203IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
+            fires:
+                file: /css/viirs/data/Level2/VJ214IMG/{0:%Y}/{0:%j}/VJ214IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
 
         igbp: /discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/
         watermask: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/watermask/watermask-700m.no_coast.nc4

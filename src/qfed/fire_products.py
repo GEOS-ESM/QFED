@@ -211,6 +211,11 @@ def create(instrument, satellite):
         return MODIS(engine)
 
     if instrument == Instrument.VIIRS and \
+       satellite in (Satellite.JPSS2, Satellite.NOAA21):
+        engine = DatasetAccessEngine_NetCDF4()
+        return VIIRS_JPSS(engine)
+
+    if instrument == Instrument.VIIRS and \
        satellite in (Satellite.JPSS1, Satellite.NOAA20):
         engine = DatasetAccessEngine_NetCDF4()
         return VIIRS_JPSS(engine)

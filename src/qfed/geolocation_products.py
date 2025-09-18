@@ -221,6 +221,10 @@ def create(instrument, satellite, NPPv1=False):
         return MODIS()
 
     if instrument == Instrument.VIIRS and \
+       satellite in (Satellite.JPSS2, Satellite.NOAA21):
+        return VIIRS_JPSS()
+
+    if instrument == Instrument.VIIRS and \
        satellite in (Satellite.JPSS1, Satellite.NOAA20):
         return VIIRS_JPSS()
 
