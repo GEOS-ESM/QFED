@@ -66,7 +66,7 @@ def parse_arguments(default, version):
         metavar='platform',
         dest='obs',
         default=default['obs'],
-        choices=('modis/terra', 'modis/aqua', 'viirs/npp', 'viirs/jpss-1'),
+        choices=('modis/terra', 'modis/aqua', 'viirs/npp', 'viirs/jpss-1', 'viirs/jpss-2'),
         help='fire observing system (default: %(default)s)',
     )
 
