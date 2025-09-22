@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v3debug] - 2025-09-09
+## [Unreleased] - 2025-09-09
 
 ### Fixed 
 
@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This fix fixes issue of accidental exclusion of wetlands fires. [2025-09-03]
 - This fix ensures the syntax compatibility across different python version. [2025-09-03]
 - This fix ensures that fire detections across the anti-meridian are retained correctly without accidental exclusion. [2025-08-28]
- 
+- The standard name for time in the emissions output files
+
 ### Added 
 
 - Added NOAA-21/VJ2 option in `classification_products.py`, `fire_products.py`, `geolocation_products.py`, `config.yaml`, and `qcscalingfactors.yaml`
@@ -24,7 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added several maps `canonical_instrument` and `canonical_satellite` in instruments.py
 - Added Emissions._save_forecast(l3a_density_file, compress=False, fill_value=1e15, diskless=False) in emissions.py to save the FRP density [2025-09-18]
 - Added metadata of **number_of_input_files** in the l3a gridded FRP output
-
+- Code to qfed_l3a.py to generate output directories for FRP if they do not already exist
+- Trace gases needed for GEOS CF to the list of emissions in qfed_l3b.py
+- A second emission factors yaml file with values from Andreae 2019
+- time_increment was added as an attribute to the emissions output files as it is needed to compute monthly means
+- QC for erroneously large values of FRP in the input files (max value selected is 24000 MW)
+- Capability to include dampened FRP density in tomorrow's emissions calculation in obscured pixels
+	
 ### Changed 
 
 - Streamlined process() preamble for forecast backgrounds [2025-09-18]
@@ -34,32 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - modified helper function **_process_fire**, **_process_fire_water**, **_process_fire_coast**, and **_process_fire_land** in frp.py to use open water information in IGBP for land pixel restoring [2025-09-03]
 - modified helper function **_fire_place** in classification_products.py to support VIIRS processing [2025-09-03]
 - modified helper function **_place** in classification_products.py to support MODIS processing [2025-09-03]
-
-### Removed 
-
-- removeD the commented line made during the developments [2025-09-04]
-
-### Deprecated 
-
-
-## [Unreleased] - 2025-02-20
-
-### Fixed 
-- The standard name for time in the emissions output files
-
-### Added 
-- Code to qfed_l3a.py to generate output directories for FRP if they do not already exist
-- Trace gases needed for GEOS CF to the list of emissions in qfed_l3b.py
-- A second emission factors yaml file with values from Andreae 2019
-- time_increment was added as an attribute to the emissions output files as it is needed to compute monthly means
-- QC for erroneously large values of FRP in the input files (max value selected is 24000 MW)
-- Capability to include dampened FRP density in tomorrow's emissions calculation in obscured pixels
-	
-### Changed 
 - Contact information in netcdf output files from Anton to the GMAO website
 - Changed version in version.py to 3.1.1 in response to changes to the output files and additional QC
 
 ### Removed 
+
+- removeD the commented line made during the developments [2025-09-04]
 
 ### Deprecated 
 
