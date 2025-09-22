@@ -49,7 +49,7 @@ qfed:
                     "FRP",
                     "Y{0:%Y}/M{0:%m}",
                     "qfed3_2.frp.vj2.{0:%Y%m%d}.nc4"
-                ]		
+               ]
         frp_fcs:
                 file: [
                     *qfed_base_dir,
