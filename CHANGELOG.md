@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v3debug] - 2025-09-09
+## [unreleased] - 2025-09-09
 
 ### Fixed 
 
@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added several maps `canonical_instrument` and `canonical_satellite` in instruments.py
 - Added Emissions._save_forecast(l3a_density_file, compress=False, fill_value=1e15, diskless=False) in emissions.py to save the FRP density [2025-09-18]
 - Added metadata of **number_of_input_files** in the l3a gridded FRP output
+- Added a config file with the filepaths for the NRT streams of the satellite data
+- Added a python code to file that biome dependent scaling factors for each satellite specified 
 
 ### Changed 
 
