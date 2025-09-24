@@ -5,7 +5,6 @@ Satellites and instruments
 from enum import Enum, unique
 
 import numpy as np
-from typing import Dict
 
 @unique
 class Instrument(Enum):
@@ -31,32 +30,22 @@ class Satellite(Enum):
     VNP = 'vnp'
 
 # Canonical codes for variable naming
-canonical_instrument: Dict[Instrument, str] = {
-    Instrument.MODIS: "modis",
-    Instrument.VIIRS: "viirs",
-}
-
 # Map ALL satellite enum members (including aliases) to the desired short code
-canonical_satellite: Dict[Satellite, str] = {
-    Satellite.TERRA:    "terra",
-    Satellite.AQUA:     "aqua",
-
-    # SNPP family -> npp
-    Satellite.NPP:      "vnp",
-    Satellite.SNPP:     "vnp",
-    Satellite.SuomiNPP: "vnp",
-    Satellite.VNP:      "vnp",
-
-    # JPSS-1 / NOAA-20 family → vj1
-    Satellite.JPSS1:    "vj1",
-    Satellite.NOAA20:   "vj1",
-    Satellite.VJ1:      "vj1",
-
-    # JPSS-2 / NOAA-21 family → vj2
-    Satellite.JPSS2:    "vj2",
-    Satellite.NOAA21:   "vj2",
-    Satellite.VJ2:      "vj2",
+canonical_instrument = {Instrument.MODIS: "modis", Instrument.VIIRS: "viirs"}
+canonical_satellite  = {
+    Satellite.TERRA: "terra", Satellite.AQUA: "aqua",
+    Satellite.NPP: "npp", Satellite.SNPP: "npp", Satellite.SuomiNPP: "npp",
+    Satellite.JPSS1: "vj1", Satellite.NOAA20: "vj1",
+    Satellite.JPSS2: "vj2", Satellite.NOAA21: "vj2",
 }
+
+def sensor_code(inst: Instrument, sat: Satellite) -> str:
+    """Single tag that already implies instrument, e.g., mod14/myd14/vnp/vj1/vj2."""
+    if inst is Instrument.MODIS:
+        return "mod14" if canonical_satellite.get(sat) == "terra" else "myd14"
+    # VIIRS family
+    code = canonical_satellite.get(sat, "unknown")
+    return "vnp" if code == "npp" else code
 
 # VIIRS SDR User Guide: The bow-tie effect leads to 
 # scan-to-scan overlap, which start to show visibly at 

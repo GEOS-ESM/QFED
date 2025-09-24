@@ -489,8 +489,6 @@ class VIIRS(PixelClassifier):
         '''
         pixel = (self._fire_mask == VIIRS.CLOUD)
 
-#         if self._watermask != ():
-        # MZ, Sept 2025, Fix syntax compatibility across different python version
         if self._watermask.size > 0:
             AUX_WATER = 0
             AUX_COAST = 1

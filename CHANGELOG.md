@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-09-09
+## [Unreleased] - 2025-09-23
 
 ### Fixed 
 
@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- Added the `config_NRT.yaml` adapted for the the l3b [2025-09-23]
+- Added the bug fixed `frpscaling.py` [2025-09-23]
+- Added the background e-folding time into the global attribute [2025-09-23]
 - Added NOAA-21/VJ2 option in `classification_products.py`, `fire_products.py`, `geolocation_products.py`, `config.yaml`, and `qcscalingfactors.yaml`
 - Added the configuration to provide the path and the naming convention for the forecast FRP density in config.yaml
 - Added several functions in emissions.py [2025-09-18]
@@ -34,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	
 ### Changed 
 
+- Modified the `qfed_l3b.py`, `emission.py`, `instruments.py`, and `cli_utils.py` to save the FRP density forecast per sensor [2025-09-23]
 - Streamlined process() preamble for forecast backgrounds [2025-09-18]
   - Background FRP density loading replaced with a small helper `load_frp_density` that prefers today’s forecast combined file, else zeros
   - Writing combined forecast into a **qfedvxx.frp_fcs.YYYYMMDD.nc4**

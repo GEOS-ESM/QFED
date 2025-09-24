@@ -1,6 +1,6 @@
 define:
-    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/
-    modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis/ 
+    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/share/gmao_ops/fvInput/ExtData/chemistry/QFED/v3.2-nrt/sfc/0.1/
+    modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis.061/ 
 
 qfed:
     output:
@@ -13,7 +13,7 @@ qfed:
                 "Y{0:%Y}/M{0:%m}", 
                 "qfed_emis_x3600y1800_{{species}}.v3_2.{0:%Y%m%d}.nc4"
             ]
-            doi: "10.5067/OA7JO5RLJCO2"
+            doi: "n/a"
         frp:
             modis/terra:
                 file: [
@@ -60,29 +60,29 @@ qfed:
     with:
         modis/terra:
             geolocation:
-                file: /css/modis/Collection6.1/L1/MOD03/{0:%Y}/{0:%j}/MOD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
+                file: /discover/nobackup/projects/gmao/input/dao_ops/ops/flk/modis/061//MOD03/{0:%Y}/{0:%j}/MOD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
             fires:
-                file: /css/modis/Collection6.1/L2/MOD14_L2/{0:%Y}/{0:%j}/MOD14.A{0:%Y%j}.{0:%H%M}.061.*.hdf
+                file: /discover/nobackup/projects/gmao/input/dao_ops/ops/flk/modis/061/MOD14/{0:%Y}/{0:%j}/MOD14.A{0:%Y%j}.{0:%H%M}.061.*.hdf
         modis/aqua:
             geolocation:
-                file: /css/modis/Collection6.1/L1/MYD03/{0:%Y}/{0:%j}/MYD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
+                file: /discover/nobackup/projects/gmao/input/dao_ops/ops/flk/modis/061/MYD03/{0:%Y}/{0:%j}/MYD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
             fires: 
-                file: /css/modis/Collection6.1/L2/MYD14_L2/{0:%Y}/{0:%j}/MYD14.A{0:%Y%j}.{0:%H%M}.*.hdf
+                file: /discover/nobackup/projects/gmao/input/dao_ops/ops/flk/modis/061/MYD14/{0:%Y}/{0:%j}/MYD14.A{0:%Y%j}.{0:%H%M}.*.hdf
         viirs/npp:
             geolocation:
-                file: /css/viirs/data/Level1/VNP03IMG.trimmed/{0:%Y}/{0:%j}/VNP03IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
+                file: /css/viirs/data/Level1/VNP03IMG_NRT.trimmed/{0:%Y}/{0:%j}/VNP03IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
             fires:
-                file: /css/viirs/data/Level2/VNP14IMG/{0:%Y}/{0:%j}/VNP14IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
+                file: /css/viirs/data/Level2/VNP14IMG_NRT/{0:%Y}/{0:%j}/VNP14IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
         viirs/jpss-1:
             geolocation:
-                file: /css/viirs/data/Level1/VJ103IMG.trimmed/{0:%Y}/{0:%j}/VJ103IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
+                file: /css/viirs/data/Level1/VJ103IMG_NRT.trimmed/{0:%Y}/{0:%j}/VJ103IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
             fires:
-                file: /css/viirs/data/Level2/VJ114IMG/{0:%Y}/{0:%j}/VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
+                file: /css/viirs/data/Level2/VJ114IMG_NRT/{0:%Y}/{0:%j}/VJ114IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
         viirs/jpss-2:
             geolocation:
-                file: /css/viirs/data/Level1/VJ203IMG.trimmed/{0:%Y}/{0:%j}/VJ203IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
+                file: /css/viirs/data/Level1/VJ203IMG_NRT.trimmed/{0:%Y}/{0:%j}/VJ203IMG.A{0:%Y%j}.{0:%H%M}.0[02][21].*.nc
             fires:
-                file: /css/viirs/data/Level2/VJ214IMG/{0:%Y}/{0:%j}/VJ214IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
+                file: /css/viirs/data/Level2/VJ214IMG_NRT/{0:%Y}/{0:%j}/VJ214IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
 
         igbp: /discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/
         watermask: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/watermask/watermask-700m.no_coast.nc4

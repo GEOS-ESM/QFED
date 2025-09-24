@@ -19,7 +19,7 @@ import xarray as xr
 
 from qfed import cli_utils
 from qfed import grid
-from qfed.instruments import Instrument, Satellite, canonical_instrument, canonical_satellite
+from qfed.instruments import Instrument, Satellite, sensor_code
 from qfed.emissions import Emissions
 from qfed import fire
 from qfed import VERSION
@@ -154,70 +154,36 @@ def search(file_glob: str, logging):
 
     return match[0]
 
-def _combined_var_names(inst: Instrument, sat: Satellite, bb_code: str):
-
-    def _sanitize(s: str) -> str:
-        s = re.sub(r'[^0-9a-z_]+', '_', str(s).lower())
-        return re.sub(r'_+', '_', s).strip('_')
-
-    """Return likely var names for combined forecast files."""
-    inst_code = canonical_instrument.get(inst, _sanitize(inst.value))
-    sat_code  = canonical_satellite.get(sat, _sanitize(sat.value))
-    bb_code   = _sanitize(bb_code)
-    # try both orders
-    return (
-        f"{sat_code}_{inst_code}_{bb_code}",  # sat_inst_biome (e.g., vj1_viirs_gl)
-        f"{inst_code}_{sat_code}_{bb_code}",  # inst_sat_biome (e.g., viirs_vj1_gl)
-    )
 
 def load_frp_density(
     *,
-    platform: tuple[Instrument, Satellite],
+    platform,                 # (Instrument, Satellite)
     fcs_this_l3a_file: str | None,
-    frp: dict,     # frp[platform][bb] exists; used for shapes
-    fire,          # provides BIOMASS_BURNING
+    frp: dict,                # shapes via frp[platform][bb]
+    fire,                     # BIOMASS_BURNING
     logging,
     use_forecast: bool = True,
-    ) -> dict:
-    """
-    Load background FRP density for one platform from today's combined forecast file.
-    If the file or variables are missing, return zeros (per biome).
-    """
+) -> dict:
+    """Read today's per-sensor FRP-FCS file (vars: fb_{biome}); else zeros."""
     inst_enum, sat_enum = platform
-    bg = {}
-
-    if not use_forecast:
-        logging.info(f"Background set to zeros for {inst_enum.name}/{sat_enum.name} (use_forecast=False).")
+    if not use_forecast or not (fcs_this_l3a_file and os.path.exists(fcs_this_l3a_file)):
         return {bb: np.zeros_like(frp[platform][bb]) for bb in fire.BIOMASS_BURNING}
 
-    if fcs_this_l3a_file and os.path.exists(fcs_this_l3a_file):
-        try:
-            with xr.open_dataset(fcs_this_l3a_file) as ds:
-                for bb in fire.BIOMASS_BURNING:
-                    found = False
-                    for vn in _combined_var_names(inst_enum, sat_enum, bb.type.value):
-                        if vn in ds.variables:
-                            bg[bb] = ds[vn][0, :, :].values.T
-                            found = True
-                            break
-                    if not found:
-                        logging.warning(
-                            f"Background var not found for {inst_enum.name}/{sat_enum.name}/{bb.type.value} "
-                            f"in '{os.path.basename(fcs_this_l3a_file)}'; using zeros."
-                        )
-                        bg[bb] = np.zeros_like(frp[platform][bb])
-            logging.info(f"Background loaded from forecast file '{os.path.basename(fcs_this_l3a_file)}'.")
-            return bg
-        except Exception as e:
-            logging.warning(
-                f"Failed to read forecast background '{os.path.basename(fcs_this_l3a_file)}' ({e}). Using zeros."
-            )
-
-    # No file or failed read -> zeros
-    for bb in fire.BIOMASS_BURNING:
-        bg[bb] = np.zeros_like(frp[platform][bb])
+    bg = {}
+    try:
+        with xr.open_dataset(fcs_this_l3a_file) as ds:
+            for bb in fire.BIOMASS_BURNING:
+                vn = f"fb_{bb.type.value}"
+                if vn in ds.variables:
+                    bg[bb] = ds[vn][0, :, :].values.T
+                else:
+                    logging.warning(f"'{vn}' missing in {os.path.basename(fcs_this_l3a_file)}; using zeros.")
+                    bg[bb] = np.zeros_like(frp[platform][bb])
+        logging.info(f"Background loaded: {os.path.basename(fcs_this_l3a_file)}")
+    except Exception as e:
+        logging.warning(f"Failed to read {os.path.basename(fcs_this_l3a_file)} ({e}); using zeros.")
+        bg = {bb: np.zeros_like(frp[platform][bb]) for bb in fire.BIOMASS_BURNING}
     return bg
-
 
 
 def process(
@@ -232,81 +198,71 @@ def process(
     compress,
     dry_run,
     doi,
-    ):
-    
-    """
-    Processes single time/date.
-    """
+):
     frp = {}
     area = {}
     frp_density = {}
     l3a_files = {}
 
-    # ---- Forecast background paths (today: read; tomorrow: write) ----
-    fcs_this_l3a_file = None
-    fcs_next_l3a_file = None
-    if fcs_bkg is not None:
-        # today's forecast background (search because it SHOULD already exist)
-        fcs_today_glob = cli_utils.get_path(fcs_bkg['file'], timestamp=time)
-        fcs_this_l3a_file = search(fcs_today_glob, logging)  # Optional[str]
-
-        # tomorrow's forecast background output (do NOT search; we'll create it)
-        fcs_day = time + timedelta(days=1)
-        fcs_next_l3a_file = cli_utils.get_path(fcs_bkg['file'], timestamp=fcs_day)
-
-    # ---- Iterate components, read L3A, fill FRP/area/background ----
+    # Iterate platforms
     for component in obs_system:
-        instrument, satellite = component.split('/')
+        instrument, satellite = component.split("/")
         platform = (Instrument(instrument), Satellite(satellite))
+        inst_enum, sat_enum = platform
+        sat_tag = sensor_code(inst_enum, sat_enum)  # mod14/myd14/vnp/vj1/vj2
 
-        # current-day per-platform L3A (observations)
+        # Current-day per-platform L3A (observations)
         search_path = cli_utils.get_path(obs_system[component]['file'], timestamp=time)
-        logging.debug(
-            f"Searching for QFED L3A file matching '{os.path.basename(search_path)}' "
-            f"in '{os.path.dirname(search_path)}'."
-        )
+        logging.debug(f"Searching for L3A '{os.path.basename(search_path)}' in '{os.path.dirname(search_path)}'")
         l3a_file = search(search_path, logging)
         if not l3a_file:
             continue
 
-        logging.info(f"Reading QFED L3A file '{os.path.basename(l3a_file)}'.")
+        logging.info(f"Reading L3A '{os.path.basename(l3a_file)}'")
         l3a_files[platform] = l3a_file
 
         ds = xr.open_dataset(l3a_file)
-        area[platform] = {
-            v: ds[v][0, :, :].values.T
-            for v in ('land', 'water', 'cloud', 'unknown')
-        }
-        frp[platform] = {
-            bb: ds[f'frp_{bb.type.value}'][0, :, :].values.T
-            for bb in fire.BIOMASS_BURNING
-        }
+        area[platform] = {v: ds[v][0, :, :].values.T for v in ('land', 'water', 'cloud', 'unknown')}
+        frp[platform] = {bb: ds[f'frp_{bb.type.value}'][0, :, :].values.T for bb in fire.BIOMASS_BURNING}
         ds.close()
 
-        # Load today's FRP density background (forecast) or zeros
+        # Today's FRP-FCS (per sensor): format with {sat}
+        fcs_this_l3a_file = None
+        if fcs_bkg is not None:
+            today_path = cli_utils.get_path(fcs_bkg["file"], timestamp=time-timedelta(days=1), sat=sat_tag)
+            fcs_this_l3a_file = search(today_path, logging)
+
+        # Background (forecast or zeros)
         frp_density[platform] = load_frp_density(
             platform=platform,
+            fcs_this_l3a_file=fcs_this_l3a_file,
             frp=frp,
             fire=fire,
             logging=logging,
-            use_forecast=(fcs_bkg is not None),          # toggle read vs zeros
-            fcs_this_l3a_file=fcs_this_l3a_file,         # Optional[str]
+            use_forecast=(fcs_bkg is not None),
         )
 
-    # ---- Emissions & outputs ----
-    output_file = cli_utils.get_path(output_file, timestamp=time)
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    # Emissions & outputs
+    out_path = cli_utils.get_path(output_file, timestamp=time)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     emissions = Emissions(time, frp, frp_density, area, emission_factors_file)
-    emissions.calculate(species)
+    emissions.calculate(species, dt = 1.0, tau = 3.0)
 
-    # Write combined forecast density file for tomorrow, only if configured
-    if fcs_next_l3a_file is not None:
-        os.makedirs(os.path.dirname(fcs_next_l3a_file), exist_ok=True)
-        emissions._save_forecast(fcs_next_l3a_file, compress=compress, diskless=dry_run)
+    # Write per-sensor FRP-FCS for tomorrow
+    if fcs_bkg is not None:
+        fcs_out_map = {}
+        for platform in frp.keys():
+            inst_enum, sat_enum = platform
+            sat_tag = sensor_code(inst_enum, sat_enum)
+            tomorrow_path = cli_utils.get_path(fcs_bkg["file"], timestamp=time, sat=sat_tag)
+            os.makedirs(os.path.dirname(tomorrow_path), exist_ok=True)
+            fcs_out_map[platform] = tomorrow_path
+
+        emissions._save_forecast(fcs_out_map, compress=compress, diskless=dry_run)
 
     emissions.save(
-        output_file,
+        out_path,
         doi,
         ndays=ndays,
         compress=compress,

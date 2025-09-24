@@ -22,20 +22,22 @@ def read_config(config):
     return data
 
 
-def get_path(path, timestamp=None):
+def get_path(path, timestamp=None, **fmt):
     """
-    Generate a path and optionally evaluate a templated path
-    at a specific time.
+    Generate a path and optionally evaluate a templated path at a specific time.
+    Supports positional time placeholder {0:%Y%m%d} and named placeholders (e.g., {sat}).
     """
-    if isinstance(path, list):
-        result = path
-    else:
-        result = [path]
-
-    if timestamp is not None:
-        result = [atom.format(timestamp) for atom in result]
-
-    return os.path.join(*result)
+    parts = path if isinstance(path, list) else [path]
+    out = []
+    for atom in parts:
+        if timestamp is not None:
+            # Provide the positional arg (index 0) *and* any named args
+            s = atom.format(timestamp, **fmt)
+        else:
+            # Named-only formatting if needed (extra kwargs are harmless)
+            s = atom.format(**fmt) if fmt else atom
+        out.append(s)
+    return os.path.join(*out)
 
 
 def get_entire_time_interval(args):
