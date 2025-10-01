@@ -4,10 +4,9 @@ import pandas as pd
 from datetime import datetime
 import matplotlib.pyplot as plt
 from scipy import stats
-from sklearn.linear_model import LinearRegression
 import os
 import warnings
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -17,13 +16,12 @@ import hashlib
 warnings.filterwarnings('ignore')
 
 @dataclass
-class RegressionResult:
-    """Data class to store regression results"""
-    slope: float
-    intercept: float
+class ScalingResult:
+    """Data class to store scaling results"""
+    scaling_factor: float
+    log_scaling_factor: float  # Added log scaling factor
     r_squared: float
     correlation: float
-    p_value: float
     rmse: float
     n_points: int
     scaled_data: pd.Series
@@ -87,8 +85,9 @@ class FRPScaler:
         """Generate file path for given satellite and date"""
         year, month, day = date.strftime('%Y'), date.strftime('%m'), date.strftime('%d')
         
-        # Handle special naming for Aqua MODIS
-        filename_code = 'MYD14' if satellite == 'myd' else satellite
+        # Handle special naming for MODIS satellites
+        filename_codes = {'myd': 'MYD14', 'mod': 'MOD14'}
+        filename_code = filename_codes.get(satellite, satellite)
         filename = f"qfed3_2.frp.{filename_code}.{year}{month}{day}.nc4"
         
         return os.path.join(self.base_path, f"Y{year}", f"M{month}", filename)
@@ -282,24 +281,25 @@ class FRPScaler:
         
         return biome_dataframes, biome_names
 
-    # Keep the original method for compatibility
     def load_time_series_by_biome(self, satellites: List[str], start_date: datetime, 
                                   end_date: datetime) -> Tuple[Dict[str, pd.DataFrame], Dict[str, str]]:
         """Original sequential loading method (kept for compatibility)"""
         return self.load_time_series_by_biome_cached(satellites, start_date, end_date)
 
-    def perform_regression(self, df: pd.DataFrame, baseline_satellite: str, 
-                          target_satellites: Optional[List[str]] = None, 
-                          force_zero_intercept: bool = True,
-                          linear_scaling: bool = True) -> Dict[str, RegressionResult]:
-        """Perform linear regression to scale satellites to baseline
+    def perform_geometric_scaling(self, df: pd.DataFrame, baseline_satellite: str, 
+                                 target_satellites: Optional[List[str]] = None) -> Dict[str, ScalingResult]:
+        """Perform geometric mean scaling between satellites
+        
+        This method scales target satellite data to match the baseline satellite using
+        log-space calculations: log(c) = mean(log(baseline)) - mean(log(target))
         
         Parameters:
         df: DataFrame with satellite data
         baseline_satellite: str, baseline satellite designation
         target_satellites: list, satellites to scale (if None, uses all except baseline)
-        force_zero_intercept: bool, whether to force intercept=0
-        linear_scaling: bool, use linear scaling instead of power-law
+        
+        Returns:
+        Dictionary of scaling results keyed by satellite code
         """
         if baseline_satellite not in df.columns:
             print(f"Error: Baseline satellite '{baseline_satellite}' not found in data.")
@@ -318,119 +318,217 @@ class FRPScaler:
         
         print(f"Baseline: {baseline_satellite} ({self.SATELLITES[baseline_satellite]})")
         print(f"Targets: {[f'{sat} ({self.SATELLITES[sat]})' for sat in valid_targets]}")
-        print(f"Force zero intercept: {force_zero_intercept}")
-        print(f"Linear scaling: {linear_scaling}")
+        print("Using log-space geometric mean scaling: log(c) = mean(log(baseline)) - mean(log(target))")
         
         results = {}
         
         for target_sat in valid_targets:
-            if linear_scaling:
-                # Direct linear regression between original values (no log transform)
-                valid_mask = np.isfinite(df[baseline_satellite]) & np.isfinite(df[target_sat])
+            try:
+                # Get data and handle missing values
+                baseline_data = df[baseline_satellite]
+                target_data = df[target_sat]
                 
-                if np.sum(valid_mask) < 10:
-                    print(f"Warning: Insufficient data for {baseline_satellite} vs {target_sat}")
+                # Filter to positive values for log calculations
+                pos_mask = (baseline_data > 0) & (target_data > 0)
+                baseline_pos = baseline_data[pos_mask]
+                target_pos = target_data[pos_mask]
+                
+                if len(baseline_pos) < 10:
+                    print(f"Warning: Insufficient positive data for {baseline_satellite} vs {target_sat}")
                     continue
                 
-                X = df[baseline_satellite].values[valid_mask].reshape(-1, 1)
-                y = df[target_sat].values[valid_mask]
+                # Calculate means in log space
+                log_mean_baseline = np.mean(np.log(baseline_pos))
+                log_mean_target = np.mean(np.log(target_pos))
                 
-                if force_zero_intercept:
-                    # Force regression through origin (intercept = 0)
-                    reg = LinearRegression(fit_intercept=False).fit(X, y)
-                    intercept = 0.0
+                # Calculate log scaling factor: log(c) = mean(log(baseline)) - mean(log(target))
+                log_scaling_factor = log_mean_baseline - log_mean_target
+                
+                # Convert to linear scaling factor: c = exp(log(c))
+                scaling_factor = np.exp(log_scaling_factor)
+                
+                # Verification (these should be equivalent to the above):
+                geo_mean_baseline = np.exp(log_mean_baseline)
+                geo_mean_target = np.exp(log_mean_target)
+                scaling_factor_verification = geo_mean_baseline / geo_mean_target
+                
+                # Apply scaling to all target data
+                scaled_data = target_data * scaling_factor
+                
+                # Calculate statistics
+                common_mask = np.isfinite(baseline_data) & np.isfinite(scaled_data)
+                
+                if np.sum(common_mask) < 10:
+                    print(f"    Warning: Few valid points for {target_sat} statistics")
+                    correlation = np.nan
+                    rmse = np.nan
+                    r_squared = np.nan
                 else:
-                    # Standard regression with intercept
-                    reg = LinearRegression().fit(X, y)
-                    intercept = reg.intercept_
+                    baseline_vals = baseline_data[common_mask].values
+                    scaled_vals = scaled_data[common_mask].values
+                    
+                    # Remove any remaining NaN/Inf
+                    final_mask = np.isfinite(baseline_vals) & np.isfinite(scaled_vals)
+                    baseline_vals = baseline_vals[final_mask]
+                    scaled_vals = scaled_vals[final_mask]
+                    
+                    print(f"    After cleaning: {len(baseline_vals)} points")
+                    print(f"    Baseline mean: {np.mean(baseline_vals):.6f}")
+                    print(f"    Scaled mean: {np.mean(scaled_vals):.6f}")
+                    
+                    if len(baseline_vals) >= 10:
+                        # Calculate correlation
+                        try:
+                            correlation = np.corrcoef(baseline_vals, scaled_vals)[0, 1]
+                        except:
+                            correlation = np.nan
+                        
+                        # Calculate RMSE
+                        residuals = scaled_vals - baseline_vals
+                        rmse = np.sqrt(np.mean(residuals ** 2))
+                        
+                        # Calculate R² with better error handling
+                        ss_res = np.sum(residuals ** 2)
+                        ss_tot = np.sum((baseline_vals - np.mean(baseline_vals)) ** 2)
+                        
+                        print(f"    SS_res: {ss_res:.6f}")
+                        print(f"    SS_tot: {ss_tot:.6f}")
+                        
+                        if ss_tot > 1e-10:  # Avoid division by very small numbers
+                            r_squared = max(0.0, 1 - (ss_res / ss_tot))
+                        else:
+                            r_squared = 1.0 if ss_res < 1e-10 else 0.0
+                            print(f"    WARNING: No variance in baseline data")
+                        
+                        print(f"    FINAL - R²: {r_squared:.6f}, Corr: {correlation:.6f}, RMSE: {rmse:.6f}")
+                    else:
+                        correlation = np.nan
+                        rmse = np.nan
+                        r_squared = np.nan
                 
-                y_pred = reg.predict(X)
-                r_squared = reg.score(X, y)
-                correlation, p_value = stats.pearsonr(X.flatten(), y)
-                rmse = np.sqrt(np.mean((y - y_pred) ** 2))
-                
-                # Apply linear scaling
-                if force_zero_intercept:
-                    scaled_data = reg.coef_[0] * df[baseline_satellite]
+                # Log-space correlation
+                log_common_mask = common_mask & (baseline_data > 0) & (scaled_data > 0)
+                if np.sum(log_common_mask) >= 10:
+                    log_baseline = np.log(baseline_data[log_common_mask])
+                    log_scaled = np.log(scaled_data[log_common_mask])
+                    log_correlation = stats.pearsonr(log_baseline, log_scaled)[0]
+                    log_rmse = np.sqrt(np.mean((log_scaled - log_baseline) ** 2))
                 else:
-                    scaled_data = intercept + reg.coef_[0] * df[baseline_satellite]
+                    log_correlation = np.nan
+                    log_rmse = np.nan
                 
-            else:
-                # Log-space regression (power-law scaling)
-                log_baseline = np.log(df[baseline_satellite])
-                log_target = np.log(df[target_sat])
-                valid_mask = np.isfinite(log_baseline) & np.isfinite(log_target)
+                # Print results with explicit log-space calculations
+                print(f"  {target_sat}:")
+                print(f"    Log mean baseline: {log_mean_baseline:.6f}")
+                print(f"    Log mean target: {log_mean_target:.6f}")
+                print(f"    Log scaling factor: {log_scaling_factor:.6f}")
+                print(f"    Linear scaling factor: {scaling_factor:.6f}")
+                print(f"    Verification (should match): {scaling_factor_verification:.6f}")
+                print(f"    Geometric mean baseline: {geo_mean_baseline:.4f}")
+                print(f"    Geometric mean target: {geo_mean_target:.4f}")
+                print(f"    Linear correlation: {correlation:.4f}")
+                print(f"    Log-space correlation: {log_correlation:.4f}")
+                print(f"    R²: {r_squared:.4f}")
+                print(f"    RMSE: {rmse:.4f}")
+                print(f"    Log-space RMSE: {log_rmse:.4f}")
+                print(f"    Valid data points: {np.sum(common_mask)}")
                 
-                if np.sum(valid_mask) < 10:
-                    print(f"Warning: Insufficient data for {baseline_satellite} vs {target_sat}")
-                    continue
+                # Store the results
+                results[target_sat] = ScalingResult(
+                    scaling_factor=scaling_factor,
+                    log_scaling_factor=log_scaling_factor,  # Store log scaling factor
+                    r_squared=r_squared,
+                    correlation=correlation,
+                    rmse=rmse,
+                    n_points=np.sum(common_mask),
+                    scaled_data=scaled_data,
+                    original_data=df[target_sat],
+                    baseline_data=df[baseline_satellite]
+                )
                 
-                X = log_baseline[valid_mask].values.reshape(-1, 1)
-                y = log_target[valid_mask].values
-                
-                if force_zero_intercept:
-                    # Force regression through origin (intercept = 0)
-                    reg = LinearRegression(fit_intercept=False).fit(X, y)
-                    intercept = 0.0
-                else:
-                    # Standard regression with intercept
-                    reg = LinearRegression().fit(X, y)
-                    intercept = reg.intercept_
-                
-                y_pred = reg.predict(X)
-                
-                # Calculate R² manually for zero-intercept case
-                if force_zero_intercept:
-                    ss_res = np.sum((y - y_pred) ** 2)
-                    ss_tot = np.sum(y ** 2)  # Different for zero-intercept
-                    r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
-                else:
-                    r_squared = reg.score(X, y)
-                
-                correlation, p_value = stats.pearsonr(X.flatten(), y)
-                rmse = np.sqrt(np.mean((y - y_pred) ** 2))
-                
-                # Apply scaling
-                if force_zero_intercept:
-                    log_scaled = reg.coef_[0] * log_baseline
-                else:
-                    log_scaled = intercept + reg.coef_[0] * log_baseline
-                
-                scaled_data = np.exp(log_scaled)
-            
-            results[target_sat] = RegressionResult(
-                slope=reg.coef_[0],
-                intercept=intercept,
-                r_squared=r_squared,
-                correlation=correlation,
-                p_value=p_value,
-                rmse=rmse,
-                n_points=np.sum(valid_mask),
-                scaled_data=scaled_data,
-                original_data=df[target_sat],
-                baseline_data=df[baseline_satellite]
-            )
+            except Exception as e:
+                print(f"Error processing {target_sat}: {str(e)}")
+                continue
         
         return results
 
-    def perform_regression_by_biome(self, biome_dataframes: Dict[str, pd.DataFrame], 
-                                   baseline_satellite: str, 
-                                   target_satellites: Optional[List[str]] = None,
-                                   force_zero_intercept: bool = True,
-                                   linear_scaling: bool = True) -> Dict[str, Dict[str, RegressionResult]]:
-        """Perform regression for each biome"""
+    def perform_geometric_scaling_by_biome(self, biome_dataframes: Dict[str, pd.DataFrame], 
+                                          baseline_satellite: str, 
+                                          target_satellites: Optional[List[str]] = None) -> Dict[str, Dict[str, ScalingResult]]:
+        """Perform geometric scaling for each biome"""
         all_results = {}
         
         for biome, df in biome_dataframes.items():
             print(f"\nProcessing biome: {biome}")
-            results = self.perform_regression(df, baseline_satellite, target_satellites, 
-                                            force_zero_intercept, linear_scaling)
+            results = self.perform_geometric_scaling(df, baseline_satellite, target_satellites)
             all_results[biome] = results
         
         return all_results
 
+    def diagnose_scaling(self, df: pd.DataFrame, baseline_sat: str, target_sat: str):
+        """Enhanced diagnostic of scaling relationship with log-space calculations"""
+        baseline_data = df[baseline_sat].dropna()
+        target_data = df[target_sat].dropna()
+        
+        # Find common valid indices  
+        common_idx = baseline_data.index.intersection(target_data.index)
+        baseline_common = baseline_data[common_idx]
+        target_common = target_data[common_idx]
+        
+        print(f"\n=== DIAGNOSTIC: {target_sat} vs {baseline_sat} ===")
+        print(f"Common data points: {len(common_idx)}")
+        print(f"{baseline_sat} range: {baseline_common.min():.4f} to {baseline_common.max():.4f}")
+        print(f"{target_sat} range: {target_common.min():.4f} to {target_common.max():.4f}")
+        print(f"{baseline_sat} mean: {baseline_common.mean():.4f}")
+        print(f"{target_sat} mean: {target_common.mean():.4f}")
+        
+        # Simple ratio
+        mean_ratio = target_common.mean() / baseline_common.mean()
+        print(f"Mean ratio (target/baseline): {mean_ratio:.4f}")
+        
+        # Correlation
+        corr = target_common.corr(baseline_common)
+        print(f"Correlation: {corr:.4f}")
+        
+        # Positive data only
+        pos_baseline = baseline_common[baseline_common > 0]
+        pos_target = target_common[target_common > 0]
+        common_pos_idx = pos_baseline.index.intersection(pos_target.index)
+        
+        if len(common_pos_idx) > 10:
+            print("\nPositive values only:")
+            pos_baseline = pos_baseline[common_pos_idx]
+            pos_target = pos_target[common_pos_idx]
+            
+            print(f"Common positive data points: {len(common_pos_idx)}")
+            print(f"Positive {baseline_sat} mean: {pos_baseline.mean():.4f}")
+            print(f"Positive {target_sat} mean: {pos_target.mean():.4f}")
+            
+            # Log-space calculations
+            log_mean_baseline = np.mean(np.log(pos_baseline))
+            log_mean_target = np.mean(np.log(pos_target))
+            log_scaling_factor = log_mean_baseline - log_mean_target
+            scaling_factor = np.exp(log_scaling_factor)
+            
+            print(f"\nLog-space calculations:")
+            print(f"Log mean {baseline_sat}: {log_mean_baseline:.6f}")
+            print(f"Log mean {target_sat}: {log_mean_target:.6f}")
+            print(f"Log scaling factor (log(c)): {log_scaling_factor:.6f}")
+            print(f"Linear scaling factor (c): {scaling_factor:.6f}")
+            
+            # Geometric means (should match exp of log means)
+            geo_mean_baseline = np.exp(log_mean_baseline)
+            geo_mean_target = np.exp(log_mean_target)
+            
+            print(f"\nGeometric means (verification):")
+            print(f"Geometric mean {baseline_sat}: {geo_mean_baseline:.4f}")
+            print(f"Geometric mean {target_sat}: {geo_mean_target:.4f}")
+            print(f"Geometric scaling factor (verification): {geo_mean_baseline/geo_mean_target:.6f}")
+        
+        return scaling_factor if 'scaling_factor' in locals() else mean_ratio
+
     def _create_stats_text(self, baseline_data: pd.Series, comparison_data: pd.Series, 
-                          result: Optional[RegressionResult] = None, log_space: bool = False) -> str:
+                          result: Optional[ScalingResult] = None, log_space: bool = False) -> str:
         """Create statistics text for plots"""
         # Make sure we handle NaN and zero values properly
         valid_mask = np.isfinite(baseline_data) & np.isfinite(comparison_data)
@@ -465,15 +563,25 @@ class FRPScaler:
         stats_text = f'r = {corr:.3f}\nBias = {bias:.4f}\nRMSE = {rmse:.4f}\nn = {len(baseline_vals)}'
         
         if result and not log_space:
-            stats_text += f'\nSlope = {result.slope:.3f}\nIntercept = {result.intercept:.3f}'
+            stats_text += f'\nScaling = {result.scaling_factor:.3f}'
+            stats_text += f'\nLog(c) = {result.log_scaling_factor:.4f}'
         
         return stats_text
 
     def plot_biome_analysis(self, biome_dataframes: Dict[str, pd.DataFrame], 
-                           biome_results: Dict[str, Dict[str, RegressionResult]], 
+                           biome_results: Dict[str, Dict[str, ScalingResult]], 
                            baseline_satellite: str, plot_type: str = 'timeseries', 
                            save_path: Optional[str] = None):
         """Create plots for biome analysis"""
+        
+        # Extract date range from the first available dataframe
+        date_range_str = ""
+        if biome_dataframes:
+            first_df = next(iter(biome_dataframes.values()))
+            start_date = first_df.index.min().strftime('%Y%m%d')
+            end_date = first_df.index.max().strftime('%Y%m%d')
+            date_range_str = f"{start_date}_{end_date}"
+        
         for biome, df in biome_dataframes.items():
             if biome not in biome_results or not biome_results[biome]:
                 continue
@@ -484,7 +592,7 @@ class FRPScaler:
             for sat, result in results.items():
                 # Increased figure size and adjusted subplot spacing
                 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-                fig.subplots_adjust(hspace=0.35, wspace=0.25)  # Add more space between subplots
+                fig.subplots_adjust(hspace=0.35, wspace=0.25)
                 
                 baseline_data = df[baseline_satellite]
                 original_data = result.original_data
@@ -492,7 +600,7 @@ class FRPScaler:
                 
                 if plot_type == 'timeseries':
                     self._plot_timeseries_2x2(axes, baseline_data, original_data, scaled_data, 
-                                            biome_name, sat, baseline_satellite)
+                                            biome_name, sat, baseline_satellite, result)
                 else:  # scatter
                     self._plot_scatter_2x2(axes, baseline_data, original_data, scaled_data, 
                                          result, biome_name, sat, baseline_satellite)
@@ -502,10 +610,8 @@ class FRPScaler:
                     if plot_type == 'timeseries':
                         # Reduce number of x-axis ticks and rotate labels
                         ax.tick_params(axis='x', rotation=45, labelsize=9)
-                        # Set fewer ticks to reduce overlap
                         ax.locator_params(axis='x', nbins=6)
                     else:
-                        # For scatter plots, normal tick formatting
                         ax.tick_params(axis='x', labelsize=10)
                         ax.tick_params(axis='y', labelsize=10)
                 
@@ -517,15 +623,26 @@ class FRPScaler:
                 plt.tight_layout(pad=2.0, rect=[0, 0.02, 1, 0.96])
                 
                 if save_path:
-                    plot_suffix = 'timeseries' if plot_type == 'timeseries' else 'scatter'
-                    sat_save_path = save_path.replace('.png', f'_{plot_suffix}_{biome}_{sat}.png')
+                    # Extract biome code from the full biome key (e.g., 'frp_tf' -> 'tf')
+                    biome_code = biome.replace('frp_', '')
+                    
+                    # Create new filename format: plottype_biomeCode_satellite_vs_baseline_dateRange.png
+                    new_filename = f"frp_{plot_type}_{biome_code}_{sat}_vs_{baseline_satellite}_{date_range_str}.png"
+                    
+                    # Replace the original save_path with the new filename
+                    if '/' in save_path:
+                        directory = os.path.dirname(save_path)
+                        sat_save_path = os.path.join(directory, new_filename)
+                    else:
+                        sat_save_path = new_filename
+                    
                     plt.savefig(sat_save_path, dpi=300, bbox_inches='tight', facecolor='white')
                     print(f"Plot saved to: {sat_save_path}")
                 
                 plt.close()
 
     def _plot_timeseries_2x2(self, axes, baseline_data, original_data, scaled_data, 
-                           biome_name, sat, baseline_satellite):
+                           biome_name, sat, baseline_satellite, result):
         """Create 2x2 timeseries plots with better formatting"""
         # Linear before (top left)
         axes[0, 0].plot(baseline_data.index, baseline_data.values, 'b-', 
@@ -552,7 +669,7 @@ class FRPScaler:
         axes[0, 1].legend(fontsize=9)
         axes[0, 1].grid(True, alpha=0.3)
         
-        stats_text = self._create_stats_text(baseline_data, scaled_data)
+        stats_text = self._create_stats_text(baseline_data, scaled_data, result)
         axes[0, 1].text(0.02, 0.98, stats_text, transform=axes[0, 1].transAxes, 
                        verticalalignment='top', fontsize=8,
                        bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
@@ -589,7 +706,7 @@ class FRPScaler:
         axes[1, 1].legend(fontsize=9)
         axes[1, 1].grid(True, alpha=0.3)
         
-        stats_text = self._create_stats_text(baseline_data, scaled_data, log_space=True)
+        stats_text = self._create_stats_text(baseline_data, scaled_data, result, log_space=True)
         axes[1, 1].text(0.02, 0.98, stats_text, transform=axes[1, 1].transAxes, 
                        verticalalignment='top', fontsize=8,
                        bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
@@ -610,11 +727,15 @@ class FRPScaler:
         axes[0, 0].set_title('Before Scaling (Linear)', fontsize=11, pad=10)
         axes[0, 0].grid(True, alpha=0.3)
         
-        stats_text = f'R² = {result.r_squared:.3f}\nr = {result.correlation:.3f}\n'
-        stats_text += f'RMSE = {result.rmse:.3f}\nn = {result.n_points}'
-        axes[0, 0].text(0.05, 0.95, stats_text, transform=axes[0, 0].transAxes, 
-                       verticalalignment='top', fontsize=8,
-                       bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        # Calculate statistics for original data
+        if np.sum(valid_mask) > 0:
+            orig_corr = stats.pearsonr(baseline_data[valid_mask], original_data[valid_mask])[0]
+            orig_rmse = np.sqrt(np.mean((original_data[valid_mask] - baseline_data[valid_mask]) ** 2))
+            
+            stats_text = f'r = {orig_corr:.3f}\nRMSE = {orig_rmse:.3f}\nn = {np.sum(valid_mask)}'
+            axes[0, 0].text(0.05, 0.95, stats_text, transform=axes[0, 0].transAxes, 
+                           verticalalignment='top', fontsize=8,
+                           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
         
         # Linear after (top right)
         valid_mask = np.isfinite(baseline_data) & np.isfinite(scaled_data)
@@ -630,11 +751,8 @@ class FRPScaler:
         axes[0, 1].grid(True, alpha=0.3)
         
         if np.sum(valid_mask) > 0:
-            post_corr = stats.pearsonr(baseline_data[valid_mask], scaled_data[valid_mask])[0]
-            post_rmse = np.sqrt(np.mean((baseline_data[valid_mask] - scaled_data[valid_mask]) ** 2))
-            
-            stats_text = f'R² = {post_corr**2:.3f}\nr = {post_corr:.3f}\n'
-            stats_text += f'RMSE = {post_rmse:.3f}\nSlope = {result.slope:.3f}\nIntercept = {result.intercept:.3f}'
+            stats_text = f'r = {result.correlation:.3f}\nR² = {result.r_squared:.3f}\n'
+            stats_text += f'RMSE = {result.rmse:.3f}\nScaling = {result.scaling_factor:.3f}\nlog(c) = {result.log_scaling_factor:.4f}'
             axes[0, 1].text(0.05, 0.95, stats_text, transform=axes[0, 1].transAxes, 
                            verticalalignment='top', fontsize=8,
                            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
@@ -658,8 +776,7 @@ class FRPScaler:
             log_corr = stats.pearsonr(ln_baseline, ln_original)[0]
             log_rmse = np.sqrt(np.mean((ln_original - ln_baseline) ** 2))
             
-            stats_text = f'R² = {log_corr**2:.3f}\nr = {log_corr:.3f}\n'
-            stats_text += f'RMSE = {log_rmse:.3f}\nn = {np.sum(log_valid_mask)}'
+            stats_text = f'r = {log_corr:.3f}\nRMSE = {log_rmse:.3f}\nn = {np.sum(log_valid_mask)}'
             axes[1, 0].text(0.05, 0.95, stats_text, transform=axes[1, 0].transAxes, 
                            verticalalignment='top', fontsize=8,
                            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
@@ -683,17 +800,16 @@ class FRPScaler:
             log_corr = stats.pearsonr(ln_baseline, ln_scaled)[0]
             log_rmse = np.sqrt(np.mean((ln_scaled - ln_baseline) ** 2))
             
-            stats_text = f'R² = {log_corr**2:.3f}\nr = {log_corr:.3f}\n'
-            stats_text += f'RMSE = {log_rmse:.3f}\nSlope = {result.slope:.3f}\nIntercept = {result.intercept:.3f}'
+            stats_text = f'r = {log_corr:.3f}\nRMSE = {log_rmse:.3f}\nlog(c) = {result.log_scaling_factor:.4f}'
             axes[1, 1].text(0.05, 0.95, stats_text, transform=axes[1, 1].transAxes, 
                            verticalalignment='top', fontsize=8,
                            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
     def print_summary(self, biome_dataframes: Dict[str, pd.DataFrame], 
-                     biome_results: Dict[str, Dict[str, RegressionResult]]):
-        """Print comprehensive analysis summary"""
+                     biome_results: Dict[str, Dict[str, ScalingResult]]):
+        """Print comprehensive analysis summary with log scaling factors"""
         print("\n" + "="*60)
-        print("FRP SCALING ANALYSIS SUMMARY")
+        print("FRP LOG-SPACE GEOMETRIC SCALING ANALYSIS SUMMARY")
         print("="*60)
         
         # Data availability
@@ -705,42 +821,36 @@ class FRPScaler:
                 total_days = len(df)
                 print(f"  {self.SATELLITES[sat]}: {valid_days}/{total_days} days ({100*valid_days/total_days:.1f}%)")
         
-        # Regression results
-        print("\nREGRESSION RESULTS BY BIOME:")
+        # Scaling results
+        print("\nLOG-SPACE GEOMETRIC SCALING RESULTS BY BIOME:")
+        print("Formula: log(c) = mean(log(baseline)) - mean(log(target))")
         for biome, results in biome_results.items():
             if results:
                 print(f"\n{self.BIOMES[biome]} ({biome}):")
-                print("-" * 40)
+                print("-" * 60)
                 for sat, result in results.items():
-                    # Calculate the actual scaling factor (what to multiply target by)
-                    if result.slope != 0:
-                        scaling_factor = 1.0 / result.slope
-                    else:
-                        scaling_factor = np.nan
-                    
                     print(f"  {self.SATELLITES[sat]}:")
-                    print(f"    Scaling Factor: {scaling_factor:.4f}  (multiply {sat} by this to match baseline)")
-                    print(f"    Regression Slope: {result.slope:.4f}  (baseline = slope × {sat})")
-                    print(f"    Intercept: {result.intercept:.4f}")
+                    print(f"    Log Scaling Factor (log(c)): {result.log_scaling_factor:.6f}")
+                    print(f"    Linear Scaling Factor (c):   {result.scaling_factor:.6f}")
                     print(f"    R²: {result.r_squared:.4f}")
                     print(f"    Correlation: {result.correlation:.4f}")
                     print(f"    RMSE: {result.rmse:.4f}")
                     print(f"    Data points: {result.n_points}")
-                    
-                    # Show the scaling equation
-                    print(f"    Scaling Equation: scaled_{sat} = {scaling_factor:.4f} × original_{sat}")
+                    print(f"    Scaling Equation: scaled_{sat} = exp({result.log_scaling_factor:.6f}) × original_{sat}")
+                    print(f"                     scaled_{sat} = {result.scaling_factor:.6f} × original_{sat}")
 
 
 def main():
-    """Main analysis function with linear scaling"""
+    """Main analysis function with explicit log-space geometric scaling"""
     # Configuration
     scaler = FRPScaler()
-    satellites_to_process = ['vj2', 'myd']
+    satellites_to_process = ['vj1', 'vj2', 'vnp', 'myd', 'mod']
     baseline_satellite = 'myd'
     start_date = datetime(2024, 1, 1)
     end_date = datetime(2024, 12, 31)
     
-    print("FRP SCALING ANALYSIS BY BIOME (Linear Scaling)")
+    print("FRP SCALING ANALYSIS BY BIOME (Log-Space Geometric Mean Scaling)")
+    print("Formula: log(c) = mean(log(FRP_baseline)) - mean(log(FRP_target))")
     print(f"Satellites: {satellites_to_process}")
     print(f"Baseline: {baseline_satellite} ({scaler.SATELLITES[baseline_satellite]})")
     print(f"Date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
@@ -755,53 +865,32 @@ def main():
         print("No data loaded. Please check file paths and data availability.")
         return
     
-    # Perform linear regression (not log space) with zero intercept
-    print("\nPerforming linear regression by biome (linear scaling, zero intercept)...")
-    biome_results = scaler.perform_regression_by_biome(
-        biome_dataframes, baseline_satellite, 
-        force_zero_intercept=True, 
-        linear_scaling=True  # Use linear scaling
+    # Optional: Run diagnostics first (uncomment to use)
+    # print("\nRUNNING DIAGNOSTICS...")
+    # for biome, df in biome_dataframes.items():
+    #     print(f"\nDiagnostics for {biome} ({scaler.BIOMES[biome]}):")
+    #     for target in [sat for sat in satellites_to_process if sat != baseline_satellite]:
+    #         scaler.diagnose_scaling(df, baseline_satellite, target)
+    
+    # Perform geometric scaling
+    print("\nPerforming log-space geometric scaling by biome...")
+    biome_results = scaler.perform_geometric_scaling_by_biome(
+        biome_dataframes, baseline_satellite
     )
     
     # Check if we got any results
-    print(f"\nRegression completed. Results for {len(biome_results)} biomes.")
+    print(f"\nLog-space geometric scaling completed. Results for {len(biome_results)} biomes.")
     for biome, results in biome_results.items():
         print(f"  {biome}: {len(results)} satellite pairs processed")
     
     if not any(biome_results.values()):
-        print("No regression results obtained. Check data availability and parameters.")
+        print("No scaling results obtained. Check data availability and parameters.")
         return
     
     # Print summary
     print("\n" + "="*60)
     print("PRINTING SUMMARY...")
     scaler.print_summary(biome_dataframes, biome_results)
-    
-    # Debug section
-    print("\n" + "="*60)
-    print("DEBUG: CHECKING DATA QUALITY AND CORRELATIONS")
-    print("="*60)
-    
-    for biome, results in biome_results.items():
-        for sat, result in results.items():
-            print(f"\n=== DEBUGGING {scaler.BIOMES[biome]} - {scaler.SATELLITES[sat]} ===")
-            
-            baseline_data = result.baseline_data
-            original_data = result.original_data
-            scaled_data = result.scaled_data
-            
-            # Check correlation after linear scaling
-            valid_mask = np.isfinite(baseline_data) & np.isfinite(scaled_data)
-            
-            if np.sum(valid_mask) > 10:
-                corr_after = stats.pearsonr(baseline_data[valid_mask], scaled_data[valid_mask])[0]
-                print(f"Post-scaling correlation (linear): {corr_after:.6f}")
-                print(f"Scaling factor: {result.slope:.6f}")
-                print(f"Mean baseline: {np.nanmean(baseline_data):.2f}")
-                print(f"Mean original: {np.nanmean(original_data):.2f}")
-                print(f"Mean scaled: {np.nanmean(scaled_data):.2f}")
-                print(f"R²: {result.r_squared:.4f}")
-                print(f"RMSE: {result.rmse:.4f}")
     
     # Create plots
     print("\n" + "="*60)
@@ -812,7 +901,7 @@ def main():
     try:
         scaler.plot_biome_analysis(
             biome_dataframes, biome_results, baseline_satellite, 
-            plot_type='timeseries', save_path='frp_timeseries_biome_linear_scaling.png'
+            plot_type='timeseries', save_path='frp_logspace_scaling.png'
         )
         print("Time series plots completed successfully.")
     except Exception as e:
@@ -822,7 +911,7 @@ def main():
     try:
         scaler.plot_biome_analysis(
             biome_dataframes, biome_results, baseline_satellite, 
-            plot_type='scatter', save_path='frp_scatter_biome_linear_scaling.png'
+            plot_type='scatter', save_path='frp_logspace_scaling.png'
         )
         print("Scatter plots completed successfully.")
     except Exception as e:
@@ -842,7 +931,7 @@ def quick_analysis(satellites: List[str], baseline: str, start_date: datetime,
         # Filter to specific biomes
         biome_dataframes = {k: v for k, v in biome_dataframes.items() if k in biomes}
     
-    biome_results = scaler.perform_regression_by_biome(biome_dataframes, baseline, force_zero_intercept=True)
+    biome_results = scaler.perform_geometric_scaling_by_biome(biome_dataframes, baseline)
     scaler.print_summary(biome_dataframes, biome_results)
     
     return biome_dataframes, biome_results
