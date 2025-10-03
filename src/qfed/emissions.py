@@ -16,7 +16,7 @@ from qfed import grid
 from qfed.instruments import Instrument, Satellite
 from qfed.instruments import canonical_satellite, canonical_instrument, sensor_code
 from qfed import VERSION
-
+from qfed import cli_utils
 import re
 
 def read_emission_factors(file):
@@ -36,7 +36,7 @@ class Emissions:
     from gridded FRP and areas.
     """
 
-    def __init__(self, time, FRP, F, area, emission_factors_file):
+    def __init__(self, time, FRP, F, area, emission_factors_file, qc_scaling_factors_file):
         """
         Initializes an Emission object.
 
@@ -76,7 +76,7 @@ class Emissions:
         self.biomass_burning = list(FRP[self.platform[0]].keys())
 
         self.set_emission_factors(emission_factors_file)
-        self.set_parameters()
+        self.set_parameters(qc_scaling_factors_file)
         self.set_grid()
 
     def set_grid(self):
@@ -106,120 +106,66 @@ class Emissions:
         self.emission_factors_file = emission_factors_file
         self._EF = read_emission_factors(emission_factors_file)
 
-    def set_parameters(self):
+    def set_parameters(self, qc_scaling_factors_file):
         """
         Set parameters used in the calculation of emissions,
         including combustion rate, satellite factors, etc.
         """
-
+        
+        qc_scaling = cli_utils.read_config(qc_scaling_factors_file)
+        
         # Combustion rate constant (ECMWF Tech Memo 596).
         # It could be biome-dependent in case we want to tinker
         # with the A-M emission factors
-        Alpha = 1.37e-6  # kg(dry mater)/J
-
+        Alpha = qc_scaling['Alpha']  # kg(dry mater)/J
+        
         # enhancement factors for species contributing to AOD
         AEROSOL_SPECIES = ('oc', 'bc', 'so2', 'nh3', 'pm25', 'tpm')
-        enhance_aerosol_C5 = {
-            'tropical_forest': 2.5,
-            'extratropical_forest': 4.5,
-            'savanna': 1.8,
-            'grassland': 1.8,
-        }
 
+        # enhancement factors for species contributing to AOD
+        enhance_aerosol = qc_scaling['enhance_aerosol_factor']
         # enhancement factors for non-aerosol species
-        enhance_gas_C5 = {
-            'tropical_forest': 1.0,
-            'extratropical_forest': 1.0,
-            'savanna': 1.0,
-            'grassland': 1.0,
-        }
-
-        # scaling of C6 based on C5 (based on OC tuning)
-        alpha_C6 = {
-            'MODIS_TERRA': 0.96450253,
-            'tropical_forest': 1.09728882,
-            'extratropical_forest': 1.12014982,
-            'savanna': 1.22951496,
-            'grassland': 1.21702972,
-        }
-
-        enhance_aerosol_C6 = {
-            b: (v * alpha_C6[b]) for b, v in enhance_aerosol_C5.items()
-        }
-
-        enhance_gas_C6 = {
-            b: (v * alpha_C6[b]) for b, v in enhance_gas_C5.items()
-        }
+        enhance_gas = qc_scaling['enhance_gas_factor']        
 
         # effective combustion rate
         self._A_f = {}
-
         self._A_f[(Instrument.MODIS, Satellite.TERRA)] = {}
         self._A_f[(Instrument.MODIS, Satellite.AQUA)] = {}
-        for s in self._EF.keys():
-            if s in AEROSOL_SPECIES:
-                enhance_factor = enhance_aerosol_C6
-            else:
-                enhance_factor = enhance_gas_C6
-
-            self._A_f[(Instrument.MODIS, Satellite.TERRA)][s] = {
-                b: (Alpha * v) for (b, v) in enhance_factor.items()
-            }
-
-            self._A_f[(Instrument.MODIS, Satellite.AQUA)][s] = {
-                b: (Alpha * v) for (b, v) in enhance_factor.items()
-            }
-
-        alpha_JPSS2 = {
-            'tropical_forest': 1.524*0.40, # 1.524: [1.300, 1.865]
-            'extratropical_forest': 0.640*1.46, # 0.640: [0.485, 0.771]
-            'savanna': 1.224*0.79, # 1.224: [1.075, 1.323]
-            'grassland': 0.830*1.05, # 0.830: [0.770, 0.934]
-        }
-
-        alpha_JPSS1 = {
-            'tropical_forest': 1.524*0.40, # 1.524: [1.300, 1.865]
-            'extratropical_forest': 0.640*1.46, # 0.640: [0.485, 0.771]
-            'savanna': 1.224*0.79, # 1.224: [1.075, 1.323]
-            'grassland': 0.830*1.05, # 0.830: [0.770, 0.934]
-        }
-        alpha_NPP = {
-            'tropical_forest': 1.435*0.40, # 1.435: [1.114, 1.800]
-            'extratropical_forest': 0.685*1.46, # 0.685: [0.485, 0.813]
-            'savanna': 1.147*0.79, # 1.147: [1.055, 1.290]
-            'grassland': 0.878*1.05, # 0.878: [0.776, 0.977]
-        }
         self._A_f[(Instrument.VIIRS, Satellite.JPSS1)] = {}
         self._A_f[(Instrument.VIIRS, Satellite.JPSS2)] = {}
         self._A_f[(Instrument.VIIRS, Satellite.NPP)] = {}
+  
         for s in self._EF.keys():
             if s in AEROSOL_SPECIES:
-                enhance_factor = enhance_aerosol_C5
+                enhance_factor = enhance_aerosol
             else:
-                enhance_factor = enhance_gas_C5
+                enhance_factor = enhance_gas
+
+            self._A_f[(Instrument.MODIS, Satellite.TERRA)][s] = {
+                b: (qc_scaling['modis/aqua'][b] * Alpha * v) for (b, v) in enhance_factor.items()
+            }
+
+            self._A_f[(Instrument.MODIS, Satellite.AQUA)][s] = {
+                b: (qc_scaling['modis/terra'][b] * Alpha * v) for (b, v) in enhance_factor.items()
+            }
 
             self._A_f[(Instrument.VIIRS, Satellite.JPSS2)][s] = {
-                b: (Alpha * v * alpha_JPSS2[b]) for (b, v) in enhance_factor.items()
+                b: (qc_scaling['viirs/jpss-2'][b] * Alpha * v) for (b, v) in enhance_factor.items()
             }
             self._A_f[(Instrument.VIIRS, Satellite.JPSS1)][s] = {
-                b: (Alpha * v * alpha_JPSS1[b]) for (b, v) in enhance_factor.items()
+                b: (qc_scaling['viirs/jpss-1'][b] * Alpha * v) for (b, v) in enhance_factor.items()
             }
             self._A_f[(Instrument.VIIRS, Satellite.NPP)][s] = {
-                b: (Alpha * v * alpha_NPP[b]) for (b, v) in enhance_factor.items()
+                b: (qc_scaling['viirs/npp'][b] * Alpha * v ) for (b, v) in enhance_factor.items()
             }
 
-        # satellite factors
         self._S_f = {}
-        self._S_f['MODIS_TERRA'] = (
-            1.385 * alpha_C6['MODIS_TERRA']
-        )  # C6 scaling based on C5 above
-        self._S_f['MODIS_AQUA'] = 0.473
+        self._S_f[(Instrument.MODIS, Satellite.TERRA)] = qc_scaling['satscale']['modis/terra']
+        self._S_f[(Instrument.MODIS, Satellite.AQUA)]  = qc_scaling['satscale']['modis/aqua']
+        self._S_f[(Instrument.VIIRS, Satellite.JPSS2)] = qc_scaling['satscale']['viirs/jpss-2']
+        self._S_f[(Instrument.VIIRS, Satellite.JPSS1)] = qc_scaling['satscale']['viirs/jpss-1']
+        self._S_f[(Instrument.VIIRS, Satellite.NPP)]   = qc_scaling['satscale']['viirs/npp']
 
-        self._S_f[(Instrument.MODIS, Satellite.TERRA)] = self._S_f['MODIS_TERRA']
-        self._S_f[(Instrument.MODIS, Satellite.AQUA)] = self._S_f['MODIS_AQUA']
-        self._S_f[(Instrument.VIIRS, Satellite.JPSS2)] = 0.49 #0.384  # TODO: TBD
-        self._S_f[(Instrument.VIIRS, Satellite.JPSS1)] = 0.49 #0.384  # TODO: TBD
-        self._S_f[(Instrument.VIIRS, Satellite.NPP)] = 0.54   #0.384    # TODO: TBD
 
     def emission_factor(self, species, fire):
         """

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- Added the `alpha_factor.yaml` to save all the emission coefficient related parameter [25-10-02]
 - Added the `config_NRT.yaml` adapted for the the l3b [2025-09-23]
 - Added the bug fixed `frpscaling.py` [2025-09-23]
 - Added the background e-folding time into the global attribute [2025-09-23]
@@ -37,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	
 ### Changed 
 
+- Modified the `set_parameters` in `emissions.py` [25-10-02]
 - Modified the `qfed_l3b.py`, `emission.py`, `instruments.py`, and `cli_utils.py` to save the FRP density forecast per sensor [2025-09-23]
 - Streamlined process() preamble for forecast backgrounds [2025-09-18]
   - Background FRP density loading replaced with a small helper `load_frp_density` that prefers today’s forecast combined file, else zeros
@@ -50,7 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed 
 
-- removeD the commented line made during the developments [2025-09-04]
+- Removed the emission coefficient related parameters in `qcscalingfactor.yaml` [25-10-02]
+- removed the commented line made during the developments [2025-09-04]
 
 ### Deprecated 
 

@@ -193,6 +193,7 @@ def process(
     obs_system,
     fcs_bkg,
     emission_factors_file,
+    alpha_factor_file,
     species,
     ndays,
     compress,
@@ -246,7 +247,7 @@ def process(
     out_path = cli_utils.get_path(output_file, timestamp=time)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    emissions = Emissions(time, frp, frp_density, area, emission_factors_file)
+    emissions = Emissions(time, frp, frp_density, area, emission_factors_file, alpha_factor_file)
     emissions.calculate(species, dt = 1.0, tau = 3.0)
 
     # Write per-sensor FRP-FCS for tomorrow
@@ -276,7 +277,7 @@ def main():
     and a configuration file.
     """
     defaults = dict(
-        obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1'],
+        obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1', 'viirs/jpss-2'],
         fill_days=1,
         config='config.yaml',
         log_level='INFO',
@@ -291,7 +292,7 @@ def main():
 
     args = parse_arguments(defaults, VERSION)
     config = cli_utils.read_config(args.config)
-
+    
     logging.getLogger().setLevel(args.log_level)
     cli_utils.display_description(VERSION, 'QFED Level 3B - Gridded Emissions')
 
@@ -315,8 +316,12 @@ def main():
         os.path.dirname(sys.argv[0]), 'emission_factors.yaml'
     )
 
-    species = ('co2', 'oc', 'so2', 'nh3', 'bc', 'co','acet','ald2','alk4','c2h6','c3h8','ch2o','mek','no','c3h6','pm25','tpm','ch4')
+    alpha_factor_file = os.path.join(
+        os.path.dirname(sys.argv[0]), 'alpha_factor.yaml'
+    )
 
+    species = ('co2', 'oc', 'so2', 'nh3', 'bc', 'co','acet','ald2','alk4','c2h6','c3h8','ch2o','mek','no','c3h6','pm25','tpm','ch4')
+    
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
@@ -328,6 +333,7 @@ def main():
             obs,
             fcs_bkg,
             emission_factors_file,
+            alpha_factor_file,
             species,
             args.ndays,
             args.compress,
