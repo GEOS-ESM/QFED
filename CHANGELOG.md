@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	
 ### Changed 
 
+- Updated values in `alpha_factor.yaml` based new log-log regression analysis. [25-10-06]
 - Modified the `set_parameters` in `emissions.py` [25-10-02]
 - Modified the `qfed_l3b.py`, `emission.py`, `instruments.py`, and `cli_utils.py` to save the FRP density forecast per sensor [2025-09-23]
 - Streamlined process() preamble for forecast backgrounds [2025-09-18]

@@ -35,17 +35,17 @@ modis/terra:
     savanna: 1.22951496
     grassland: 1.21702972
 viirs/jpss-2:
-    tropical_forest: 0.924499806
-    extratropical_forest: 0.906563467
-    savanna: 1.093971848
-    grassland: 1.038155523
+    tropical_forest: 0.937186
+    extratropical_forest: 0.967695
+    savanna: 1.06492
+    grassland: 0.971424
 viirs/jpss-1:
-    tropical_forest: 0.944037712
-    extratropical_forest: 0.934163157
-    savanna: 1.10491351
-    grassland: 1.055897813
+    tropical_forest: 1.03882
+    extratropical_forest: 1.06094
+    savanna: 1.15763
+    grassland: 1.01706
 viirs/npp:
-    tropical_forest: 0.927354486
-    extratropical_forest: 0.911254666
-    savanna: 1.097604765
-    grassland: 1.052453394
+    tropical_forest: 1.03562
+    extratropical_forest: 1.08427
+    savanna: 1.14231
+    grassland: 1.01964

@@ -5,3 +5,27 @@ oc:
     Savanna: 3.40
     Grassland: 3.40
     crop_residue: 2.30
+modis/terra:
+    satellitefactor: 1.336
+    Tropical Forest: 2.74322205
+    Extra-tropical Forest: 5.04067419
+    Savanna: 2.21312693
+    Grassland: 2.1942535
+modis/aqua:
+    satellitefactor: 0.473
+    Tropical Forest: 2.74322205
+    Extra-tropical Forest: 5.04067419
+    Savanna: 2.21312693
+    Grassland: 2.1942535
+viirs/jpss-1:
+    satellitefactor: 0.49
+    Tropical Forest: 1.524
+    Extra-tropical Forest: 4.3398
+    Savanna: 1.740528
+    Grassland: 1.5687
+viirs/npp:
+    satellitefactor: 0.54
+    Tropical Forest: 1.435
+    Extra-tropical Forest: 4.50045
+    Savanna: 1.631034
+    Grassland: 1.65942
