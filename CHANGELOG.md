@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- Added the `analysis_frp_scaling.py` and `lib_frp_scaling.py` to for log-log FRP density regression tuning [25-10-07]
 - Added the `alpha_factor.yaml` to save all the emission coefficient related parameter [25-10-02]
 - Added the `config_NRT.yaml` adapted for the the l3b [2025-09-23]
 - Added the bug fixed `frpscaling.py` [2025-09-23]
