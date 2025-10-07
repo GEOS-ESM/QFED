@@ -36,6 +36,7 @@ lfs.base_path = '/Dedicated/jwang-data2/shared_satData/GMAO_QFED/OUTPUT/v3.2/0.1
 
 prefix = 'QFED V3.2'
 
+
 # Optional biome-specific scaling factors (dimensionless) for FRP density
 # Keys match columns in data_dict[...] (units of rho_FRP typically W·km^-2 after your 1e6 scaling)
 c6scale = {}
@@ -193,7 +194,7 @@ if plot_analysis:
             axes[idx].xaxis.set_major_formatter(mdates.DateFormatter('%b') )  # e.g., Jan 2022
 
             axes[idx].legend(frameon = False, loc = 'upper left', ncol = 2)
-            axes[idx].set_xlim(x[0] - np.timedelta64(1, 'D'), x[364]+np.timedelta64(1, 'D'))
+            axes[idx].set_xlim(start_date, end_date)
 
             axes[idx].tick_params(axis='both', which='major')
             axes[idx].tick_params(axis='both', which='minor')
