@@ -13,39 +13,31 @@ class Instrument(Enum):
 
 @unique
 class Satellite(Enum):
-    TERRA = 'terra'
-    AQUA  = 'aqua'
-
-    JPSS1 = 'jpss-1'
-    NOAA20 = 'noaa-20'
-    VJ1 = 'vj1'
-
-    JPSS2  = 'jpss-2'
-    NOAA21 = 'noaa-21'
-    VJ2 = 'vj2'
-
-    NPP = 'npp'
-    SNPP = 's-npp'
-    SuomiNPP = 'suomi-npp'
-    VNP = 'vnp'
+    MOD = 'mod' # terra
+    MYD = 'myd' # aqua
+    VJ1 = 'vj1' # NOAA20
+    VJ2 = 'vj2' # NOAA21
+    VNP = 'vnp' # SNPP
 
 # Canonical codes for variable naming
 # Map ALL satellite enum members (including aliases) to the desired short code
-canonical_instrument = {Instrument.MODIS: "modis", Instrument.VIIRS: "viirs"}
+# canonical_instrument = {Instrument.MODIS: "modis", Instrument.VIIRS: "viirs"}
 canonical_satellite  = {
-    Satellite.TERRA: "terra", Satellite.AQUA: "aqua",
-    Satellite.NPP: "npp", Satellite.SNPP: "npp", Satellite.SuomiNPP: "npp",
-    Satellite.JPSS1: "vj1", Satellite.NOAA20: "vj1",
-    Satellite.JPSS2: "vj2", Satellite.NOAA21: "vj2",
+    Satellite.MOD: "terra", 
+    Satellite.MYD: "aqua",
+    Satellite.VNP: "vnp",
+    Satellite.VJ1: "vj1", 
+    Satellite.VJ2: "vj2",
 }
 
-def sensor_code(inst: Instrument, sat: Satellite) -> str:
-    """Single tag that already implies instrument, e.g., mod14/myd14/vnp/vj1/vj2."""
-    if inst is Instrument.MODIS:
-        return "mod14" if canonical_satellite.get(sat) == "terra" else "myd14"
-    # VIIRS family
-    code = canonical_satellite.get(sat, "unknown")
-    return "vnp" if code == "npp" else code
+canonical_instrument  = {
+    'mod': 'MODIS TERRA',# terra
+    'myd': 'MODIS AQUA' ,# aqua
+    'vj1': 'VIIRS NOAA20 (JPSS1)',# NOAA20
+    'vj2': 'VIIRS NOAA21 (JPSS1)',# NOAA21
+    'vnp': 'VIIRS Suomi NPP',# SNPP
+}
+
 
 # VIIRS SDR User Guide: The bow-tie effect leads to 
 # scan-to-scan overlap, which start to show visibly at 
@@ -54,7 +46,6 @@ def sensor_code(inst: Instrument, sat: Satellite) -> str:
 # at scan angle greater than 31.72 and 44.86 degrees, 
 # respectively. 
 VIIRS_SCAN_OVERLAP_ANGLE = (19.00, 31.72, 44.86)
-
 
 def modis_pixel_area(sample):
     """

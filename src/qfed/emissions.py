@@ -14,7 +14,7 @@ import netCDF4 as nc
 
 from qfed import grid
 from qfed.instruments import Instrument, Satellite
-from qfed.instruments import canonical_satellite, canonical_instrument, sensor_code
+from qfed.instruments import canonical_satellite, canonical_instrument
 from qfed import VERSION
 from qfed import cli_utils
 import re
@@ -36,7 +36,7 @@ class Emissions:
     from gridded FRP and areas.
     """
 
-    def __init__(self, time, FRP, F, area, emission_factors_file, qc_scaling_factors_file):
+    def __init__(self, time, FRP, F, area, emission_factors_file, alpha_factor_factors_file):
         """
         Initializes an Emission object.
 
@@ -76,7 +76,7 @@ class Emissions:
         self.biomass_burning = list(FRP[self.platform[0]].keys())
 
         self.set_emission_factors(emission_factors_file)
-        self.set_parameters(qc_scaling_factors_file)
+        self.set_parameters(alpha_factor_factors_file)
         self.set_grid()
 
     def set_grid(self):
@@ -106,65 +106,48 @@ class Emissions:
         self.emission_factors_file = emission_factors_file
         self._EF = read_emission_factors(emission_factors_file)
 
-    def set_parameters(self, qc_scaling_factors_file):
+    def set_parameters(self, alpha_factors_file):
         """
         Set parameters used in the calculation of emissions,
         including combustion rate, satellite factors, etc.
         """
         
-        qc_scaling = cli_utils.read_config(qc_scaling_factors_file)
+        alpha_factor = cli_utils.read_config(alpha_factors_file)
         
         # Combustion rate constant (ECMWF Tech Memo 596).
         # It could be biome-dependent in case we want to tinker
         # with the A-M emission factors
-        Alpha = qc_scaling['Alpha']  # kg(dry mater)/J
+        Alpha = alpha_factor['Alpha']  # kg(dry mater)/J
         
         # enhancement factors for species contributing to AOD
         AEROSOL_SPECIES = ('oc', 'bc', 'so2', 'nh3', 'pm25', 'tpm')
 
         # enhancement factors for species contributing to AOD
-        enhance_aerosol = qc_scaling['enhance_aerosol_factor']
+        enhance_aerosol = alpha_factor['enhance_aerosol_factor']
         # enhancement factors for non-aerosol species
-        enhance_gas = qc_scaling['enhance_gas_factor']        
+        enhance_gas = alpha_factor['enhance_gas_factor']        
 
         # effective combustion rate
         self._A_f = {}
-        self._A_f[(Instrument.MODIS, Satellite.TERRA)] = {}
-        self._A_f[(Instrument.MODIS, Satellite.AQUA)] = {}
-        self._A_f[(Instrument.VIIRS, Satellite.JPSS1)] = {}
-        self._A_f[(Instrument.VIIRS, Satellite.JPSS2)] = {}
-        self._A_f[(Instrument.VIIRS, Satellite.NPP)] = {}
-  
+        for platform in canonical_satellite.keys():
+            self._A_f[platform] = {}
+          
         for s in self._EF.keys():
             if s in AEROSOL_SPECIES:
                 enhance_factor = enhance_aerosol
             else:
                 enhance_factor = enhance_gas
+            
+            for platform in canonical_satellite.keys():
+                self._A_f[platform][s] = {
+                    b: (alpha_factor[platform.value][b] * Alpha * v) for (b, v) in enhance_factor.items()
+                }
+            
 
-            self._A_f[(Instrument.MODIS, Satellite.TERRA)][s] = {
-                b: (qc_scaling['modis/aqua'][b] * Alpha * v) for (b, v) in enhance_factor.items()
-            }
-
-            self._A_f[(Instrument.MODIS, Satellite.AQUA)][s] = {
-                b: (qc_scaling['modis/terra'][b] * Alpha * v) for (b, v) in enhance_factor.items()
-            }
-
-            self._A_f[(Instrument.VIIRS, Satellite.JPSS2)][s] = {
-                b: (qc_scaling['viirs/jpss-2'][b] * Alpha * v) for (b, v) in enhance_factor.items()
-            }
-            self._A_f[(Instrument.VIIRS, Satellite.JPSS1)][s] = {
-                b: (qc_scaling['viirs/jpss-1'][b] * Alpha * v) for (b, v) in enhance_factor.items()
-            }
-            self._A_f[(Instrument.VIIRS, Satellite.NPP)][s] = {
-                b: (qc_scaling['viirs/npp'][b] * Alpha * v ) for (b, v) in enhance_factor.items()
-            }
 
         self._S_f = {}
-        self._S_f[(Instrument.MODIS, Satellite.TERRA)] = qc_scaling['satscale']['modis/terra']
-        self._S_f[(Instrument.MODIS, Satellite.AQUA)]  = qc_scaling['satscale']['modis/aqua']
-        self._S_f[(Instrument.VIIRS, Satellite.JPSS2)] = qc_scaling['satscale']['viirs/jpss-2']
-        self._S_f[(Instrument.VIIRS, Satellite.JPSS1)] = qc_scaling['satscale']['viirs/jpss-1']
-        self._S_f[(Instrument.VIIRS, Satellite.NPP)]   = qc_scaling['satscale']['viirs/npp']
+        for platform in canonical_satellite.keys():
+            self._S_f[platform] = alpha_factor['satscale'][platform.value]
 
 
     def emission_factor(self, species, fire):
@@ -295,31 +278,37 @@ class Emissions:
 
         return result
 
-    # helper function to add the l3a source 
-    def _platform_label(self, inst_enum, sat_enum):
-        inst_label = canonical_instrument.get(inst_enum, inst_enum.value.lower())
-        sat_label  = canonical_satellite.get(sat_enum,  sat_enum.value.lower())
-        return inst_label, sat_label, f"{inst_label}/{sat_label}"
 
-    def _save_as_netcdf4(self, file, doi, compress=False, fill_value=1e15, diskless=False):
-        """
-        Saves gridded emissions to a file.
-        """
-        
+    def _get_satellite_labels(self, number_of_l1b_file):
         platforms = list(self.F.keys())
         platform_labels = set()
         for platform in platforms:
             try:
-                inst_enum, sat_enum = platform
-                inst_label, sat_label, label = self._platform_label(inst_enum, sat_enum)
-                platform_labels.add(label)
+                label = canonical_instrument[platform.value]
+                num_files = number_of_l1b_file[platform]
+                
+                if num_files>0:
+                    num_files = f'{num_files}'
+                else:
+                    num_files = f'No Observational Data Available'
+
+                platform_labels.add(f'{label} ({num_files})')
             except Exception:
-                logging.warning(f"Platform key is not (Instrument, Satellite): {platform!r}; skipping.")
+                logging.warning(f"Platform key is not Satellite: {platform!r}; skipping.")
                 continue
+        return platform_labels
+        
+
+    def _save_as_netcdf4(self, file, number_of_l1b_file, doi, compress=False, fill_value=1e15, diskless=False):
+        """
+        Saves gridded emissions to a file.
+        """
+     
+        
 
         # map species to output files
         self.file = {
-            species: file.format(species=species.lower())
+            species: file.format(species=species.lower(), version = f'v{VERSION.replace(".", "_")}')
             for species in self.estimate.keys()
         }
 
@@ -353,7 +342,7 @@ class Emissions:
             f.title = 'Quick Fire Emissions Dataset (QFED) Level 3 Gridded Emissions (v{0:s})'.format(VERSION)
             f.contact = 'qfed@lists.nasa.gov'
             f.VersionID = VERSION
-            f.source = ', '.join(sorted(platform_labels))
+            f.source = 'NASA/GSFC/GMAO GEOS Aerosol Group'
             f.history = ''
             f.ShortName = 'QFED_EMIS' + '_X' + str(self.im) + 'Y' + str(self.jm)
             f.LongName = 'QFED Daily Level 3 Emissions at ' + str(360/self.im) + 'x' + str(np.round(180/self.jm,3)) + ' Degrees'
@@ -373,9 +362,10 @@ class Emissions:
             f.SouthernmostLatitude=str(self.lat[0])
             f.NorthernmostLatitude=str(self.lat[len(self.lat)-1])
             f.WesternmostLongitude=str(self.lon[0])
-            f.EasternmostLongitude=str(self.lon[len(self.lon)-1])   
+            f.EasternmostLongitude=str(self.lon[len(self.lon)-1])
+            f.satellite = ', '.join(sorted(self._get_satellite_labels(number_of_l1b_file)))
+            f.e_folding_time = f"{self.tau} days"  
             f.RelatedURL = 'https://gmao.gsfc.nasa.gov/GMAO_products/qfed'    
-            f.e_folding_time = f"{self.tau} days"
               
             # dimensions
             f.createDimension('lon', len(self.lon))
@@ -446,34 +436,17 @@ class Emissions:
             logging.info(f"Successfully saved gridded emissions to file '{file}'.")
             
 
-    def _materialize_sensor_path(self, tmpl_or_dict, inst_enum, sat_enum):
-        # Allow dict mapping or a single template string
-        if isinstance(tmpl_or_dict, dict):
-            return tmpl_or_dict.get((inst_enum, sat_enum))
-        tmpl = str(tmpl_or_dict)
-        sat_tag = sensor_code(inst_enum, sat_enum)
-        if "{sat}" in tmpl:
-            return tmpl.format(sat=sat_tag)
-        root, ext = os.path.splitext(tmpl)
-        return f"{root}.{sat_tag}{ext or '.nc4'}"
-
-    def _canon_labels(inst_enum, sat_enum):
-        return (
-            canonical_instrument.get(inst_enum, inst_enum.value.lower()),
-            canonical_satellite.get(sat_enum,  sat_enum.value.lower()),
-        )
-
-    def _write_one_sensor_file(self, out_file, inst_enum, sat_enum, per_bb, compress, fill_value, diskless):
+    def _write_one_sensor_file(self, out_file, sat_enum, per_bb, compress, fill_value, diskless):
         os.makedirs(os.path.dirname(out_file), exist_ok=True)
         f = nc.Dataset(out_file, "w", format="NETCDF4", diskless=diskless)
 
-        # ---- globals (mirror your style) ----
+        # ---- globals ----
         f.institution  = 'NASA/GSFC, Global Modeling and Assimilation Office'
         f.title        = f'QFED Level 3 FRP Density Forecast (v{VERSION})'
         f.contact      = 'qfed@lists.nasa.gov'
         f.VersionID    = VERSION
         f.history      = ''
-        f.ShortName    = 'QFED_FRP_F' + '_X' + str(self.im) + 'Y' + str(self.jm)
+        f.ShortName    = 'QFED_FRP_FCST' + '_X' + str(self.im) + 'Y' + str(self.jm)
         f.LongName     = 'QFED Daily Level 3 FRP Density Forecast at ' + f"{360/self.im}x{np.round(180/self.jm,3)} Degrees"
         f.GranuleID    = os.path.basename(out_file)
         f.Format       = 'NetCDF-4'
@@ -491,8 +464,9 @@ class Emissions:
         f.RelatedURL         = 'https://gmao.gsfc.nasa.gov/GMAO_products/qfed'
         f.ProductionDateTime = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Optional single-code provenance (you said instrument label not needed)
-        f.source = sensor_code(inst_enum, sat_enum)  # e.g., vj2/vj1/vnp/mod14/myd14
+        # Optional single-code provenance
+        f.source = 'NASA/GSFC/GMAO Aerosol Group'
+        f.satellite = canonical_instrument[sat_enum.value]
         f.e_folding_time = f"{self.tau} days"
 
         # ---- dims/coords ----
@@ -544,19 +518,15 @@ class Emissions:
             return
 
         for platform, per_bb in F.items():
+            
             try:
-                inst_enum, sat_enum = platform
+                out_file =l3a_density_out[platform]
             except Exception:
-                logging.warning(f"Bad platform key: {platform!r}; skipping.")
+                logging.warning(f"No output path for {platform.name}; skipping.")
                 continue
-
-            out_file = self._materialize_sensor_path(l3a_density_out, inst_enum, sat_enum)
-            if not out_file:
-                logging.warning(f"No output path for {inst_enum.name}/{sat_enum.name}; skipping.")
-                continue
-
+            
             self._write_one_sensor_file(
-                out_file, inst_enum, sat_enum, per_bb,
+                out_file, platform, per_bb,
                 compress=compress, fill_value=fill_value, diskless=diskless
             )
             logging.info(f"Saved FRP-FCS to {out_file}")
@@ -581,6 +551,7 @@ class Emissions:
     def save(
         self,
         file,
+        number_of_l1b_file,
         doi,
         ndays=1,
         compress=False,
@@ -613,7 +584,7 @@ class Emissions:
         """
         # Save emission files for current and future days
         for n in range(ndays):
-            self._save_as_netcdf4(file, doi, compress in (True,), fill_value, diskless)
+            self._save_as_netcdf4(file, number_of_l1b_file, doi, compress in (True,), fill_value, diskless)
 
             if compress == 'n4zip':
                 self.compress_n4zip()

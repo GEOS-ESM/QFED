@@ -35,10 +35,10 @@ def parse_arguments(default, version):
             '''
             examples:
               process single date of MODIS and VIIRS fire observations
-              $ %(prog)s --obs modis/aqua modis/terra viirs/npp viirs/jpss-1 2021-08-21
+              $ %(prog)s --obs mod myd vnp vj1 vj2 2021-08-21
 
               process several months of VIIRS/JPSS1 fire observations and compress the output files
-              $ %(prog)s --obs viirs/jpss-1 --compress 2020-08-01 2021-04-01
+              $ %(prog)s --obs vj1 --compress 2020-08-01 2021-04-01
             '''
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -66,8 +66,12 @@ def parse_arguments(default, version):
         metavar='platform',
         dest='obs',
         default=default['obs'],
-        choices=('modis/terra', 'modis/aqua', 'viirs/npp', 'viirs/jpss-1', 'viirs/jpss-2'),
-        help='fire observing system (default: %(default)s)',
+        choices=('mod', 'myd', 'vnp', 'vj1', 'vj2'),
+        help=("Fire observing system(s). Accepts short or long names: "
+              "mod|modis/terra, myd|modis/aqua, "
+              "vnp|viirs/npp or s-npp"
+              "vj1|viirs/jpss-1 or noaa-20, "
+              "vj2|viirs/jpss-2 or noaa-21"),
     )
 
     parser.add_argument(
@@ -134,6 +138,7 @@ def process(
     output,
     obs_system,
     igbp,
+    version,
     watermask,
     compress,
     dry_run,
@@ -141,40 +146,41 @@ def process(
     """
     Processes single timestamped time interval.
     """
-    for component in obs_system.keys():
-        instrument, satellite = component.split('/')
-        platform = Instrument(instrument), Satellite(satellite)
+    for satellite in obs_system.keys():
 
+        platform = Satellite(satellite) #Instrument(instrument)
+        
         # input files
-        gp_file = cli_utils.get_path(obs_system[component]['geolocation']['file'])
-        fp_file = cli_utils.get_path(obs_system[component]['fires']['file'])
-
+        gp_file = cli_utils.get_path(obs_system[satellite]['geolocation']['file'])
+        fp_file = cli_utils.get_path(obs_system[satellite]['fires']['file'])
+        
         vg_dir = igbp
 
         # output file
-        output_file =cli_utils.get_path(output[component]['file'], timestamp)
+        output_file = cli_utils.get_path(output[satellite], timestamp=timestamp, 
+                                         version=version, sat=satellite)
+
+      
         output_dir = os.path.dirname(output_file)
         os.makedirs(output_dir, exist_ok=True)
 
         # product readers
         finder = Finder(gp_file, fp_file, vg_dir)
-        gp_reader = geolocation_products.create(*platform)
-        fp_reader = fire_products.create(*platform)
-        cp_reader = classification_products.create(*platform)
+        gp_reader = geolocation_products.create(platform)
+        fp_reader = fire_products.create(platform)
+        cp_reader = classification_products.create(platform)
 
         cp_reader.set_auxiliary(watermask=watermask)
 
         # generate gridded FRP and areas
-        frp = GriddedFRP(component, output_grid, finder, gp_reader, fp_reader, cp_reader)
+        frp = GriddedFRP(satellite, output_grid, finder, gp_reader, fp_reader, cp_reader)
         frp.ingest(t_start, t_end)
         frp.save(
             output_file,
             timestamp,
             qc=True,
             compress=compress,
-            source=f'{instrument}/{satellite}'.upper(),
-            instrument=instrument.upper(),
-            satellite=satellite.upper(),
+            satellite=satellite,
             fill_value=1e20,
             diskless=dry_run,
         )
@@ -186,7 +192,7 @@ def main():
     and a configuration file.
     """
     defaults = dict(
-        obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1'],
+        obs=['mod', 'myd', 'vnp', 'vj1', 'vj2'],
         config='config.yaml',
         log_level='INFO',
     )
@@ -216,17 +222,20 @@ def main():
     output_grid = grid.Grid(resolution)
 
     watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
+
     igbp = config['qfed']['with']['igbp']
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
     output = {
-        platform: config['qfed']['output']['frp'][platform] for platform in args.obs
+        platform: config['qfed']['output']['frp']['file'] for platform in args.obs
     }
-
+    
+    version = f'v{VERSION.replace(".", "_")}'
+    
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
-
+	
     for t_start, t_end, timestamp in intervals:
         process(
             t_start,
@@ -236,6 +245,7 @@ def main():
             output,
             obs,
             igbp,
+            version,
             watermask,
             args.compress,
             args.dry_run,

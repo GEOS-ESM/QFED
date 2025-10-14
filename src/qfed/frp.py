@@ -426,18 +426,23 @@ class GriddedFRP:
 
         # find the input files and process the data
         input_data = self._finder.find(t_start, t_end)
+        
+        
         for i in input_data:
             self._igbp_dir = i.vegetation
             self._process(i.geolocation, i.fire)
-
+            
         # store n_files as a class attribute during ingest, so it’s available when writing:
         self.n_input_files = len(input_data)
-
+        
+        for bb, frp in self.frp.items():
+            biome = bb.type.value
+            print(biome, np.nanmax(frp), np.nanmin(frp))
+        
     def save(
         self,
         file,
         timestamp,
-        instrument='',
         satellite='',
         source='',
         qc=True,
@@ -510,7 +515,6 @@ class GriddedFRP:
         self._save_as_netcdf4(
             file,
             timestamp,
-            instrument,
             satellite,
             source,
             compress,
@@ -522,7 +526,6 @@ class GriddedFRP:
         self,
         file,
         timestamp,
-        instrument='',
         satellite='',
         source='',
         compress=False,
@@ -543,9 +546,8 @@ class GriddedFRP:
         f.title = f"QFED Gridded FRP (Level-3A, v{VERSION})"
         f.contact = "http://gmao.gsfc.nasa.gov"
         f.version = VERSION
-        f.source = f"{source}"
-        f.instrument = f"{instrument}"
-        f.satellite = f"{satellite}"
+        f.source = 'NASA/GSFC/GMAO Aerosol Group'
+        f.satellite = instruments.canonical_instrument[satellite]
         f.processed = str(datetime.now())
         f.history = ""
 
@@ -618,8 +620,8 @@ class GriddedFRP:
             v.units = _u
             v.missing_value = np.array(fill_value, np.float32)
             v.fmissing_value = np.array(fill_value, np.float32)
-            v.vmin = np.array(fill_value, np.float32)
-            v.vmax = np.array(fill_value, np.float32)
+#             v.vmin = np.array(fill_value, np.float32)
+#             v.vmax = np.array(fill_value, np.float32)
 
         # data
         f.variables['time'][:] = np.array((0,))
@@ -637,8 +639,12 @@ class GriddedFRP:
             f.variables[f'frp_{biome}'][0, :, :] = np.transpose(frp)
 
         # number of input files used
-        f.setncattr("number_of_input_files", self.n_input_files)
-
+        if self.n_input_files > 0:
+            f.setncattr("number_of_input_files", int(self.n_input_files))
+            f.setncattr("comment", ' ')
+        else:
+            f.setncattr("number_of_input_files", int(self.n_input_files))
+            f.setncattr("comment", 'No Observational Data Available')
         f.close()
         logging.info(f"Successfully saved gridded FRP and areas to file '{file}'.\n\n")
 
@@ -658,13 +664,3 @@ def _binareas(lon, lat, area, im, jm, grid_type):
         raise NotImplementedError("Data binning does not support this type of grid.")
 
     return result
-
-
-
-
-
-
-
-
-
-

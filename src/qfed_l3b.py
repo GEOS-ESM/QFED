@@ -19,7 +19,7 @@ import xarray as xr
 
 from qfed import cli_utils
 from qfed import grid
-from qfed.instruments import Instrument, Satellite, sensor_code
+from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
 from qfed import fire
 from qfed import VERSION
@@ -36,13 +36,13 @@ def parse_arguments(default, version):
             '''
             examples:
               generate emissions for a single date using MODIS and VIIRS L3A data
-              $ %(prog)s --obs modis/aqua modis/terra viirs/npp viirs/jpss-1 2021-08-21
+              $ %(prog)s --obs mod myd vnp vj1 vj2 2021-08-21
 
               generate and persist emissions for 7 consecutive days
-              $ %(prog)s --obs viirs/jpss-1 --ndays 7 2021-08-21
+              $ %(prog)s --obs vj1 --ndays 7 2021-08-21
 
               generate emissions for several months of VIIRS/JPSS1 L3A data and compress the output files
-              $ %(prog)s --obs viirs/jpss-1 --compress 2020-08-01 2021-04-01
+              $ %(prog)s --obs vj1 --compress 2020-08-01 2021-04-01
             '''
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -70,8 +70,12 @@ def parse_arguments(default, version):
         metavar='platform',
         dest='obs',
         default=default['obs'],
-        choices=('modis/terra', 'modis/aqua', 'viirs/npp', 'viirs/jpss-1', 'viirs/jpss-2'),
-        help='fire observing system (default: %(default)s)',
+        choices=('mod', 'myd', 'vnp', 'vj1', 'vj2'),
+        help=("Fire observing system(s). Accepts short or long names: "
+              "mod|modis/terra, myd|modis/aqua, "
+              "vnp|viirs/npp or s-npp"
+              "vj1|viirs/jpss-1 or noaa-20, "
+              "vj2|viirs/jpss-2 or noaa-21"),
     )
 
     parser.add_argument(
@@ -164,8 +168,7 @@ def load_frp_density(
     logging,
     use_forecast: bool = True,
 ) -> dict:
-    """Read today's per-sensor FRP-FCS file (vars: fb_{biome}); else zeros."""
-    inst_enum, sat_enum = platform
+    """Read today's per-sensor FRP-FCST file (vars: fb_{biome}); else zeros."""
     if not use_forecast or not (fcs_this_l3a_file and os.path.exists(fcs_this_l3a_file)):
         return {bb: np.zeros_like(frp[platform][bb]) for bb in fire.BIOMASS_BURNING}
 
@@ -204,33 +207,48 @@ def process(
     area = {}
     frp_density = {}
     l3a_files = {}
-
+    number_of_l1b_file = {}
     # Iterate platforms
-    for component in obs_system:
-        instrument, satellite = component.split("/")
-        platform = (Instrument(instrument), Satellite(satellite))
-        inst_enum, sat_enum = platform
-        sat_tag = sensor_code(inst_enum, sat_enum)  # mod14/myd14/vnp/vj1/vj2
-
+    for satellite in obs_system.keys():
+    
+        platform = Satellite(satellite) #Instrument(instrument)
         # Current-day per-platform L3A (observations)
-        search_path = cli_utils.get_path(obs_system[component]['file'], timestamp=time)
+        search_path = cli_utils.get_path(obs_system[satellite]['file'], 
+                                         timestamp=time, 
+                                         sat=satellite, 
+                                         version = f'v{VERSION.replace(".", "_")}')
+
         logging.debug(f"Searching for L3A '{os.path.basename(search_path)}' in '{os.path.dirname(search_path)}'")
         l3a_file = search(search_path, logging)
         if not l3a_file:
-            continue
+            logging.warning(f"Failed to find '{os.path.basename(search_path)}'; using zeros.")
 
-        logging.info(f"Reading L3A '{os.path.basename(l3a_file)}'")
-        l3a_files[platform] = l3a_file
+            im = output_grid.dimensions()['x']
+            jm = output_grid.dimensions()['y']
+            
+            area[platform] = {v: np.ones((im, jm)) for v in ('land', 'water', 'cloud', 'unknown')}
+            frp[platform]  = {bb: np.zeros((im, jm)) for bb in fire.BIOMASS_BURNING}
+            number_of_l1b_file[platform] = 0
+            
+        else:
+            logging.info(f"Reading L3A '{os.path.basename(l3a_file)}'")
+            l3a_files[platform] = l3a_file
 
-        ds = xr.open_dataset(l3a_file)
-        area[platform] = {v: ds[v][0, :, :].values.T for v in ('land', 'water', 'cloud', 'unknown')}
-        frp[platform] = {bb: ds[f'frp_{bb.type.value}'][0, :, :].values.T for bb in fire.BIOMASS_BURNING}
-        ds.close()
+            ds = xr.open_dataset(l3a_file)
+            area[platform] = {v: ds[v][0, :, :].values.T for v in ('land', 'water', 'cloud', 'unknown')}
+            frp[platform] = {bb: ds[f'frp_{bb.type.value}'][0, :, :].values.T for bb in fire.BIOMASS_BURNING}
+            number_of_l1b_file[platform] = ds.number_of_input_files
+        
+            ds.close()
 
         # Today's FRP-FCS (per sensor): format with {sat}
         fcs_this_l3a_file = None
+        
         if fcs_bkg is not None:
-            today_path = cli_utils.get_path(fcs_bkg["file"], timestamp=time-timedelta(days=1), sat=sat_tag)
+            today_path = cli_utils.get_path(fcs_bkg["file"], 
+                             timestamp=time-timedelta(days=1), 
+                             sat=satellite, 
+                             version = f'v{VERSION.replace(".", "_")}')
             fcs_this_l3a_file = search(today_path, logging)
 
         # Background (forecast or zeros)
@@ -246,7 +264,6 @@ def process(
     # Emissions & outputs
     out_path = cli_utils.get_path(output_file, timestamp=time)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-
     emissions = Emissions(time, frp, frp_density, area, emission_factors_file, alpha_factor_file)
     emissions.calculate(species, dt = 1.0, tau = 3.0)
 
@@ -254,9 +271,10 @@ def process(
     if fcs_bkg is not None:
         fcs_out_map = {}
         for platform in frp.keys():
-            inst_enum, sat_enum = platform
-            sat_tag = sensor_code(inst_enum, sat_enum)
-            tomorrow_path = cli_utils.get_path(fcs_bkg["file"], timestamp=time, sat=sat_tag)
+            tomorrow_path = cli_utils.get_path(fcs_bkg["file"], 
+                                timestamp=time, 
+                                sat=platform.value, 
+                                version = f'v{VERSION.replace(".", "_")}')
             os.makedirs(os.path.dirname(tomorrow_path), exist_ok=True)
             fcs_out_map[platform] = tomorrow_path
 
@@ -264,6 +282,7 @@ def process(
 
     emissions.save(
         out_path,
+        number_of_l1b_file,
         doi,
         ndays=ndays,
         compress=compress,
@@ -277,7 +296,7 @@ def main():
     and a configuration file.
     """
     defaults = dict(
-        obs=['modis/aqua', 'modis/terra', 'viirs/npp', 'viirs/jpss-1', 'viirs/jpss-2'],
+        obs=['mod', 'myd', 'vnp', 'vj1', 'vj2'],
         fill_days=1,
         config='config.yaml',
         log_level='INFO',
@@ -307,9 +326,13 @@ def main():
 
     output_grid = grid.Grid(resolution)
 
-    obs = {platform: config['qfed']['output']['frp'][platform] for platform in args.obs}
+
+    obs = {platform: config['qfed']['output']['frp'] for platform in args.obs}
+    
     fcs_bkg = config['qfed']['output']['frp_fcs']
+    
     output_file = config['qfed']['output']['emissions']['file']
+    
     doi = config['qfed']['output']['emissions']['doi']
 
     emission_factors_file = os.path.join(

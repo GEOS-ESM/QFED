@@ -24,19 +24,26 @@ def read_config(config):
 
 def get_path(path, timestamp=None, **fmt):
     """
-    Generate a path and optionally evaluate a templated path at a specific time.
-    Supports positional time placeholder {0:%Y%m%d} and named placeholders (e.g., {sat}).
+    Generate a full path by resolving time-based and named placeholders.
+    - Step 1: resolve time-based placeholders like {0:%Y%m%d}
+    - Step 2: resolve named placeholders like {version} (escaped in YAML as {{version}})
     """
     parts = path if isinstance(path, list) else [path]
     out = []
+
     for atom in parts:
-        if timestamp is not None:
-            # Provide the positional arg (index 0) *and* any named args
-            s = atom.format(timestamp, **fmt)
-        else:
-            # Named-only formatting if needed (extra kwargs are harmless)
-            s = atom.format(**fmt) if fmt else atom
+        # First resolve datetime placeholders
+        s = atom.format(timestamp) if timestamp is not None else atom
+
+        # Then resolve named placeholders like {version}, {sat}, etc.
+        if fmt:
+            try:
+                s = s.format(**fmt)
+            except KeyError as e:
+                print(f" - WARNING: Missing key for format: {e} in '{s}'")
+
         out.append(s)
+
     return os.path.join(*out)
 
 

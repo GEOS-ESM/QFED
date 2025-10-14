@@ -199,34 +199,19 @@ class VIIRS_JPSS(VIIRS):
         return result
 
 
-
-def create(instrument, satellite):
+def create(satellite):
     '''
     Active fire product factory.
     '''
-
-    if instrument == Instrument.MODIS and \
-       satellite in (Satellite.AQUA, Satellite.TERRA):
+    
+    if satellite in (Satellite.MOD, Satellite.MYD):
         engine = DatasetAccessEngine_HDF4()
         return MODIS(engine)
 
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.JPSS2, Satellite.NOAA21):
+    if satellite in (Satellite.VJ1, Satellite.VJ2, Satellite.VNP):
         engine = DatasetAccessEngine_NetCDF4()
         return VIIRS_JPSS(engine)
-
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.JPSS1, Satellite.NOAA20):
-        engine = DatasetAccessEngine_NetCDF4()
-        return VIIRS_JPSS(engine)
-
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
-        engine = DatasetAccessEngine_NetCDF4()
-        return VIIRS_NPP(engine)
 
     msg = ("Unrecognized satellite observing system platform: "
            "{0:s} on board of {1:s}.".format(instrument, satellite))
     raise ValueError(msg)
-
-

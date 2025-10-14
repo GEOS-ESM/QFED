@@ -211,30 +211,24 @@ class VIIRS_JPSS(GeolocationProduct):
 
 
 
-def create(instrument, satellite, NPPv1=False):
+def create(satellite, NPPv1=False):
     '''
     Geolocation product reader factory.
     '''
-
-    if instrument == Instrument.MODIS and \
-       satellite in (Satellite.AQUA, Satellite.TERRA):
+    
+    if satellite in (Satellite.MOD, Satellite.MYD):
         return MODIS()
 
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.JPSS2, Satellite.NOAA21):
+    if satellite in (Satellite.VJ1, Satellite.VJ2):
         return VIIRS_JPSS()
-
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.JPSS1, Satellite.NOAA20):
-        return VIIRS_JPSS()
-
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
+    
+    
+    if satellite in (Satellite.VNP, ):
         if NPPv1:
             return VIIRS_NPP()
         else:
             return VIIRS_JPSS()
-
+    
     msg = ("Unrecognized satellite observing system platform: "
-           "{0:s} on board of {1:s}.".format(instrument, satellite))
+           "{0:s}.".format(satellite))
     raise ValueError(msg)
