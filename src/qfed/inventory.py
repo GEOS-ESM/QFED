@@ -20,7 +20,7 @@ class DataSource:
     time: datetime
     geolocation: str
     fire: str
-    vegetation: str
+#     vegetation: str
 
 
 class Finder:
@@ -28,10 +28,10 @@ class Finder:
     Search for files in a time-templated directory structure.
     """
 
-    def __init__(self, gp_file, fp_file, vegetation_file, time_interval=60.0):
+    def __init__(self, gp_file, fp_file, time_interval=60.0): #vegetation_file, 
         self._gp_file = gp_file
         self._fp_file = fp_file
-        self._vegetation_file = vegetation_file
+#         self._vegetation_file = vegetation_file
         self._time_interval = time_interval
 
     def find(self, t_start, t_end):
@@ -84,7 +84,7 @@ class Finder:
                     time=t,
                     geolocation=gp_file,
                     fire=fp_file,
-                    vegetation=self._vegetation_file,
+#                     vegetation=self._vegetation_file,
                 )
 
                 logging.debug(f"Found a match: {_item}.")

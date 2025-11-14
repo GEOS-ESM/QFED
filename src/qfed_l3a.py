@@ -22,7 +22,7 @@ from qfed.inventory import Finder
 from qfed.instruments import Instrument, Satellite
 from qfed.frp import GriddedFRP
 from qfed import VERSION
-
+from qfed.vegetation import IGBPNetCDF
 
 def parse_arguments(default, version):
     """
@@ -154,7 +154,7 @@ def process(
         gp_file = cli_utils.get_path(obs_system[satellite]['geolocation']['file'])
         fp_file = cli_utils.get_path(obs_system[satellite]['fires']['file'])
         
-        vg_dir = igbp
+#         vg_dir = igbp
 
         # output file
         output_file = cli_utils.get_path(output[satellite], timestamp=timestamp, 
@@ -165,7 +165,8 @@ def process(
         os.makedirs(output_dir, exist_ok=True)
 
         # product readers
-        finder = Finder(gp_file, fp_file, vg_dir)
+#         finder = Finder(gp_file, fp_file, vg_dir)
+        finder = Finder(gp_file, fp_file)
         gp_reader = geolocation_products.create(platform)
         fp_reader = fire_products.create(platform)
         cp_reader = classification_products.create(platform)
@@ -173,7 +174,7 @@ def process(
         cp_reader.set_auxiliary(watermask=watermask)
 
         # generate gridded FRP and areas
-        frp = GriddedFRP(satellite, output_grid, finder, gp_reader, fp_reader, cp_reader)
+        frp = GriddedFRP(satellite, output_grid, finder, gp_reader, fp_reader, cp_reader, igbp)
         frp.ingest(t_start, t_end)
         frp.save(
             output_file,
@@ -223,7 +224,16 @@ def main():
 
     watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
 
-    igbp = config['qfed']['with']['igbp']
+	# Option if want to remove the gas flaring and other static sources
+#     igbp = IGBPNetCDF( config['qfed']['with']['igbp'], 
+#                       static_heat=True,
+#                       gasflaring=True,
+#                       volcano=True,
+#                       drops = [0, 21, 22, 23])
+
+    igbp = IGBPNetCDF(config['qfed']['with']['igbp'],
+                      drops = [0])
+    
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
@@ -235,7 +245,7 @@ def main():
     
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
-	
+
     for t_start, t_end, timestamp in intervals:
         process(
             t_start,
@@ -250,6 +260,7 @@ def main():
             args.compress,
             args.dry_run,
         )
+
 
 
 if __name__ == '__main__':
