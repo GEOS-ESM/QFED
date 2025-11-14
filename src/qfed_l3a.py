@@ -225,14 +225,14 @@ def main():
     watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
 
 	# Option if want to remove the gas flaring and other static sources
-#     igbp = IGBPNetCDF( config['qfed']['with']['igbp'], 
-#                       static_heat=True,
-#                       gasflaring=True,
-#                       volcano=True,
-#                       drops = [0, 21, 22, 23])
-
-    igbp = IGBPNetCDF(config['qfed']['with']['igbp'],
-                      drops = [0])
+    igbp = IGBPNetCDF( config['qfed']['with']['igbp'], 
+                      static_heat=True,
+                      gasflaring=True,
+                      volcano=True,
+                      drops = [0, 21, 22, 23])
+	#  Keep this at this moment for option that doesn't drop out gas flaring...
+#     igbp = IGBPNetCDF(config['qfed']['with']['igbp'],
+#                       drops = [0])
     
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
