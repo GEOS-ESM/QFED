@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- Added `gen_global_MODIS_IGBP.py`, `gen_global_volcano_source.py`, `gen_global_gasflaring_source.py`, `lib_IGBP_plus.py` to `dev_toolbox` [25-11-17]
 - Added handling of no L2 fire detections in `inventory.py`, `qfed_l3a.py`, and `qfed_l3b.py`, write placeholder L3A and let L3B proceed [25-10-14]
 - Added the `analysis_frp_scaling.py` and `lib_frp_scaling.py` to for log-log FRP density regression tuning [25-10-07]
 - Added the `alpha_factor.yaml` to save all the emission coefficient related parameter [25-10-02]
@@ -40,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	
 ### Changed 
 
+- Renamed folder `emissionstuning` to `dev_toolbox` [25-11-17]
 - Modified `qfed_l3a.py`, set removing gas flaring etc. as default configuration  [25-11-14]
 - Rewrote the `vegetation.py` and adapted `inventory.py`, `emissions.py`, and `frp.py` to support IGBP updating [25-11-14]
 - Modified `fire_products.py`, `cli_utils.py` to fix unclosed NetCDF file handles and improve I/O lifecycle management [25-10-14]
