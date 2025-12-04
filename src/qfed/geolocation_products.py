@@ -34,11 +34,48 @@ class GeolocationProduct(ABC):
 
         lon, lon_range = self.get_longitude(file)
         lat, lat_range = self.get_latitude(file)
+        
+        # finite mask (filter out NaNs)
+        finite = np.isfinite(lon) & np.isfinite(lat)
+        
+        # longitude mask (handles anti-meridian crossing internally)
+        lon_ok = self._longitude_mask(lon, lon_range)
 
-        valid = (lon >= lon_range[0]) & (lon <= lon_range[1]) & \
-                (lat >= lat_range[0]) & (lat <= lat_range[1])
+        lat_ok = (lat >= lat_range[0]) & (lat <= lat_range[1])
 
+        valid = finite & lon_ok & lat_ok 
+        
         return lon, lat, valid, lon_range, lat_range
+
+    @staticmethod
+    def _longitude_mask(lon, lon_range):
+        """
+        Return a boolean mask for valid longitudes, handling anti-meridian crossings.
+	
+        Parameters
+        ----------
+        lon : ndarray
+            Longitude array.
+        lon_range : tuple(float, float)
+            Expected longitude range (min, max). If min < max, assumes no crossing.
+            If min > max, assumes the swath crosses the anti-meridian.
+	
+		Returns
+		-------
+		lon_ok : ndarray of bool
+            Mask of valid longitude points.
+        """
+        if lon_range[0] < lon_range[1]:
+            # no anti-meridian crossing
+            return (lon >= lon_range[0]) & (lon <= lon_range[1])
+        else:
+            # anti-meridian crossing: normalize to [0, 360)
+            lon360 = np.mod(lon + 360.0, 360.0)
+            lo360  = (lon_range[0] + 360.0) % 360.0
+            hi360  = (lon_range[1] + 360.0) % 360.0
+            # wrap interval: valid if >= lo360 OR <= hi360
+            return (lon360 >= lo360) | (lon360 <= hi360)
+
 
     def message_on_file_error(self, file):
         logging.warning(f"Cannot open the geolocation file '{file}' - excluding it.")
@@ -174,27 +211,24 @@ class VIIRS_JPSS(GeolocationProduct):
 
 
 
-def create(instrument, satellite, NPPv1=False):
+def create(satellite, NPPv1=False):
     '''
     Geolocation product reader factory.
     '''
-
-    if instrument == Instrument.MODIS and \
-       satellite in (Satellite.AQUA, Satellite.TERRA):
+    
+    if satellite in (Satellite.MOD, Satellite.MYD):
         return MODIS()
 
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.JPSS1, Satellite.NOAA20):
+    if satellite in (Satellite.VJ1, Satellite.VJ2):
         return VIIRS_JPSS()
-
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
+    
+    
+    if satellite in (Satellite.VNP, ):
         if NPPv1:
             return VIIRS_NPP()
         else:
             return VIIRS_JPSS()
-
+    
     msg = ("Unrecognized satellite observing system platform: "
-           "{0:s} on board of {1:s}.".format(instrument, satellite))
+           "{0:s}.".format(satellite))
     raise ValueError(msg)
-

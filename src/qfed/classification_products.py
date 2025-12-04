@@ -168,6 +168,12 @@ class MODIS(PixelClassifier):
         result['land' ] = pixel & self._is_over_land()
         result['coast'] = pixel & self._is_over_coast()
         result['water'] = pixel & self._is_over_water()
+        
+        # MZ, Sept 2025, API parity keys
+        result['valid'] = pixel   # for MODIS, 'valid' is simply the selected pixels
+        # keep the key for cross-sensor uniformity (always True for MODIS)
+        result['not_residual_bowtie'] = np.ones_like(pixel, dtype=bool)
+        
         return result
 
     def get_surface_type(self):
@@ -407,6 +413,10 @@ class VIIRS(PixelClassifier):
         result['coast'] = self._is_fire_over_coast() & not_residual_bowtie
         result['water'] = self._is_fire_over_water() & not_residual_bowtie
         result['unknown'] = self._no_such_classification() & not_residual_bowtie
+        
+        # MZ Sept 2025, expose masks for downstream gating
+        result['valid'] = not_residual_bowtie # same shape as swath
+        result['not_residual_bowtie'] = self._is_fire_not_residual_bowtie() # full-swath info
         return result  
 
     def _place_as_unknown(self, pixel):
@@ -479,7 +489,7 @@ class VIIRS(PixelClassifier):
         '''
         pixel = (self._fire_mask == VIIRS.CLOUD)
 
-        if self._watermask != ():
+        if self._watermask.size > 0:
             AUX_WATER = 0
             AUX_COAST = 1
             AUX_LAND  = 2
@@ -619,25 +629,19 @@ class VIIRS(PixelClassifier):
         plt.imsave('water.algorithm_qa.bit10.png', data, cmap='gray')#, norm=NoNorm())
      
 
-def create(instrument, satellite):
+def create(satellite):
     '''
     Classifier product factory.
     '''
-
-    if instrument == Instrument.MODIS and \
-       satellite in (Satellite.AQUA, Satellite.TERRA):
+    
+    if satellite in (Satellite.MOD, Satellite.MYD):
         engine = DatasetAccessEngine_HDF4()
         return MODIS(engine)
 
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.JPSS1, Satellite.NOAA20):
+    if satellite in (Satellite.VJ1, Satellite.VJ2, Satellite.VNP):
         engine = DatasetAccessEngine_NetCDF4()
         return VIIRS(engine)
 
-    if instrument == Instrument.VIIRS and \
-       satellite in (Satellite.NPP, Satellite.SNPP, Satellite.SuomiNPP):
-        engine = DatasetAccessEngine_NetCDF4()
-        return VIIRS(engine)
 
     msg = ("Unrecognized satellite observing system platform: "
            "{0:s} on board of {1:s}.".format(instrument, satellite))

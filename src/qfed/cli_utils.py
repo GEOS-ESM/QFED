@@ -22,20 +22,29 @@ def read_config(config):
     return data
 
 
-def get_path(path, timestamp=None):
+def get_path(path, timestamp=None, **fmt):
     """
-    Generate a path and optionally evaluate a templated path
-    at a specific time.
+    Generate a full path by resolving time-based and named placeholders.
+    - Step 1: resolve time-based placeholders like {0:%Y%m%d}
+    - Step 2: resolve named placeholders like {version} (escaped in YAML as {{version}})
     """
-    if isinstance(path, list):
-        result = path
-    else:
-        result = [path]
+    parts = path if isinstance(path, list) else [path]
+    out = []
 
-    if timestamp is not None:
-        result = [atom.format(timestamp) for atom in result]
+    for atom in parts:
+        # First resolve datetime placeholders
+        s = atom.format(timestamp) if timestamp is not None else atom
 
-    return os.path.join(*result)
+        # Then resolve named placeholders like {version}, {sat}, etc.
+        if fmt:
+            try:
+                s = s.format(**fmt)
+            except KeyError as e:
+                print(f" - WARNING: Missing key for format: {e} in '{s}'")
+
+        out.append(s)
+
+    return os.path.join(*out)
 
 
 def get_entire_time_interval(args):
