@@ -1,22 +1,22 @@
 emission_factors:
-    sources: 'Andreae (2019), except CO2, CO, and CH4 use Andreae and Merlet (2001)'
+    sources: 'Andreae (2019)'
     units: 'g(species) / kg(dry mater)'
     column: ['overal average', 'natural variation']
     species:
         co2:
             name: 'Carbon Dioxide (CO2)'
-            tropical_forest:      [1580.,    90.]
-            extratropical_forest: [1569.,   131.]
-            savanna:              [1613.,    95.]
-            grassland:            [1613.,    95.]
-            crop_residue:         [1585.,   100.]
+            tropical_forest:      [1620.,    70.]
+            extratropical_forest: [1570.,   130.]
+            savanna:              [1670.,    90.]
+            grassland:            [1660.,    90.]
+            crop_residue:         [1430.,   230.]
         co:
             name: 'Carbon Monoxide (CO)'
-            tropical_forest:      [ 104.,    20.]
-            extratropical_forest: [ 107.,    37.]
-            savanna:              [  65.,    20.]
-            grassland:            [  65.,    20.]
-            crop_residue:         [ 102.,    33.]
+            tropical_forest:      [ 104.,    39.]
+            extratropical_forest: [ 113.,    50.]
+            savanna:              [  69.,    20.]
+            grassland:            [  69.,    20.]
+            crop_residue:         [  76.,    55.]
         oc:
             name: 'Organic Carbon (OC)'
             tropical_forest:      [ 5.20,   1.50]
@@ -68,11 +68,11 @@ emission_factors:
             crop_residue:         [ 2.40,   1.20]
         ch4:
             name: 'Methane (CH4)'
-            tropical_forest:      [ 6.80,   2.00]
-            extratropical_forest: [ 4.70,   1.90]
-            savanna:              [ 2.30,   0.90]
-            grassland:            [ 2.30,   0.90]
-            crop_residue:         [ 5.82,   3.56]
+            tropical_forest:      [ 6.50,   1.60]
+            extratropical_forest: [ 5.20,   2.80]
+            savanna:              [ 2.70,   2.20]
+            grassland:            [ 2.70,   2.20]
+            crop_residue:         [ 5.70,   6.00]
         mek:
             name: 'Methyl Ethyl Ketone (C4H8O)'
             tropical_forest:      [ 0.50,  -0.00]

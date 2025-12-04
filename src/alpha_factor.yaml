@@ -1,0 +1,51 @@
+# Combustion rate constant (ECMWF Tech Memo 596).
+Alpha: 1.37e-6
+# enhancement factors for species contributing to AOD, C5
+enhance_aerosol_factor:
+    tropical_forest: 2.5
+    extratropical_forest: 4.5
+    savanna: 1.8
+    grassland: 1.8
+# enhancement factors for non-aerosol species
+enhance_gas_factor:
+    tropical_forest: 1
+    extratropical_forest: 1
+    savanna: 1
+    grassland: 1
+# satellite scale factor based on comparison with GFED CO, since VIIRS 
+# FRP density is scale to the AQUA level, the satellite factor should be 
+# the same as AQUA
+satscale:
+    modis/aqua: 0.473
+    modis/terra: 1.336
+    viirs/jpss-2: 0.473
+    viirs/jpss-1: 0.473
+    viirs/npp: 0.473
+# MODIS C6 to C5 scaling factor (based on OC tuning), the VIIRS is 
+# based on FRP density regression using MODIS AQUA (C6)as reference
+# and with the MODIS C6 to C5 scaling factor considered
+modis/aqua:
+    tropical_forest: 1.09728882
+    extratropical_forest: 1.12014982
+    savanna: 1.22951496
+    grassland: 1.21702972
+modis/terra:
+    tropical_forest: 1.09728882
+    extratropical_forest: 1.12014982
+    savanna: 1.22951496
+    grassland: 1.21702972
+viirs/jpss-2:
+    tropical_forest: 0.937186
+    extratropical_forest: 0.967695
+    savanna: 1.06492
+    grassland: 0.971424
+viirs/jpss-1:
+    tropical_forest: 1.03882
+    extratropical_forest: 1.06094
+    savanna: 1.15763
+    grassland: 1.01706
+viirs/npp:
+    tropical_forest: 1.03562
+    extratropical_forest: 1.08427
+    savanna: 1.14231
+    grassland: 1.01964
