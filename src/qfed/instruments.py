@@ -34,7 +34,7 @@ canonical_instrument  = {
     'mod': 'MODIS TERRA',# terra
     'myd': 'MODIS AQUA' ,# aqua
     'vj1': 'VIIRS NOAA20 (JPSS1)',# NOAA20
-    'vj2': 'VIIRS NOAA21 (JPSS1)',# NOAA21
+    'vj2': 'VIIRS NOAA21 (JPSS2)',# NOAA21
     'vnp': 'VIIRS Suomi NPP',# SNPP
 }
 

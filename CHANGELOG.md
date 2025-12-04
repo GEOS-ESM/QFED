@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This fix ensures that fire detections across the anti-meridian are retained correctly without accidental exclusion. [2025-08-28]
 - The standard name for time in the emissions output files
 
-### Added 
+### Added
+
 - Added handling of no L2 fire detections in `inventory.py`, `qfed_l3a.py`, and `qfed_l3b.py`, write placeholder L3A and let L3B proceed [25-10-14]
 - Added the `analysis_frp_scaling.py` and `lib_frp_scaling.py` to for log-log FRP density regression tuning [25-10-07]
 - Added the `alpha_factor.yaml` to save all the emission coefficient related parameter [25-10-02]
@@ -39,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 	
 ### Changed 
 
+- Moved the species configurations `config_NRT.yaml` and `config.yaml` to improve code & configuration separating. [25-12-04]
+- Modified `qfed_l3b.py`, `frp.py`, `instruments.py` to apply Full persistence procedures for emission when no observations are available (e.g., sensor malfunction or data gap). [25-12-04]
 - Modified `fire_products.py`, `cli_utils.py` to fix unclosed NetCDF file handles and improve I/O lifecycle management [25-10-14]
 - Modified `config_NRT.yaml`, `classification_products.py`, `geolocation_products.py`, `instruments.py`, `utils.py`, `frp.py`, and `emissions.py` to Unify variable and file naming across QFED v3 (align with Code 619 conventions) [25-10-14]
 - Updated values in `alpha_factor.yaml` based new log-log regression analysis. [25-10-06]

@@ -437,7 +437,6 @@ class GriddedFRP:
         
         for bb, frp in self.frp.items():
             biome = bb.type.value
-            print(biome, np.nanmax(frp), np.nanmin(frp))
         
     def save(
         self,
@@ -547,7 +546,7 @@ class GriddedFRP:
         f.contact = "http://gmao.gsfc.nasa.gov"
         f.version = VERSION
         f.source = 'NASA/GSFC/GMAO Aerosol Group'
-        f.satellite = instruments.canonical_instrument[satellite]
+        f.sensor = instruments.canonical_instrument[satellite]
         f.processed = str(datetime.now())
         f.history = ""
 
@@ -641,12 +640,13 @@ class GriddedFRP:
         # number of input files used
         if self.n_input_files > 0:
             f.setncattr("number_of_input_files", int(self.n_input_files))
-            f.setncattr("comment", ' ')
+            f.setncattr("comment", '')
         else:
             f.setncattr("number_of_input_files", int(self.n_input_files))
             f.setncattr("comment", 'No Observational Data Available')
         f.close()
         logging.info(f"Successfully saved gridded FRP and areas to file '{file}'.\n\n")
+
 
 
 def _binareas(lon, lat, area, im, jm, grid_type):
