@@ -324,6 +324,9 @@ def main():
     args = parse_arguments(defaults, VERSION)
     config = cli_utils.read_config(args.config)
     
+    # Add scaling configuration
+    scaling_config = config.get('qfed', {}).get('scaling', None)
+    
     logging.getLogger().setLevel(args.log_level)
     cli_utils.display_description(VERSION, 'QFED Level 3B - Gridded Emissions')
 
@@ -337,7 +340,6 @@ def main():
         return
 
     output_grid = grid.Grid(resolution)
-
 
     obs = {platform: config['qfed']['output']['frp'] for platform in args.obs}
     
@@ -370,10 +372,11 @@ def main():
             emission_factors_file,
             alpha_factor_file,
             species,
-            args.ndays,
+            args.ndays,  # Fixed: use args.ndays instead of undefined ndays
             args.compress,
             args.dry_run,
             doi,
+            scaling_config,  # Add scaling_config as the last parameter
         )
 
 
