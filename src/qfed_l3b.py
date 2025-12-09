@@ -23,6 +23,7 @@ from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
 from qfed import fire
 from qfed import VERSION
+from qfed.scaletov2 import apply_regional_scaling
 
 
 def parse_arguments(default, version):
@@ -202,6 +203,7 @@ def process(
     compress,
     dry_run,
     doi,
+    scaling_config,
     dt = 1.0, 
     tau = 3.0
 ):
@@ -301,6 +303,23 @@ def process(
         diskless=dry_run,
     )
 
+    # Apply scaling based on precomputed mask if provided in config.yaml
+    if scaling_config is None:
+        logging.info("No scaling configuration found, skipping regional scaling")
+    elif scaling_config.get('file')== '/dev/null':
+        logging.info("Regional scaling disabled (mask file set to /dev/null)")
+    else:        
+        try:
+            logging.info(f"Applying scaling using mask: {scaling_config['file']}")
+            apply_regional_scaling(
+                emissions_file_template=output_file,
+                timestamp=time,
+                species_list=species,
+                scaling_mask_file=scaling_config['file'],
+                scaled_output_dir=scaling_config.get('output_dir', None),
+            )
+        except Exception as e:
+            logging.error(f"Regional scaling failed: {e}")
 
 def main():
     """
@@ -338,7 +357,6 @@ def main():
 
     output_grid = grid.Grid(resolution)
 
-
     obs = {platform: config['qfed']['output']['frp'] for platform in args.obs}
     
     fcs_bkg = config['qfed']['output']['frp_fcs']
@@ -346,6 +364,9 @@ def main():
     output_file = config['qfed']['output']['emissions']['file']
     
     doi = config['qfed']['output']['emissions']['doi']
+
+    # Extract scaling configuration using consistent pattern
+    scaling_config = config['qfed'].get('scaling', None)
 
     emission_factors_file = os.path.join(
         os.path.dirname(sys.argv[0]), 'emission_factors.yaml'
@@ -374,6 +395,7 @@ def main():
             args.compress,
             args.dry_run,
             doi,
+            scaling_config,
         )
 
 
