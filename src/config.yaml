@@ -4,7 +4,7 @@ define:
 
 qfed:
     scaling:
-        file: /discover/nobackup/acollow/geos_aerosols/acollow/QFED/qfed3_regional_scaling_masks.nc4
+        file: /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/qfed3_regional_scaling_masks.nc4
     output:
         grid:
             resolution: '0.1x0.1'  # choose from ('c', 'd', 'e', 'f', '0.1x0.1')
