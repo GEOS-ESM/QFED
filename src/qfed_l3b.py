@@ -308,7 +308,7 @@ def process(
         logging.info("No scaling configuration found, skipping regional scaling")
     elif scaling_config['file'] == '/dev/null':
         logging.info("Regional scaling disabled (mask file set to /dev/null)")
-    else scaling_config['file'] != '/dev/null':        
+    elif scaling_config['file'] != '/dev/null':        
         try:
             logging.info(f"Applying scaling using mask: {scaling_config['file']}")
             apply_regional_scaling(
