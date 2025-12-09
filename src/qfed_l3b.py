@@ -23,6 +23,7 @@ from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
 from qfed import fire
 from qfed import VERSION
+from qfed.scaletov2 import apply_regional_scaling
 
 
 def parse_arguments(default, version):
@@ -202,6 +203,7 @@ def process(
     compress,
     dry_run,
     doi,
+    scaling_config,
     dt = 1.0, 
     tau = 3.0
 ):
@@ -301,6 +303,28 @@ def process(
         diskless=dry_run,
     )
 
+    # Apply scaling based on precomputed mask if provided in config.yaml
+    if (scaling_config and 
+        scaling_config.get('file') and 
+        scaling_config['file'] != '/dev/null'):
+        
+        try:
+            logging.info(f"Applying scaling using mask: {scaling_config['file']}")
+            apply_regional_scaling(
+                emissions_file_template=output_file,
+                timestamp=time,
+                species_list=species,
+                scaling_mask_file=scaling_config['file'],
+                scaled_output_dir=scaling_config.get('output_dir', None),
+            )
+        except Exception as e:
+            logging.error(f"Regional scaling failed: {e}")
+            # Continue processing - scaling failure shouldn't stop the pipeline
+    elif scaling_config and scaling_config.get('mask_file') == '/dev/null':
+        logging.info("Regional scaling disabled (mask_file set to /dev/null)")
+    elif not scaling_config:
+        logging.debug("No scaling configuration found, skipping regional scaling")
+
 
 def main():
     """
@@ -324,9 +348,6 @@ def main():
     args = parse_arguments(defaults, VERSION)
     config = cli_utils.read_config(args.config)
     
-    # Add scaling configuration
-    scaling_config = config.get('qfed', {}).get('scaling', None)
-    
     logging.getLogger().setLevel(args.log_level)
     cli_utils.display_description(VERSION, 'QFED Level 3B - Gridded Emissions')
 
@@ -348,6 +369,9 @@ def main():
     output_file = config['qfed']['output']['emissions']['file']
     
     doi = config['qfed']['output']['emissions']['doi']
+
+    # Extract scaling configuration using consistent pattern
+    scaling_config = config['qfed'].get('scaling', None)
 
     emission_factors_file = os.path.join(
         os.path.dirname(sys.argv[0]), 'emission_factors.yaml'
@@ -372,11 +396,11 @@ def main():
             emission_factors_file,
             alpha_factor_file,
             species,
-            args.ndays,  # Fixed: use args.ndays instead of undefined ndays
+            args.ndays,
             args.compress,
             args.dry_run,
             doi,
-            scaling_config,  # Add scaling_config as the last parameter
+            scaling_config,
         )
 
 
