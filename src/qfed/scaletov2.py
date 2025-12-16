@@ -15,8 +15,6 @@ import shutil
 from datetime import datetime
 from qfed import cli_utils
 
-# Species that should have scaling applied
-SCALABLE_SPECIES = ['oc', 'bc', 'so2', 'nh3']
 
 # Biome variables in QFED files
 BIOME_VARS = ['biomass_tf', 'biomass_xf', 'biomass_sv', 'biomass_gl']
@@ -174,9 +172,6 @@ def apply_regional_scaling(emissions_file_template, timestamp, species_list, sca
     
     # Process each species
     for species in species_list:
-        if species not in SCALABLE_SPECIES:
-            logging.debug(f"Skipping scaling for {species} (not in scalable species list)")
-            continue
         
         # Construct input file path
         input_file = cli_utils.get_path(
