@@ -71,12 +71,21 @@ def apply_scaling_to_file(input_file, output_file, scaling_maps, species_name):
     species_name : str
         Species name for logging
     """
-    
-    # Create backup of oringal file just in case
-    backup_file = input_file + '.original'
-    if not os.path.exists(backup_file):
-        shutil.copy2(input_file, backup_file)
-        logging.debug(f"Created backup: {backup_file}")
+    #Check if scaling has already been applied
+    # Open the file first to check if scaling has already been applied
+    with nc.Dataset(input_file, 'r') as check_file:
+        # Safety check: verify scaling hasn't already been applied
+        if hasattr(check_file, 'regional_scaling_applied'):
+            scaling_status = getattr(check_file, 'regional_scaling_applied')
+            if scaling_status == 'True' or scaling_status is True:
+                logging.warning(f"Regional scaling already applied to {species_name} file: {os.path.basename(input_file)}")
+                logging.info(f"Scaling application date: {getattr(check_file, 'scaling_application_date', 'Unknown')}")
+                return    
+    # Save original data before applying the scaling
+    originaldata_file = input_file + '.original'
+    if not os.path.exists(originaldata_file):
+        shutil.copy2(input_file, originaldata_file)
+        logging.debug(f"Created copy of original data: {originaldata_file}")
     
     # Open the file and apply scaling directly
     with nc.Dataset(input_file, 'r+') as ncfile:

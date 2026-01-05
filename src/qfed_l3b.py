@@ -314,7 +314,7 @@ def process(
             apply_regional_scaling(
                 emissions_file_template=output_file,
                 timestamp=time,
-                species_list=species,
+                species_list=scaling_config['species'],
                 scaling_mask_file=scaling_config['file'],
                 scaled_output_dir=scaling_config.get('output_dir', None),
             )
