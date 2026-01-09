@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2025-09-23
+## [Unreleased]
+
+### Fixed
+### Added
+### Changed
+### Removed
+### Deprecated
+ 
+
+## [3.2.0] - 2026-01-09
 
 ### Fixed 
 
@@ -37,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - time_increment was added as an attribute to the emissions output files as it is needed to compute monthly means
 - QC for erroneously large values of FRP in the input files (max value selected is 24000 MW)
 - Capability to include dampened FRP density in tomorrow's emissions calculation in obscured pixels
+- Added ability to scale emissions for all species after they are computed using a scaling mask that was computed offline.
 	
 ### Changed 
 
