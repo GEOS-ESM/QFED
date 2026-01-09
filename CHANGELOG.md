@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - time_increment was added as an attribute to the emissions output files as it is needed to compute monthly means
 - QC for erroneously large values of FRP in the input files (max value selected is 24000 MW)
 - Capability to include dampened FRP density in tomorrow's emissions calculation in obscured pixels
-- Added ability to scale the aerosol emission after they are computed using a scaling mask that was computed offline.
+- Added ability to scale emissions for all species after they are computed using a scaling mask that was computed offline.
 	
 ### Changed 
 
