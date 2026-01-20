@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The standard name for time in the emissions output files
 
 ### Added 
-
+- Added scripts to generate the IGBP+ for land surface type updating 
 - Added `gen_global_MODIS_IGBP.py`, `gen_global_volcano_source.py`, `gen_global_gasflaring_source.py`, `lib_IGBP_plus.py` to `dev_toolbox` [25-11-17]
 - Added handling of no L2 fire detections in `inventory.py`, `qfed_l3a.py`, and `qfed_l3b.py`, write placeholder L3A and let L3B proceed [25-10-14]
 - Added the `analysis_frp_scaling.py` and `lib_frp_scaling.py` to for log-log FRP density regression tuning [25-10-07]

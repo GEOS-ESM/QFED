@@ -14,7 +14,7 @@ import pandas as pd
 from scipy import stats
 import numpy as np
 from netCDF4 import Dataset
-from lib_IGBP_plues import *
+from lib_IGBP_plus import *
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -22,11 +22,12 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 		
 
-in_dir = './GAS_FLARING_SOURCE_DATA/'
+in_dir = '/Dedicated/jwang-data2/mzhou/project/OPNL_FILDA/STATIC_SOURCE/GAS_FLARING_SOURCE_DATA/'
 out_dir = './GL_STATIC/'
 os.makedirs(out_dir, exist_ok=True)
 
 FILL_VALUES = 255
+num_cells=480
 flag_verify = True
 
 
@@ -77,7 +78,7 @@ for year in filenames.keys():
 # processing
 
 # set up grids
-grid_sinu = SinusoidalGrid(num_cells=480)
+grid_sinu = SinusoidalGrid(num_cells=num_cells)
 
 # processing...bin data into grids
 for year in dfs.keys():
@@ -193,7 +194,7 @@ for year in dfs.keys():
 				   color = 'orange', edgecolors='white', linewidths=0.1, 
 				   zorder = 599, transform=ccrs.PlateCarree())
 				   
-		ax.set_title(f'QFED 3.2 Volcano Source Map (Static) - Verification')
+		ax.set_title(f'VIIRS Gasflaring ({year})')
 		
 		VOL  = Line2D([0], [0], label='Volcano', 
 					  lw = 1, ls='', marker = 'o', 
@@ -239,7 +240,7 @@ for year in dfs.keys():
 					   edgecolor = lineColor,color = landClr)
 	
 	
-		plt.savefig(f'{fig_dir}MAP.QFED_Gasflaring.{year}.png', dpi = 300)
+		plt.savefig(f'{fig_dir}MAP.VIIRS_Gasflaring.{year}.png', dpi = 300)
 
 
 

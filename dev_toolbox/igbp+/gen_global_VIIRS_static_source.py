@@ -14,39 +14,72 @@ import pandas as pd
 from scipy import stats
 import numpy as np
 from netCDF4 import Dataset
-from lib_IGBP_plues import *
+from lib_IGBP_plus import *
+import time, copy
 
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
+parser = argparse.ArgumentParser(description="Generate daily grided fire data based on l2 viirs activate fire detection V**14IMG")
+parser.add_argument("sat", help="Sensor short name (e.g., VNP)")
+parser.add_argument("--year", required=True, help="Year of analysis YYYY (e.g., 2024)")
+args = parser.parse_args()
 
-data_path = './GVP_Volcano_List/'
-out_dir = './GL_STATIC/'
-os.makedirs(out_dir, exist_ok=True)
+sat = args.sat
+year = args.year
 
-FILL_VALUES = 255
 flag_verify = True
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# Read the global volcano program volcano list
-# https://volcano.si.edu/volcanolist_holocene.cfm
-df = pd.read_excel(data_path + 'GVP_Volcano_List_Holocene.xlsx', sheet_name='Sheet1')
+in_dir  = f'./Daily_NC/{sat}{year}/'
+out_dir = f'./GL_STATIC/'
+os.makedirs(out_dir, exist_ok=True)
+
+
+
+num_cells = 480
+FILL_VALUES = 255
+revisit_cycle = 16
 
 # set up grids
-grid_sinu = SinusoidalGrid(num_cells=480)
+grid_sinu = SinusoidalGrid(num_cells=num_cells)
 
-# processing...bin data into grids
-xs, ys = geog_to_sinu(df['Latitude'].values, df['Longitude'].values)
-ones= np.ones_like(xs)
-one_sum, xedges, yedges, binnumber = stats.binned_statistic_2d(xs, ys, 
-                                                               values=ones,
-                                                               statistic='sum', 
-                                                               bins=[grid_sinu.easting, grid_sinu.northing[::-1]])   
-one_sum = one_sum[:, ::-1]
-one_sum[one_sum >0]  = 1
-one_sum[one_sum <=0] = FILL_VALUES
+# - - - - - - - - - - - - - - - - - - - - - - - - - 
+doys = np.arange(1,367, revisit_cycle)
+start_time = time.time()
+accumulator = np.zeros((grid_sinu.n_meridional, grid_sinu.n_zonal), dtype=np.int16)
+sub_accumulator = np.zeros((grid_sinu.n_meridional, grid_sinu.n_zonal), dtype=np.int16) 
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# write the data into a temporary *.nc file...
-savename = f"{out_dir}GL_GVP_VOLCANO.nc"
+for ini_doy in doys:
+    
+    sub_accumulator.fill(0)  # reset in-place
+    
+    for doy in range(ini_doy, ini_doy+revisit_cycle):
+        filenames = glob.glob( f'{in_dir}*{year}*{str(doy).zfill(3)}.nc')
+        if len(filenames) > 0 :
+            
+            ncid = Dataset(filenames[0], 'r')
+            ncid.set_auto_mask(False)
+            feild = ncid['static_heat_source_mask'][:]
+
+            # turn the sub_accumulator to 1 if in revisit_cycle there is one detection found
+            valid = (feild>0) & (feild!=255) 
+
+            sub_accumulator[valid] = 1
+
+            ncid.close()
+          
+    accumulator += sub_accumulator
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f" - {ini_doy} Elapsed time: {elapsed_time:.2f} seconds")
+
+accumulator_save = copy.deepcopy(accumulator)
+accumulator_save[np.where(accumulator_save<=0)] = FILL_VALUES
+
+
+savename = f"{out_dir}GL_VIIRS_HEAT_SOURCE.{sat}.{year}.nc"
 ncid = Dataset(savename, 'w', format='NETCDF4' )
 ncid.createDimension('easting', grid_sinu.n_zonal)
 ncid.createDimension('northing', grid_sinu.n_meridional)
@@ -69,17 +102,14 @@ crs_var.spatial_ref = ( "{PROJCS[\"Sinusoidal\",GEOGCS[\"GCS_ELLIPSE_BASED_1\","
                         "PARAMETER[\"Central_Meridian\",0.0],UNIT[\"Meter\",1.0]]}"
                        )
 
-tempInstance = ncid.createVariable('easting', 'f8', ('easting'), 
-                                   zlib=True, complevel = 4, 
-                                   chunksizes = (grid_sinu.n_zonal,))
+
+tempInstance = ncid.createVariable('easting', 'f4', ('easting'), zlib=True, complevel = 4 , chunksizes = (grid_sinu.n_zonal,))
 tempInstance[:] = grid_sinu.easting[:-1]
 tempInstance.standard_name = "easting"
 tempInstance.long_name = "easting"
 tempInstance.units = "meters"
 
-tempInstance = ncid.createVariable('northing', 'f8', ('northing'), 
-                                    zlib=True, complevel = 4 , 
-                                    chunksizes = (grid_sinu.n_meridional,))
+tempInstance = ncid.createVariable('northing', 'f4', ('northing'), zlib=True, complevel = 4 , chunksizes = (grid_sinu.n_meridional,))
 tempInstance[:] = grid_sinu.northing[:-1]
 tempInstance.standard_name = "northing"
 tempInstance.long_name = "northing"
@@ -89,22 +119,21 @@ chunksizes = (2400, 4800)
 complevel  = 8
 shuffle    = True
 
-var = ncid.createVariable('volcano_mask', 'u1', ('northing', 'easting'), 
+var = ncid.createVariable('heat_source_mask_per_revisiting_cycle', 'u1', ('northing', 'easting'), 
                           zlib=True, complevel = complevel, 
                           chunksizes = chunksizes, shuffle = shuffle, 
                           fill_value = FILL_VALUES)
-var[:, :] = one_sum.T
-var.long_name = f"Global Volcanol List - Holocene period"
-var.legend = "1: detect"
+var[:, :] = accumulator_save.astype(int)
+var.long_name = f"Yearly grided heat source per revisiting cycle - {sat}14IMG"
 var.valid_range = [0, 255] 
 var.grid_mapping = 'crs'
 
-ncid.description = ( f"The Global Volcanism Program database currently contains 1,230 volcanoes with eruptions during the Holocene period, "
+ncid.description = ( f"VIIRS Global Binary Frided Fire Occurrence from {sat}14IMG, "
                      f"Global Sinusoidal Projection, {grid_sinu.resol_h:6.2f}x{grid_sinu.resol_v:6.2f} m")
 ncid.Conventions = 'CF', 
 ncid.institution = 'Global Modeling and Assimilation Office, NASA/GSFC'
-ncid.data_source = f'Annual Gas Flared Volume'
-ncid.primary_documentation = f"https://volcano.si.edu/volcanolist_holocene.cfm"
+ncid.data_source = f'VIIRS {sat}14IMG Collection 2'
+ncid.primary_documentation = f"HTTPS://DOI.ORG/10.5067/VIIRS/{sat}14IMG.002"
 ncid.history = 'M. Zhou created this CF compliant global file'
 ncid.contact = 'mzhou16@umbc.edu',
 ncid.close()
@@ -112,20 +141,16 @@ print(f' - Wrote {savename}\n')
 
 
 if flag_verify:
-	import cartopy.crs as ccrs
-	import cartopy.feature as cfeature
-	import matplotlib.pyplot as plt
-	from matplotlib.lines import Line2D
-	
+	savename = f"{out_dir}GL_VIIRS_HEAT_SOURCE.{sat}.{year}.nc"
 	# - - - - - - - - - - - - - - - - - - - - - 
 	ncid = Dataset(savename, 'r')	
 	ncid.set_auto_mask(False)
-	volcano_source = ncid['volcano_mask'][:]
+	gasflaring_source = ncid['heat_source_mask_per_revisiting_cycle'][:]
 	northing = ncid['northing'][:]
 	easting = ncid['easting'][:]
 	ncid.close()
 
-	idx = np.where(volcano_source==1)
+	idx = np.where((gasflaring_source>=16) & (gasflaring_source<255))
 	lat, lon = get_coordinates(northing, easting, idx)
 
 	# - - - - - - - - - - - - - - - - - - - - - 
@@ -137,7 +162,7 @@ if flag_verify:
 	
 	fontsize = 12
 	linewidth = 1	
-	   	
+		
 	fig = plt.figure(figsize=(10, 5))
 	ax = fig.add_subplot(1, 1, 1, projection=ccrs.Robinson())
 	
@@ -145,14 +170,14 @@ if flag_verify:
 	# the extents of any plotted data
 	ax.set_global()
 	ax.scatter(lon, lat, s = 3, 
-			   color = 'crimson', edgecolors='white', linewidths=0.1, 
+			   color = 'purple', edgecolors='white', linewidths=0.1, 
 			   zorder = 599, transform=ccrs.PlateCarree())
 			   
-	ax.set_title(f'QFED 3.2 Volcano Source Map (Static) - Verification')
+	ax.set_title(f'QFED 3.2 Static Heat Source Map ({sat}) - Verification')
 	
-	VOL  = Line2D([0], [0], label='Volcano', 
+	VOL  = Line2D([0], [0], label='Static Heat Source', 
 				  lw = 1, ls='', marker = 'o', 
-				  markersize = 8, color=f"crimson")
+				  markersize = 8, color=f"purple")
 	handles = [VOL]
 	plt.legend(handles=handles, frameon = False, 
 			   ncol = 3, fontsize = fontsize,
@@ -191,14 +216,9 @@ if flag_verify:
 	
 	
 	ax.add_feature(cfeature.LAND.with_scale('10m'), linewidth=linewidth, 
-	               edgecolor = lineColor,color = landClr)
+				   edgecolor = lineColor,color = landClr)
 
 
-	plt.savefig(f'{fig_dir}MAP.QFED_Volcano.png', dpi = 300)
-
-
-
-
-
+	plt.savefig(f'{fig_dir}MAP.QFED_Static_heat_source.{sat}.{year}.png', dpi = 300)
 
 

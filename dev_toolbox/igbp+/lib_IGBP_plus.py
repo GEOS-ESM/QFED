@@ -1,5 +1,9 @@
 import numpy as np
 
+# - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * -  
+# function and class related to grid manipulation for Sinusoidal projection
+
+# - - - - - - -  
 class SinusoidalGrid:
     def __init__(self, num_cells=800,
                  hid_max=35, vid_max=17,
@@ -28,10 +32,10 @@ class SinusoidalGrid:
     def meshgrid(self):
         return np.meshgrid(self.easting, self.northing)
 
-
+# - - - - - - - 
 def geog_to_sinu(lat, lon, R=6371007.181000):
     '''
-    Function of converting the geographical projection to sinusoidal projection
+    Function of converting the geographical coordinates to sinusoidal coordinates
 
     Parameters
     ----------
@@ -57,7 +61,7 @@ def geog_to_sinu(lat, lon, R=6371007.181000):
 
 def sinu_to_geog(x, y):
 	'''
-	Function of converting the sinusoidal projection to platecree projection
+	Function of converting the sinusoidal coordinate to geographical coordinates
 
 	Parameters
 	----------
@@ -129,15 +133,15 @@ def cal_sinu_xy(tile, numCeil):
     
     return xv, yv
 
-
-
+# given the index, calculating the geographical coordinates
 def get_coordinates(northing, easting, idx):
     x = easting[idx[1]]
     y = northing[idx[0]]
     return sinu_to_geog(x, y)
     
     
-
+# - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * -  
+# function dictionary that related to the MCDQ12...
 legend_dict = {}
 legend_dict['LC_Type1'] = { "long_name": f"MCD12Q1 International Geosphere-Biosphere Programme (IGBP) legend  and class descriptions",
                             "class_01": "Evergreen Needleleaf Forests",
@@ -248,10 +252,23 @@ water_mapping['LC_Type4'] = 0
 water_mapping['LC_Type5'] = 0
 water_mapping['LW'] = 0
     
+# - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * -  
+# functions related to the VNP14IMG...
+def get_bit(x, bit=0):
+    '''
+    Extracts the value of a single bit.
+    '''
+    return (x >> bit) & 1
     
-    
-    
-    
+def is_fire_residual_bowtie(algorithm_qa):
+	'''
+	Fire pixels identified as residual bow-tie data.
+
+	These pixels should be excluded to avoid 
+	double-counting of redunant FRP.
+	'''
+	bit = get_bit(algorithm_qa, 22)
+	return bit 
     
 
 

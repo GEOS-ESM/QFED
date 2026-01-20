@@ -14,7 +14,7 @@ import pandas as pd
 from scipy import stats
 import numpy as np
 from netCDF4 import Dataset
-from lib_IGBP_plues import *
+from lib_IGBP_plus import *
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -32,7 +32,7 @@ FILL_VALUES = 31
 num_cells = 2400
 
 
-SURF_DIR = f'./MCD12Q1/{year}/001/'
+SURF_DIR = f'/Dedicated/jwang-data/shared_satData/OPNL_FILDA/DATA/LAND_COVER_SINO/{year}/001/'
 out_dir = './GL_IGBP_MODIS/'
 os.makedirs(out_dir, exist_ok=True)
 
