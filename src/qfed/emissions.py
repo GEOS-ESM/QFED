@@ -142,13 +142,10 @@ class Emissions:
                 self._A_f[platform][s] = {
                     b: (alpha_factor[platform.value][b] * Alpha * v) for (b, v) in enhance_factor.items()
                 }
-            
-
 
         self._S_f = {}
         for platform in canonical_satellite.keys():
             self._S_f[platform] = alpha_factor['satscale'][platform.value]
-
 
     def emission_factor(self, species, fire):
         """
@@ -228,7 +225,7 @@ class Emissions:
 
             for bb in self.biomass_burning:
                 E_b = E[s][bb][:, :]
-                E_b_ = E_[s][bb][:, :]
+                E_b_ = E_[s][bb][:, :] * np.exp(-dt/tau)
 
                 if (method == 'default') or (method == 'sequential'):
                     E_b[j] = ( (E_b[j]  / (A_o[j] + A_c[j])) * (1 + A_c[j] / (A_l[j] + A_c[j])) +
@@ -265,7 +262,7 @@ class Emissions:
                 
                 # Calculate F using the first species as reference (similar to old code)
                 self.F[p][bb][:,:] = (self.estimate[s][bb][:,:] / 
-                                    (units_factor * A_f * S_f * B_f)) * np.exp(-dt/tau)
+                                    (units_factor * A_f * S_f * B_f)) # * np.exp(-dt/tau)
                 self.F[p][bb][j] = self.F[p][bb][j] * ((A_o[j] + A_c[j]) / (A_l[j] + A_c[j]))
 
     def total(self, species):
@@ -279,33 +276,30 @@ class Emissions:
         return result
 
 
-    def _get_satellite_labels(self, number_of_l1b_file):
+    def _get_satellite_labels(self, number_of_l2b_file):
+    
         platforms = list(self.F.keys())
-        platform_labels = set()
+        platform_labels = []
+        number_of_file_labels = []
+
         for platform in platforms:
             try:
                 label = canonical_instrument[platform.value]
-                num_files = number_of_l1b_file[platform]
+                num_files = number_of_l2b_file[platform]
                 
-                if num_files>0:
-                    num_files = f'{num_files}'
-                else:
-                    num_files = f'No Observational Data Available'
-
-                platform_labels.add(f'{label} ({num_files})')
+                platform_labels.append(f'{label}')
+                number_of_file_labels.append(f'{num_files}')
             except Exception:
                 logging.warning(f"Platform key is not Satellite: {platform!r}; skipping.")
                 continue
-        return platform_labels
-        
+   
+        return platform_labels, number_of_file_labels
 
-    def _save_as_netcdf4(self, file, number_of_l1b_file, doi, compress=False, fill_value=1e15, diskless=False):
+    def _save_as_netcdf4(self, file, number_of_l2b_file, doi, compress=False, fill_value=1e15, diskless=False):
         """
         Saves gridded emissions to a file.
         """
-     
         
-
         # map species to output files
         self.file = {
             species: file.format(species=species.lower(), version = f'v{VERSION.replace(".", "_")}')
@@ -342,7 +336,7 @@ class Emissions:
             f.title = 'Quick Fire Emissions Dataset (QFED) Level 3 Gridded Emissions (v{0:s})'.format(VERSION)
             f.contact = 'qfed@lists.nasa.gov'
             f.VersionID = VERSION
-            f.source = 'NASA/GSFC/GMAO GEOS Aerosol Group'
+            f.source = 'NASA/GSFC/GMAO Aerosol Group'
             f.history = ''
             f.ShortName = 'QFED_EMIS' + '_X' + str(self.im) + 'Y' + str(self.jm)
             f.LongName = 'QFED Daily Level 3 Emissions at ' + str(360/self.im) + 'x' + str(np.round(180/self.jm,3)) + ' Degrees'
@@ -363,8 +357,21 @@ class Emissions:
             f.NorthernmostLatitude=str(self.lat[len(self.lat)-1])
             f.WesternmostLongitude=str(self.lon[0])
             f.EasternmostLongitude=str(self.lon[len(self.lon)-1])
-            f.satellite = ', '.join(sorted(self._get_satellite_labels(number_of_l1b_file)))
-            f.e_folding_time = f"{self.tau} days"  
+
+
+            no_l2b_flag = all(value == 0 for value in number_of_l2b_file.values())
+            if no_l2b_flag:
+                f.observation_data_availability = "unavailable"
+                f.frp_persistence_mode = "full persistence"
+                f.frp_damping_e_folding_days = f"None"  
+            else:
+                f.observation_data_availability = "available" 
+                f.frp_persistence_mode = "damped_blend"
+                f.frp_damping_e_folding_days = f"{self.tau}"  
+            platform_labels, number_of_file_labels = self._get_satellite_labels(number_of_l2b_file)
+            f.sensors_used = ', '.join(platform_labels)
+            f.number_of_observations = ', '.join(number_of_file_labels)
+                        
             f.RelatedURL = 'https://gmao.gsfc.nasa.gov/GMAO_products/qfed'    
               
             # dimensions
@@ -551,7 +558,7 @@ class Emissions:
     def save(
         self,
         file,
-        number_of_l1b_file,
+        number_of_l2b_file,
         doi,
         ndays=1,
         compress=False,
@@ -584,10 +591,11 @@ class Emissions:
         """
         # Save emission files for current and future days
         for n in range(ndays):
-            self._save_as_netcdf4(file, number_of_l1b_file, doi, compress in (True,), fill_value, diskless)
+            self._save_as_netcdf4(file, number_of_l2b_file, doi, compress in (True,), fill_value, diskless)
 
             if compress == 'n4zip':
                 self.compress_n4zip()
 
             # increment time to persist emissions
             self.time = self.time + timedelta(hours=24)
+            

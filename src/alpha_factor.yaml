@@ -16,35 +16,35 @@ enhance_gas_factor:
 # FRP density is scale to the AQUA level, the satellite factor should be 
 # the same as AQUA
 satscale:
-    modis/aqua: 0.473
-    modis/terra: 1.336
-    viirs/jpss-2: 0.473
-    viirs/jpss-1: 0.473
-    viirs/npp: 0.473
+    myd: 0.473
+    mod: 1.336
+    vj2: 0.473
+    vj1: 0.473
+    vnp: 0.473
 # MODIS C6 to C5 scaling factor (based on OC tuning), the VIIRS is 
 # based on FRP density regression using MODIS AQUA (C6)as reference
 # and with the MODIS C6 to C5 scaling factor considered
-modis/aqua:
+myd:
     tropical_forest: 1.09728882
     extratropical_forest: 1.12014982
     savanna: 1.22951496
     grassland: 1.21702972
-modis/terra:
+mod:
     tropical_forest: 1.09728882
     extratropical_forest: 1.12014982
     savanna: 1.22951496
     grassland: 1.21702972
-viirs/jpss-2:
+vj2:
     tropical_forest: 0.937186
     extratropical_forest: 0.967695
     savanna: 1.06492
     grassland: 0.971424
-viirs/jpss-1:
+vj1:
     tropical_forest: 1.03882
     extratropical_forest: 1.06094
     savanna: 1.15763
     grassland: 1.01706
-viirs/npp:
+vnp:
     tropical_forest: 1.03562
     extratropical_forest: 1.08427
     savanna: 1.14231

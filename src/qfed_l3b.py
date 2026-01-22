@@ -23,6 +23,7 @@ from qfed.instruments import Instrument, Satellite
 from qfed.emissions import Emissions
 from qfed import fire
 from qfed import VERSION
+from qfed.scaletov2 import apply_regional_scaling
 
 
 def parse_arguments(default, version):
@@ -202,12 +203,17 @@ def process(
     compress,
     dry_run,
     doi,
+    scaling_config,
+    dt = 1.0, 
+    tau = 3.0
 ):
     frp = {}
     area = {}
     frp_density = {}
     l3a_files = {}
-    number_of_l1b_file = {}
+    l3a_fsc_files = {}
+    number_of_l2b_file = {}
+#     total_valid_l2b = 0
     # Iterate platforms
     for satellite in obs_system.keys():
     
@@ -220,15 +226,9 @@ def process(
 
         logging.debug(f"Searching for L3A '{os.path.basename(search_path)}' in '{os.path.dirname(search_path)}'")
         l3a_file = search(search_path, logging)
+        
         if not l3a_file:
-            logging.warning(f"Failed to find '{os.path.basename(search_path)}'; using zeros.")
-
-            im = output_grid.dimensions()['x']
-            jm = output_grid.dimensions()['y']
-            
-            area[platform] = {v: np.ones((im, jm)) for v in ('land', 'water', 'cloud', 'unknown')}
-            frp[platform]  = {bb: np.zeros((im, jm)) for bb in fire.BIOMASS_BURNING}
-            number_of_l1b_file[platform] = 0
+            raise FileNotFoundError(f"Failed to find '{os.path.basename(search_path)}' ")
             
         else:
             logging.info(f"Reading L3A '{os.path.basename(l3a_file)}'")
@@ -237,8 +237,7 @@ def process(
             ds = xr.open_dataset(l3a_file)
             area[platform] = {v: ds[v][0, :, :].values.T for v in ('land', 'water', 'cloud', 'unknown')}
             frp[platform] = {bb: ds[f'frp_{bb.type.value}'][0, :, :].values.T for bb in fire.BIOMASS_BURNING}
-            number_of_l1b_file[platform] = ds.number_of_input_files
-        
+            number_of_l2b_file[platform] = ds.number_of_input_files
             ds.close()
 
         # Today's FRP-FCS (per sensor): format with {sat}
@@ -250,22 +249,37 @@ def process(
                              sat=satellite, 
                              version = f'v{VERSION.replace(".", "_")}')
             fcs_this_l3a_file = search(today_path, logging)
-
-        # Background (forecast or zeros)
-        frp_density[platform] = load_frp_density(
-            platform=platform,
-            fcs_this_l3a_file=fcs_this_l3a_file,
-            frp=frp,
-            fire=fire,
-            logging=logging,
-            use_forecast=(fcs_bkg is not None),
-        )
-
+            
+            # Background (forecast or zeros)
+            frp_density[platform] = load_frp_density(
+                platform=platform,
+                fcs_this_l3a_file=fcs_this_l3a_file,
+                frp=frp,
+                fire=fire,
+                logging=logging,
+                use_forecast=(fcs_bkg is not None),
+                )            
+            l3a_fsc_files[platform] = fcs_this_l3a_file
+    
+    no_l2b_flag = all(value == 0 for value in number_of_l2b_file.values())
+    
+    if no_l2b_flag:
+        logging.warning(f"No valid l3b grided FRP available, apply Full persistence to FPR.")
+        
+        im = output_grid.dimensions()['x']
+        jm = output_grid.dimensions()['y']
+        # overwrite the cloud area to all one
+        for satellite in obs_system.keys():
+            platform = Satellite(satellite)
+            area[platform]['cloud'] = np.ones((im, jm))  
+            for biome in frp_density[platform].keys():
+                frp_density[platform][biome] *=np.exp(dt/tau)
+ 
     # Emissions & outputs
     out_path = cli_utils.get_path(output_file, timestamp=time)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     emissions = Emissions(time, frp, frp_density, area, emission_factors_file, alpha_factor_file)
-    emissions.calculate(species, dt = 1.0, tau = 3.0)
+    emissions.calculate(species, dt=dt, tau=tau)
 
     # Write per-sensor FRP-FCS for tomorrow
     if fcs_bkg is not None:
@@ -282,13 +296,30 @@ def process(
 
     emissions.save(
         out_path,
-        number_of_l1b_file,
+        number_of_l2b_file,
         doi,
         ndays=ndays,
         compress=compress,
         diskless=dry_run,
     )
 
+    # Apply scaling based on precomputed mask if provided in config.yaml
+    if scaling_config is None:
+        logging.info("No scaling configuration found, skipping regional scaling")
+    elif scaling_config.get('file')== '/dev/null':
+        logging.info("Regional scaling disabled (mask file set to /dev/null)")
+    else:        
+        try:
+            logging.info(f"Applying scaling using mask: {scaling_config['file']}")
+            apply_regional_scaling(
+                emissions_file_template=output_file,
+                timestamp=time,
+                species_list=scaling_config['species'],
+                scaling_mask_file=scaling_config['file'],
+                scaled_output_dir=scaling_config.get('output_dir', None),
+            )
+        except Exception as e:
+            logging.error(f"Regional scaling failed: {e}")
 
 def main():
     """
@@ -326,7 +357,6 @@ def main():
 
     output_grid = grid.Grid(resolution)
 
-
     obs = {platform: config['qfed']['output']['frp'] for platform in args.obs}
     
     fcs_bkg = config['qfed']['output']['frp_fcs']
@@ -334,6 +364,9 @@ def main():
     output_file = config['qfed']['output']['emissions']['file']
     
     doi = config['qfed']['output']['emissions']['doi']
+
+    # Extract scaling configuration using consistent pattern
+    scaling_config = config['qfed'].get('scaling', None)
 
     emission_factors_file = os.path.join(
         os.path.dirname(sys.argv[0]), 'emission_factors.yaml'
@@ -343,8 +376,8 @@ def main():
         os.path.dirname(sys.argv[0]), 'alpha_factor.yaml'
     )
 
-    species = ('co2', 'oc', 'so2', 'nh3', 'bc', 'co','acet','ald2','alk4','c2h6','c3h8','ch2o','mek','no','c3h6','pm25','tpm','ch4')
-    
+    species = config['qfed']['output']['emissions']['species']    
+      
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
@@ -362,6 +395,7 @@ def main():
             args.compress,
             args.dry_run,
             doi,
+            scaling_config,
         )
 
 
