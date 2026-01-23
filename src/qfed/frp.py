@@ -405,7 +405,6 @@ class GriddedFRP:
                 self.frp[bb][:, :] += _binareas(
                     lon[j], lat[j], frp[j], self.im, self.jm, self.grid_type
                     )
-                print( ' - ', bb.description, np.nansum(frp[j]), np.sum(j))
 
 
     def ingest(self, t_start, t_end):
