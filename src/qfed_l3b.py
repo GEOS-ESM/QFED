@@ -213,11 +213,11 @@ def process(
     l3a_files = {}
     l3a_fsc_files = {}
     number_of_l2b_file = {}
-#     total_valid_l2b = 0
+
     # Iterate platforms
     for satellite in obs_system.keys():
     
-        platform = Satellite(satellite) #Instrument(instrument)
+        platform = Satellite(satellite)
         # Current-day per-platform L3A (observations)
         search_path = cli_utils.get_path(obs_system[satellite]['file'], 
                                          timestamp=time, 
@@ -276,8 +276,18 @@ def process(
                 frp_density[platform][biome] *=np.exp(dt/tau)
  
     # Emissions & outputs
-    out_path = cli_utils.get_path(output_file, timestamp=time)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    # Build a template with {date} placeholder for emissions.save() to use
+    # First, get the path with directory structure
+    sample_path = cli_utils.get_path(output_file, timestamp=time)
+    os.makedirs(os.path.dirname(sample_path), exist_ok=True)
+    
+    # Create a template by replacing the date in the filename with {date}
+    # Extract just the filename part and replace the date pattern
+    date_str = time.strftime('%Y%m%d')
+    out_template = sample_path.replace(date_str, '{date}')
+    
+    logging.debug(f"Output template: {out_template}")
+    
     emissions = Emissions(time, frp, frp_density, area, emission_factors_file, alpha_factor_file)
     emissions.calculate(species, dt=dt, tau=tau)
 
@@ -294,8 +304,9 @@ def process(
 
         emissions._save_forecast(fcs_out_map, compress=compress, diskless=dry_run)
 
+
     emissions.save(
-        out_path,
+        out_template,
         number_of_l2b_file,
         doi,
         ndays=ndays,
@@ -311,12 +322,18 @@ def process(
     else:        
         try:
             logging.info(f"Applying scaling using mask: {scaling_config['file']}")
+            
+            # Get save_original flag from config, default to False
+            save_original = scaling_config.get('save_original', False)
+            
             apply_regional_scaling(
                 emissions_file_template=output_file,
                 timestamp=time,
                 species_list=scaling_config['species'],
                 scaling_mask_file=scaling_config['file'],
                 scaled_output_dir=scaling_config.get('output_dir', None),
+                ndays=ndays,
+                save_original=save_original,
             )
         except Exception as e:
             logging.error(f"Regional scaling failed: {e}")

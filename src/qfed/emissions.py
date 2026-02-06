@@ -302,7 +302,7 @@ class Emissions:
         
         # map species to output files
         self.file = {
-            species: file.format(species=species.lower(), version = f'v{VERSION.replace(".", "_")}')
+            species: file.format(species=species.lower(), version = f'v{VERSION.replace(".", "_")}', date=self.time.strftime('%Y%m%d'))
             for species in self.estimate.keys()
         }
 
