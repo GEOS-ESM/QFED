@@ -215,5 +215,5 @@ def apply_regional_scaling(emissions_file_template, timestamp, species_list, sca
             except Exception as e:
                 logging.error(f"Failed to apply scaling to {species} on {current_date.strftime('%Y-%m-%d')}: {e}")
                 continue
-    
+            logging.info(f"Regional scaling completed for {current_date.strftime('%Y-%m-%d')}") 
     logging.info(f"Regional scaling completed for {ndays} day(s)")
