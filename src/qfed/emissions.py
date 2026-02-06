@@ -301,8 +301,10 @@ class Emissions:
         """
         
         # map species to output files
+        out_path = cli_utils.get_path(file, timestamp=self.time)
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
         self.file = {
-            species: file.format(species=species.lower(), version = f'v{VERSION.replace(".", "_")}', date=self.time.strftime('%Y%m%d'))
+            species: out_path.format(species=species.lower(), version = f'v{VERSION.replace(".", "_")}')
             for species in self.estimate.keys()
         }
 

@@ -275,19 +275,7 @@ def process(
             for biome in frp_density[platform].keys():
                 frp_density[platform][biome] *=np.exp(dt/tau)
  
-    # Emissions & outputs
-    # Build a template with {date} placeholder for emissions.save() to use
-    # First, get the path with directory structure
-    sample_path = cli_utils.get_path(output_file, timestamp=time)
-    os.makedirs(os.path.dirname(sample_path), exist_ok=True)
-    
-    # Create a template by replacing the date in the filename with {date}
-    # Extract just the filename part and replace the date pattern
-    date_str = time.strftime('%Y%m%d')
-    out_template = sample_path.replace(date_str, '{date}')
-    
-    logging.debug(f"Output template: {out_template}")
-    
+    # Emissions 
     emissions = Emissions(time, frp, frp_density, area, emission_factors_file, alpha_factor_file)
     emissions.calculate(species, dt=dt, tau=tau)
 
@@ -306,7 +294,7 @@ def process(
 
 
     emissions.save(
-        out_template,
+        output_file,
         number_of_l2b_file,
         doi,
         ndays=ndays,
