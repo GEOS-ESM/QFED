@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.2.0] - 2026-01-09
 
 ### Fixed 
-
+- This fix addresses the bug found in vegetation.py that incorrect usage of IGBP+ file[2026-02-10]
 - This fix addresses the minor problem raised by PR review [2025-09-09]
 - This fix fixes issue of accidental exclusion of wetlands fires. [2025-09-03]
 - This fix ensures the syntax compatibility across different python version. [2025-09-03]
