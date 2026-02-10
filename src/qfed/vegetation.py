@@ -182,7 +182,7 @@ class IGBPNetCDF():
         lat, lon: numpy arrays or scalars with same shape.
         """
         # get the index for IGBP
-        ix, iy = self._index_from_latlon(lat, lon, self.dx, self.dy, self.x_min, self.y_max)
+        ix, iy = self._index_from_latlon(lat, lon, self.dx_plus, self.dy_plus, self.x_plus_min, self.y_plus_max)
         
         # clip indices to the array bounds
         ny, nx = self.plus_mask.shape
