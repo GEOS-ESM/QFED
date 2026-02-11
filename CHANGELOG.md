@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- ndays functionality
+
 ### Added
 - Added scripts to generate the IGBP+ for land surface type updating 
 - Added `gen_global_MODIS_IGBP.py`, `gen_global_volcano_source.py`, `gen_global_gasflaring_source.py`, `lib_IGBP_plus.py` to `dev_toolbox` [25-11-17]

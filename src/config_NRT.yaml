@@ -7,6 +7,7 @@ qfed:
         #file: /dev/null        
         file: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/QFED3/qfed3_regional_scaling_masks.nc4
         species: ['co2', 'oc', 'so2', 'nh3', 'bc', 'co', 'acet', 'ald2', 'alk4', 'c2h6', 'c3h8', 'ch2o', 'mek', 'no', 'c3h6', 'pm25', 'tpm', 'ch4']
+        save_original: false
     output:
         grid:
             resolution: '0.1x0.1'  # choose from ('c', 'd', 'e', 'f', '0.1x0.1')
