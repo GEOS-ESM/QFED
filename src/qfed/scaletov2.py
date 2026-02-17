@@ -12,7 +12,7 @@ import netCDF4 as nc
 import numpy as np
 from pathlib import Path
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from qfed import cli_utils
 
 
@@ -56,7 +56,7 @@ def load_scaling_masks(scaling_mask_file):
     
     return scaling_maps
 
-def apply_scaling_to_file(input_file, output_file, scaling_maps, species_name):
+def apply_scaling_to_file(input_file, output_file, scaling_maps, species_name, save_original=False):
     """
     Apply regional scaling to a single QFED file.
     
@@ -70,8 +70,10 @@ def apply_scaling_to_file(input_file, output_file, scaling_maps, species_name):
         Dictionary mapping biome names to scaling arrays
     species_name : str
         Species name for logging
+    save_original : bool, default=False
+        Whether to save a copy of the original file before scaling
     """
-    #Check if scaling has already been applied
+    # Check if scaling has already been applied
     # Open the file first to check if scaling has already been applied
     with nc.Dataset(input_file, 'r') as check_file:
         # Safety check: verify scaling hasn't already been applied
@@ -81,11 +83,15 @@ def apply_scaling_to_file(input_file, output_file, scaling_maps, species_name):
                 logging.warning(f"Regional scaling already applied to {species_name} file: {os.path.basename(input_file)}")
                 logging.info(f"Scaling application date: {getattr(check_file, 'scaling_application_date', 'Unknown')}")
                 return    
-    # Save original data before applying the scaling
-    originaldata_file = input_file + '.original'
-    if not os.path.exists(originaldata_file):
-        shutil.copy2(input_file, originaldata_file)
-        logging.debug(f"Created copy of original data: {originaldata_file}")
+    
+    # Save original data before applying the scaling (only if flag is True)
+    if save_original:
+        originaldata_file = input_file + '.original'
+        if not os.path.exists(originaldata_file):
+            shutil.copy2(input_file, originaldata_file)
+            logging.debug(f"Created copy of original data: {originaldata_file}")
+        else:
+            logging.debug(f"Original data copy already exists: {originaldata_file}")
     
     # Open the file and apply scaling directly
     with nc.Dataset(input_file, 'r+') as ncfile:
@@ -150,7 +156,7 @@ def apply_scaling_to_file(input_file, output_file, scaling_maps, species_name):
         logging.info(f"Scaling {'applied' if scaling_applied else 'skipped'} for {species_name}: {os.path.basename(input_file)}")
 
 def apply_regional_scaling(emissions_file_template, timestamp, species_list, scaling_mask_file, 
-                         scaled_output_dir=None, version='v3_2_0'):
+                         scaled_output_dir=None, version='v3_2_0', ndays=1, save_original=False):
     """
     Apply regional scaling to QFED emission files for specified species.
     
@@ -168,9 +174,13 @@ def apply_regional_scaling(emissions_file_template, timestamp, species_list, sca
         Output directory for scaled files (currently unused - scaling is done in-place)
     version : str
         QFED version string
+    ndays : int, default=1
+        Number of days to process (for persistence)
+    save_original : bool, default=False
+        Whether to save a copy of the original file before scaling
     """
     
-    logging.info(f"Applying regional scaling for {timestamp.strftime('%Y-%m-%d')}")
+    logging.info(f"Applying regional scaling for {ndays} day(s) starting {timestamp.strftime('%Y-%m-%d')}")
     
     # Load scaling masks
     try:
@@ -179,26 +189,31 @@ def apply_regional_scaling(emissions_file_template, timestamp, species_list, sca
         logging.error(f"Failed to load scaling masks: {e}")
         return
     
-    # Process each species
-    for species in species_list:
+    # Loop through each day
+    for n in range(ndays):
+        current_date = timestamp + timedelta(days=n)
+        logging.info(f"Processing scaling for day {n+1}/{ndays}: {current_date.strftime('%Y-%m-%d')}")
         
-        # Construct input file path
-        input_file = cli_utils.get_path(
-            emissions_file_template,
-            timestamp=timestamp,
-            species=species,
-            version=version
-        )
-        
-        if not os.path.exists(input_file):
-            logging.warning(f"Input file not found: {input_file}")
-            continue
-        
-        # Apply scaling in-place
-        try:
-            apply_scaling_to_file(input_file, input_file, scaling_maps, species)
-        except Exception as e:
-            logging.error(f"Failed to apply scaling to {species}: {e}")
-            continue
-    
-    logging.info(f"Regional scaling completed for {timestamp.strftime('%Y-%m-%d')}")
+        # Process each species
+        for species in species_list:
+            
+            # Construct input file path
+            input_file = cli_utils.get_path(
+                emissions_file_template,
+                timestamp=current_date,
+                species=species,
+                version=version
+            )
+            
+            if not os.path.exists(input_file):
+                logging.warning(f"Input file not found: {input_file}")
+                continue
+            
+            # Apply scaling in-place
+            try:
+                apply_scaling_to_file(input_file, input_file, scaling_maps, species, save_original=save_original)
+            except Exception as e:
+                logging.error(f"Failed to apply scaling to {species} on {current_date.strftime('%Y-%m-%d')}: {e}")
+                continue
+            logging.info(f"Regional scaling completed for {current_date.strftime('%Y-%m-%d')}") 
+    logging.info(f"Regional scaling completed for {ndays} day(s)")
