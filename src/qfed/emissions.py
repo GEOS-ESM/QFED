@@ -514,7 +514,7 @@ class Emissions:
             if arr is not None and np.size(arr) > 0:
                 vv[0, :, :] = np.transpose(arr)
             else:
-                vv[0, :, :] = fill_value
+                vv[0, :, :] = 0
 
         f.close()
 
