@@ -424,10 +424,8 @@ class Emissions:
                 v = f.variables[_v['name']]
                 v.long_name = _v['long_name']
                 v.units = _v['units']
-                #v.missing_value = np.array(fill_value, np.float32)
-                #v.fmissing_value = np.array(fill_value, np.float32)
-                #v.vmin = np.array(fill_value, np.float32)
-                #v.vmax = np.array(fill_value, np.float32)
+                v.missing_value = np.array(fill_value, np.float32)
+                v.fmissing_value = np.array(fill_value, np.float32)
 
             # coordinate variables - data
             f.variables['time'][:] = np.array((0,))
@@ -435,10 +433,15 @@ class Emissions:
             f.variables['lat'][:] = np.array(self.lat)
 
             # data variables - data
-            f.variables['biomass'][0, :, :] = np.transpose(self.total(species)[:, :])
+            total_data = np.transpose(self.total(species)[:, :])
+            total_masked = np.ma.masked_invalid(total_data)
+            f.variables['biomass'][0, :, :] = total_masked
+            
             for bb in self.biomass_burning:
                 v = f.variables[v_meta_data[bb]['name']]
-                v[0, :, :] = np.transpose(self.estimate[species][bb][:, :])
+                bb_data = np.transpose(self.estimate[species][bb][:, :])
+                bb_masked = np.ma.masked_invalid(bb_data)
+                v[0, :, :] = bb_masked
 
             f.close()
 
