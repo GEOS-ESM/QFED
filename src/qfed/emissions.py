@@ -433,15 +433,17 @@ class Emissions:
             f.variables['lat'][:] = np.array(self.lat)
 
             # data variables - data
-            total_data = np.transpose(self.total(species)[:, :])
-            total_masked = np.ma.masked_invalid(total_data)
-            f.variables['biomass'][0, :, :] = total_masked
-            
+            f.variables['biomass'][0, :, :] = np.transpose(self.total(species)[:, :])
             for bb in self.biomass_burning:
                 v = f.variables[v_meta_data[bb]['name']]
-                bb_data = np.transpose(self.estimate[species][bb][:, :])
-                bb_masked = np.ma.masked_invalid(bb_data)
-                v[0, :, :] = bb_masked
+                v[0, :, :] = np.transpose(self.estimate[species][bb][:, :])
+                try:
+                    if np.any(np.isnan(self.estimate[species][bb][:, :])):
+                        raise ValueError(
+                            f"NaN values detected in emissions: species='{species}', biome='{bb.type.value}'")
+                except ValueError as e:
+                    print(f"Nan values detected in emissions: species'{species}', biome='{bb.type.value}'")
+                    logging.error(str(e))
 
             f.close()
 
