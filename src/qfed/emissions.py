@@ -436,14 +436,13 @@ class Emissions:
             f.variables['biomass'][0, :, :] = np.transpose(self.total(species)[:, :])
             for bb in self.biomass_burning:
                 v = f.variables[v_meta_data[bb]['name']]
+                if np.any(np.isnan(self.estimate[species][bb][:, :])):
+                    error_msg = f"NaN values detected in emissions: species='{species}',biome='{bb.type.value}'. Replacing with zeros."
+                    logging.error(error_msg)
+
+                self.estimate[species][bb] = np.nan_to_num(self.estimate[species][bb], nan=0.0)
                 v[0, :, :] = np.transpose(self.estimate[species][bb][:, :])
-                try:
-                    if np.any(np.isnan(self.estimate[species][bb][:, :])):
-                        raise ValueError(
-                            f"NaN values detected in emissions: species='{species}', biome='{bb.type.value}'")
-                except ValueError as e:
-                    print(f"Nan values detected in emissions: species'{species}', biome='{bb.type.value}'")
-                    logging.error(str(e))
+
 
             f.close()
 
