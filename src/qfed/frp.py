@@ -272,7 +272,7 @@ class GriddedFRP:
         lat = self._fp_reader.get_fire_latitude(fire_product_file)
         frp = self._fp_reader.get_fire_frp(fire_product_file)
         frp[frp < 0]=0
-        frp[frp > 40000]=np.nan #40000 was chosen as it is just above the max for all platforms using the equation FRP = A*sigma* (L4_fire - L4_background) / C
+        frp[frp > 40000]=0 #40000 was chosen as it is just above the max for all platforms using the equation FRP = A*sigma* (L4_fire - L4_background) / C
         line = self._fp_reader.get_fire_line(fire_product_file)
         sample = self._fp_reader.get_fire_sample(fire_product_file)
         area = self._fp_reader.get_fire_pixel_area(fire_product_file)
