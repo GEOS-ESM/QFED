@@ -424,10 +424,8 @@ class Emissions:
                 v = f.variables[_v['name']]
                 v.long_name = _v['long_name']
                 v.units = _v['units']
-                #v.missing_value = np.array(fill_value, np.float32)
-                #v.fmissing_value = np.array(fill_value, np.float32)
-                #v.vmin = np.array(fill_value, np.float32)
-                #v.vmax = np.array(fill_value, np.float32)
+                v.missing_value = np.array(fill_value, np.float32)
+                v.fmissing_value = np.array(fill_value, np.float32)
 
             # coordinate variables - data
             f.variables['time'][:] = np.array((0,))
@@ -438,7 +436,13 @@ class Emissions:
             f.variables['biomass'][0, :, :] = np.transpose(self.total(species)[:, :])
             for bb in self.biomass_burning:
                 v = f.variables[v_meta_data[bb]['name']]
+                if np.any(np.isnan(self.estimate[species][bb][:, :])):
+                    error_msg = f"NaN values detected in emissions: species='{species}',biome='{bb.type.value}'. Replacing with zeros."
+                    logging.error(error_msg)
+
+                self.estimate[species][bb] = np.nan_to_num(self.estimate[species][bb], nan=0.0)
                 v[0, :, :] = np.transpose(self.estimate[species][bb][:, :])
+
 
             f.close()
 
@@ -511,7 +515,7 @@ class Emissions:
             if arr is not None and np.size(arr) > 0:
                 vv[0, :, :] = np.transpose(arr)
             else:
-                vv[0, :, :] = fill_value
+                vv[0, :, :] = 0
 
         f.close()
 
