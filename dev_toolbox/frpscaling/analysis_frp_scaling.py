@@ -15,35 +15,35 @@ year = 2024
 
 # Which satellite streams to process (keys used in your data_dict)
 # 'vnp' = SNPP VIIRS, 'vj1' = NOAA-20 VIIRS, 'vj2' = NOAA-21 VIIRS, 'mod' = Terra MODIS
-satellites_to_process = ['vnp', 'vj1', 'vj2', 'mod']  # order controls output order
+satellites_to_process = ['vj2', 'vnp']  # order controls output order
 
 # Reference/baseline satellite against which others are compared
-baseline_satellite = 'myd'  # 'myd' = Aqua MODIS
+baseline_satellite = 'vj1'  # 'myd' = Aqua MODIS
 
 # Data loading behavior
-fresh_load = False  # True: force re-read from source; False: use cached/intermediate files if present
+fresh_load = True  # True: force re-read from source; False: use cached/intermediate files if present
 plot_analysis = True  # True: generate/show/save plots; False: skip plotting steps
 
 # Output & cache directories
-figure_dir = "./FIG_2"  # destination for saved figures
+figure_dir = "./v3.3"  # destination for saved figures
 cache_dir = "./cache"   # directory for serialized intermediates (e.g., npz/pkl)
 
 # Parallelism for heavy I/O/compute steps
-n_workers = 10  # number of worker processes/threads (depends on your implementation)
+n_workers = 20  # number of worker processes/threads (depends on your implementation)
 
 # Root path to QFED FRP inputs used by the loader functions
-lfs.base_path = '/Dedicated/jwang-data2/shared_satData/GMAO_QFED/OUTPUT/v3.2/0.1/FRP/'
+lfs.base_path = '/discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/IGBP/FRP/'
 
-prefix = 'QFED V3.2'
+prefix = 'QFED V3.3'
 
 
 # Optional biome-specific scaling factors (dimensionless) for FRP density
 # Keys match columns in data_dict[...] (units of rho_FRP typically W·km^-2 after your 1e6 scaling)
 c6scale = {}
-c6scale['frp_tf'] = 1.09728882  # Tropical Forests
-c6scale['frp_xf'] = 1.12014982  # Extra-tropical Forests
-c6scale['frp_sv'] = 1.22951496  # Savanna
-c6scale['frp_gl'] = 1.21702972  # Grasslands
+c6scale['frp_tf'] = 1  # Tropical Forests
+c6scale['frp_xf'] = 1  # Extra-tropical Forests
+c6scale['frp_sv'] = 1  # Savanna
+c6scale['frp_gl'] = 1  # Grasslands
 
 
 

@@ -59,11 +59,8 @@ def _load_single_day(args):
 def _get_file_path(satellite: str, date: datetime) -> str:
 	"""Generate file path for given satellite and date"""
 	year, month, day = date.strftime('%Y'), date.strftime('%m'), date.strftime('%d')
-	
-	# Handle special naming for Aqua MODIS
-	satellite = 'MYD14' if satellite == 'myd' else satellite
-	satellite = 'MOD14' if satellite == 'mod' else satellite
-	filename = f"qfed3_2.frp.{satellite}.{year}{month}{day}.nc4"
+
+	filename = f"qfed_frp_{satellite}.v3_3_0.{year}{month}{day}.nc4"
 	return os.path.join(base_path, f"Y{year}", f"M{month}", filename)
 
 
