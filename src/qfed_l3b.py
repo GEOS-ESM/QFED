@@ -321,6 +321,7 @@ def process(
                 scaling_mask_file=scaling_config['file'],
                 scaled_output_dir=scaling_config.get('output_dir', None),
                 ndays=ndays,
+                version=f'v{VERSION.replace(".", "_")}',
                 save_original=save_original,
             )
         except Exception as e:
