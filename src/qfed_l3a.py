@@ -22,7 +22,7 @@ from qfed.inventory import Finder
 from qfed.instruments import Instrument, Satellite
 from qfed.frp import GriddedFRP
 from qfed import VERSION
-from qfed.vegetation import IGBPNetCDF
+
 
 def parse_arguments(default, version):
     """
@@ -137,7 +137,7 @@ def process(
     output_grid,
     output,
     obs_system,
-    igbp,
+    igbp_template,   # raw template string
     version,
     watermask,
     compress,
@@ -146,27 +146,27 @@ def process(
     """
     Processes single timestamped time interval.
     """
+    # Format the IGBP path using the year from t_start
+    igbp = igbp_template.format(t_start)
+    logging.info(f"Using IGBP file: {igbp}")
+
     for satellite in obs_system.keys():
 
-        platform = Satellite(satellite) #Instrument(instrument)
-        
+        platform = Satellite(satellite)
+
         # input files
         gp_file = cli_utils.get_path(obs_system[satellite]['geolocation']['file'])
         fp_file = cli_utils.get_path(obs_system[satellite]['fires']['file'])
-        
-#         vg_dir = igbp
 
         # output file
-        output_file = cli_utils.get_path(output[satellite], timestamp=timestamp, 
+        output_file = cli_utils.get_path(output[satellite], timestamp=timestamp,
                                          version=version, sat=satellite)
 
-      
         output_dir = os.path.dirname(output_file)
         os.makedirs(output_dir, exist_ok=True)
 
         # product readers
-#         finder = Finder(gp_file, fp_file, vg_dir)
-        finder = Finder(gp_file, fp_file)
+        finder = Finder(gp_file, fp_file)          # Finder no longer takes igbp
         gp_reader = geolocation_products.create(platform)
         fp_reader = fire_products.create(platform)
         cp_reader = classification_products.create(platform)
@@ -224,25 +224,17 @@ def main():
 
     watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
 
-	# Option if want to remove the gas flaring and other static sources
-    igbp = IGBPNetCDF( config['qfed']['with']['igbp'], 
-                      static_heat=True,
-                      gasflaring=True,
-                      volcano=True,
-                      drops = [0, 21, 22, 23])
-	#  Keep this at this moment for option that doesn't drop out gas flaring...
-#     igbp = IGBPNetCDF(config['qfed']['with']['igbp'],
-#                       drops = [0])
-    
+    # Keep as raw template string; formatting happens inside process()
+    igbp_template = config['qfed']['with']['igbp']
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
     output = {
         platform: config['qfed']['output']['frp']['file'] for platform in args.obs
     }
-    
+
     version = f'v{VERSION.replace(".", "_")}'
-    
+
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
@@ -254,13 +246,12 @@ def main():
             output_grid,
             output,
             obs,
-            igbp,
+            igbp_template,
             version,
             watermask,
             args.compress,
             args.dry_run,
         )
-
 
 
 if __name__ == '__main__':
