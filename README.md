@@ -26,10 +26,24 @@ mepo clone git@github.com:GEOS-ESM/QFED.git
 This will clone the main branch. Use -b to clone a specific branch.
 
 ### Build and Install
+
+#### Using `cmake_it`
+
+`cmake_it` is a script that "automates" the CMake build process by essentially
+running the CMake commands seen in the next section.
+
 ```
 cd QFED
 source @env/g5_modules.sh
 ./cmake_it
+```
+
+#### Using CMake Directly
+
+```
+cd QFED
+source @env/g5_modules.sh
+cmake -B build -S . --install-prefix=$(pwd)/install
 cmake --build build --target install -j 6
 ```
 
