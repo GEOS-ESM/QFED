@@ -13,3 +13,15 @@ log.*
 CMakeUserPresets.json
 [._]*.s[a-v][a-z]
 [._]*.sw[a-p]
+
+
+# Ignore possible symlinked directories
+build-*
+install-*
+
+*.swp
+*.swo
+.DS_Store
+*#
+.#*
+**/CVS/
