@@ -1,5 +1,5 @@
 define:
-    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/
+    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_carb/sbasu1/fluxes/QFED/run
     modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis/ 
 
 qfed:
