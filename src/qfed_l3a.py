@@ -4,14 +4,20 @@
 A script that creates QFED Level 3A files.
 """
 
-import os
+import os, sys
 import logging
 from datetime import datetime, timedelta
 import yaml
 import argparse
 import textwrap
-
 import netCDF4 as nc
+
+# add QFED code to python path
+install_prefix = "%%INSTALL_PREFIX%%" # will be set by cmake
+qfed_path = os.path.realpath( os.path.join(install_prefix, 'lib/Python') )
+sys.path.append(qfed_path)
+# add config dir
+CONFIG_PATH = os.path.realpath( os.path.join( install_prefix, 'etc' ) )
 
 from qfed import cli_utils
 from qfed import grid
@@ -193,7 +199,7 @@ def main():
     """
     defaults = dict(
         obs=['mod', 'myd', 'vnp', 'vj1', 'vj2'],
-        config='config.yaml',
+        config=os.path.join(CONFIG_PATH, 'config.yaml'),
         log_level='INFO',
     )
 

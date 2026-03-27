@@ -21,6 +21,9 @@ from qfed import fire
 from qfed import VERSION
 from qfed.emissions import Emissions
 
+# add config dir
+install_prefix = "%%INSTALL_PREFIX%%" # will be set by cmake
+CONFIG_PATH = os.path.realpath( os.path.join( install_prefix, 'etc' ) )
 
 class GriddedFRP:
     """
@@ -466,7 +469,7 @@ class GriddedFRP:
             max_aod = 10 # max AOD used by QFED 2.5.2
             oc_mass_ext_coeff = 4.0
             pom_oc_ratio = 1.8 #1.4 was used by QFED 2.5.2 but this was changed to 1.8 to refect the value used by GOCART
-            with open('qcscalingfactors.yaml') as f:
+            with open(os.path.join(CONFIG_PATH, 'qcscalingfactors.yaml')) as f:
                 qcscaling = yaml.safe_load(f)
 
 # apply the 'sequential-b0' method to compute emissions
