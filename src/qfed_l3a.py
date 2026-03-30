@@ -7,7 +7,6 @@ A script that creates QFED Level 3A files.
 import os
 import logging
 from datetime import datetime, timedelta
-import yaml
 import argparse
 import textwrap
 
@@ -21,7 +20,6 @@ from qfed import fire_products
 from qfed.inventory import Finder
 from qfed.instruments import Instrument, Satellite
 from qfed.frp import GriddedFRP
-from qfed.vegetation import IGBPNetCDF
 from qfed import VERSION
 
 
@@ -70,7 +68,7 @@ def parse_arguments(default, version):
         choices=('mod', 'myd', 'vnp', 'vj1', 'vj2'),
         help=("Fire observing system(s). Accepts short or long names: "
               "mod|modis/terra, myd|modis/aqua, "
-              "vnp|viirs/npp or s-npp"
+              "vnp|viirs/npp or s-npp, "
               "vj1|viirs/jpss-1 or noaa-20, "
               "vj2|viirs/jpss-2 or noaa-21"),
     )
@@ -99,6 +97,17 @@ def parse_arguments(default, version):
     )
 
     parser.add_argument(
+        '--max-workers',
+        dest='max_workers',
+        type=int,
+        default=None,
+        help=(
+            'maximum number of parallel worker processes for granule '
+            'processing (default: auto-detect based on CPU count)'
+        ),
+    )
+
+    parser.add_argument(
         'date_start',
         type=datetime.fromisoformat,
         metavar='start',
@@ -117,20 +126,6 @@ def parse_arguments(default, version):
     return args
 
 
-def get_auxiliary_watermask(file):
-    """
-    Reads auxiliary watermask from a file.
-    """
-    logging.info(f"Reading auxiliary watermask from file '{file}'.")
-    f = nc.Dataset(file)
-    watermask = f.variables['watermask'][...]
-    f.close()
-    logging.debug(
-        f'The auxiliary watermask uses {1e-6*watermask.nbytes:.1f} MB of RAM.'
-    )
-    return watermask
-
-
 def process(
     t_start,
     t_end,
@@ -138,45 +133,99 @@ def process(
     output_grid,
     output,
     obs_system,
-    igbp_template,   # raw template string
+    igbp_template,
     version,
-    watermask,
+    watermask_file,
     compress,
     dry_run,
+    max_workers=None,
 ):
     """
-    Processes single timestamped time interval.
+    Processes all satellites sequentially for a single timestamped
+    time interval.
+
+    Granule-level parallelism is handled inside GriddedFRP.ingest(),
+    which spawns one worker process per granule up to max_workers.
+    IGBP and watermask data are loaded from file paths inside each
+    worker process and cached after first use, so there is no
+    pickling of large numpy arrays across process boundaries.
+
+    Parameters
+    ----------
+    t_start : datetime
+        Start of the processing window (inclusive).
+    t_end : datetime
+        End of the processing window (exclusive).
+    timestamp : datetime
+        Timestamp used to label the output file.
+    output_grid : grid.Grid
+        Output grid specification.
+    output : dict
+        Mapping of satellite name -> output file path template.
+    obs_system : dict
+        Mapping of satellite name -> geolocation/fire file templates.
+    igbp_template : str
+        Raw format string for the IGBP file path. Formatted with t_start.
+    version : str
+        QFED version string used in output file names.
+    watermask_file : str
+        Path to the auxiliary watermask NetCDF file.
+    compress : bool
+        If True, compress output NetCDF variables with zlib.
+    dry_run : bool
+        If True, create diskless (in-memory) output files only.
+    max_workers : int or None
+        Maximum number of parallel granule worker processes.
+        None defers to the GriddedFRP default (cpu_count - 1).
     """
-    # Format the IGBP path using the year from t_start
+    # Format the IGBP path for the year of t_start.
+    # The path string is passed directly to GriddedFRP — workers load
+    # and cache their own IGBPNetCDF instances from this path.
     igbp_path = igbp_template.format(t_start)
     logging.info(f"Using IGBP file: {igbp_path}")
-    igbp = IGBPNetCDF(igbp_path)
 
     for satellite in obs_system.keys():
 
         platform = Satellite(satellite)
 
-        # input files
+        # Input file path templates
         gp_file = cli_utils.get_path(obs_system[satellite]['geolocation']['file'])
         fp_file = cli_utils.get_path(obs_system[satellite]['fires']['file'])
 
-        # output file
-        output_file = cli_utils.get_path(output[satellite], timestamp=timestamp,
-                                         version=version, sat=satellite)
+        # Output file path
+        output_file = cli_utils.get_path(
+            output[satellite],
+            timestamp=timestamp,
+            version=version,
+            sat=satellite,
+        )
 
         output_dir = os.path.dirname(output_file)
         os.makedirs(output_dir, exist_ok=True)
 
-        # product readers
-        finder = Finder(gp_file, fp_file)
+        # Product readers
+        # These are passed to GriddedFRP for API compatibility but are
+        # not used internally by the parallel implementation — each
+        # worker process creates its own fresh reader instances.
+        finder    = Finder(gp_file, fp_file)
         gp_reader = geolocation_products.create(platform)
         fp_reader = fire_products.create(platform)
         cp_reader = classification_products.create(platform)
 
-        cp_reader.set_auxiliary(watermask=watermask)
-
-        # generate gridded FRP and areas
-        frp = GriddedFRP(satellite, output_grid, finder, gp_reader, fp_reader, cp_reader, igbp)
+        # Generate gridded FRP and areas.
+        # Pass igbp_path and watermask_file as strings — workers load
+        # and cache their own instances, avoiding large array pickling.
+        frp = GriddedFRP(
+            satellite,
+            output_grid,
+            finder,
+            gp_reader,
+            fp_reader,
+            cp_reader,
+            igbp_path,
+            watermask_file=watermask_file,
+            max_workers=max_workers,
+        )
         frp.ingest(t_start, t_end)
         frp.save(
             output_file,
@@ -191,7 +240,7 @@ def process(
 
 def main():
     """
-    Processes QFED L3A files according to command line arguments,
+    Processes QFED L3A files according to command line arguments
     and a configuration file.
     """
     defaults = dict(
@@ -204,7 +253,6 @@ def main():
         level=logging.DEBUG,
         format="%(asctime)s  %(levelname)-8s  %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        # filename='qfed_l3a.log',
     )
 
     args = parse_arguments(defaults, VERSION)
@@ -224,9 +272,11 @@ def main():
 
     output_grid = grid.Grid(resolution)
 
-    watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
+    # Pass the watermask file path to process() — workers load their
+    # own copies from this path, so we do not read it into memory here.
+    watermask_file = config['qfed']['with']['watermask']
 
-    # Keep as raw template string; formatting and instantiation happen inside process()
+    # Keep as a raw template string; formatted with t_start inside process()
     igbp_template = config['qfed']['with']['igbp']
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
@@ -238,9 +288,20 @@ def main():
     version = f'v{VERSION.replace(".", "_")}'
 
     start, end = cli_utils.get_entire_time_interval(args)
-    intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
+    intervals = cli_utils.get_timestamped_time_intervals(
+        start, end, timedelta(hours=24)
+    )
+
+    logging.info(
+        f"Processing {len(intervals)} date(s) "
+        f"with {len(args.obs)} satellite(s) each."
+    )
 
     for t_start, t_end, timestamp in intervals:
+        logging.info(f"\n{'='*70}")
+        logging.info(f"Processing date: {timestamp:%Y-%m-%d}")
+        logging.info(f"{'='*70}\n")
+
         process(
             t_start,
             t_end,
@@ -250,10 +311,15 @@ def main():
             obs,
             igbp_template,
             version,
-            watermask,
+            watermask_file,
             args.compress,
             args.dry_run,
+            max_workers=args.max_workers,
         )
+
+    logging.info("\n" + "="*70)
+    logging.info("All processing complete.")
+    logging.info("="*70)
 
 
 if __name__ == '__main__':
