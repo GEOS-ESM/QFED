@@ -237,7 +237,7 @@ class GriddedFRP:
     def _process_cloud_coast(self):
         """
         Process cloud coast pixels that do not contain active fires.
-        Note that coast pixels are lumped with land pixels.
+        Note that coast pixels are lumped with water pixels.
         """
         i = self._is_cloud['coast'] & self._valid_coordinates
         lon, lat, area = self._select(i)
