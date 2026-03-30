@@ -21,6 +21,7 @@ from qfed import fire_products
 from qfed.inventory import Finder
 from qfed.instruments import Instrument, Satellite
 from qfed.frp import GriddedFRP
+from qfed.vegetation import IGBPNetCDF
 from qfed import VERSION
 
 
@@ -147,8 +148,9 @@ def process(
     Processes single timestamped time interval.
     """
     # Format the IGBP path using the year from t_start
-    igbp = igbp_template.format(t_start)
-    logging.info(f"Using IGBP file: {igbp}")
+    igbp_path = igbp_template.format(t_start)
+    logging.info(f"Using IGBP file: {igbp_path}")
+    igbp = IGBPNetCDF(igbp_path)
 
     for satellite in obs_system.keys():
 
@@ -166,7 +168,7 @@ def process(
         os.makedirs(output_dir, exist_ok=True)
 
         # product readers
-        finder = Finder(gp_file, fp_file)          # Finder no longer takes igbp
+        finder = Finder(gp_file, fp_file)
         gp_reader = geolocation_products.create(platform)
         fp_reader = fire_products.create(platform)
         cp_reader = classification_products.create(platform)
@@ -224,7 +226,7 @@ def main():
 
     watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
 
-    # Keep as raw template string; formatting happens inside process()
+    # Keep as raw template string; formatting and instantiation happen inside process()
     igbp_template = config['qfed']['with']['igbp']
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
