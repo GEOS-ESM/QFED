@@ -25,7 +25,7 @@ class FireType(Enum):
     SAVANNA = 'sv'
     GRASSLAND = 'gl'
     AGRICULTURAL = 'ag'
-    PEETLAND = 'pt'
+    PEATLAND = 'pt'
     FLARING = 'fl'
     WASTE = 'ws'
 
@@ -61,6 +61,16 @@ BIOMASS_BURNING = (
         description='Grassland',
         type=FireType.GRASSLAND,
         vegetation=VegetationCategory.GRASSLAND,
+    ),
+    Fire(
+        description='Agricultural',
+        type=FireType.AGRICULTURAL,
+        vegetation=VegetationCategory.AGRICULTURAL,
+    ),
+        Fire(
+        description='Peatland',
+        type=FireType.PEATLAND,
+        vegetation=VegetationCategory.PEATLAND,
     ),
 )
 

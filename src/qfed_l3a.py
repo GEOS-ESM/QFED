@@ -139,6 +139,8 @@ def process(
     compress,
     dry_run,
     max_workers=None,
+    peat_file=None,
+    peat_lat_threshold=55.0,
 ):
     """
     Processes all satellites sequentially for a single timestamped
@@ -177,12 +179,29 @@ def process(
     max_workers : int or None
         Maximum number of parallel granule worker processes.
         None defers to the GriddedFRP default (cpu_count - 1).
+    peat_file : str or None, optional
+        Path to the GL_PEAT_GPA22 NetCDF file. When None (default),
+        peat reclassification is disabled entirely. Passed as a plain
+        string to GriddedFRP so worker processes can load and cache
+        their own IGBPNetCDF instances without pickling large arrays.
+    peat_lat_threshold : float, optional
+        Northern latitude threshold (degrees) above which extra-tropical
+        forest, savanna, and grassland pixels that are peat-dominated
+        (GPA22 class 1) are reclassified as peat (default 55.0°N).
     """
     # Format the IGBP path for the year of t_start.
     # The path string is passed directly to GriddedFRP — workers load
     # and cache their own IGBPNetCDF instances from this path.
     igbp_path = igbp_template.format(t_start)
     logging.info(f"Using IGBP file: {igbp_path}")
+
+    if peat_file is not None:
+        logging.info(
+            f"Peat reclassification enabled: '{peat_file}' "
+            f"(threshold: {peat_lat_threshold}°N)."
+        )
+    else:
+        logging.info("Peat reclassification disabled (no peat file configured).")
 
     for satellite in obs_system.keys():
 
@@ -203,18 +222,13 @@ def process(
         output_dir = os.path.dirname(output_file)
         os.makedirs(output_dir, exist_ok=True)
 
-        # Product readers
-        # These are passed to GriddedFRP for API compatibility but are
-        # not used internally by the parallel implementation — each
-        # worker process creates its own fresh reader instances.
+        # product readers
         finder    = Finder(gp_file, fp_file)
         gp_reader = geolocation_products.create(platform)
         fp_reader = fire_products.create(platform)
         cp_reader = classification_products.create(platform)
 
-        # Generate gridded FRP and areas.
-        # Pass igbp_path and watermask_file as strings — workers load
-        # and cache their own instances, avoiding large array pickling.
+        # generate gridded FRP and areas.
         frp = GriddedFRP(
             satellite,
             output_grid,
@@ -225,12 +239,14 @@ def process(
             igbp_path,
             watermask_file=watermask_file,
             max_workers=max_workers,
+            peat_file=peat_file,
+            peat_lat_threshold=peat_lat_threshold,
         )
         frp.ingest(t_start, t_end)
         frp.save(
             output_file,
             timestamp,
-            qc=True,
+            qc=False,
             compress=compress,
             satellite=satellite,
             fill_value=1e20,
@@ -272,12 +288,13 @@ def main():
 
     output_grid = grid.Grid(resolution)
 
-    # Pass the watermask file path to process() — workers load their
-    # own copies from this path, so we do not read it into memory here.
     watermask_file = config['qfed']['with']['watermask']
 
-    # Keep as a raw template string; formatted with t_start inside process()
     igbp_template = config['qfed']['with']['igbp']
+
+    peat_config         = config['qfed'].get('with', {}).get('peat', {}) or {}
+    peat_file           = peat_config.get('file', None)
+    peat_lat_threshold  = float(peat_config.get('lat_threshold', 55.0))
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
@@ -315,6 +332,8 @@ def main():
             args.compress,
             args.dry_run,
             max_workers=args.max_workers,
+            peat_file=peat_file,
+            peat_lat_threshold=peat_lat_threshold,
         )
 
     logging.info("\n" + "="*70)
