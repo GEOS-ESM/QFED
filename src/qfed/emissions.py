@@ -453,7 +453,7 @@ class Emissions:
         os.makedirs(os.path.dirname(out_file), exist_ok=True)
         f = nc.Dataset(out_file, "w", format="NETCDF4", diskless=diskless)
 
-        # ---- globals (mirror your style) ----
+        # ---- globals ----
         f.institution  = 'NASA/GSFC, Global Modeling and Assimilation Office'
         f.title        = f'QFED Level 3 FRP Density Forecast (v{VERSION})'
         f.contact      = 'qfed@lists.nasa.gov'
