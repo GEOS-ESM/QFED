@@ -12,18 +12,16 @@ enhance_gas_factor:
     extratropical_forest: 1
     savanna: 1
     grassland: 1
-# satellite scale factor based on comparison with GFED CO, since VIIRS 
-# FRP density is scale to the AQUA level, the satellite factor should be 
-# the same as AQUA
+# satellite scale factor based on comparison of VJ1 with GFED5 CO, since VIIRS 
+# FRP density is scale to the VJ1 level, the satellite factor should be 
+# the same as VJ1
 satscale:
     myd: 1
     mod: 1
     vj2: 0.7680
     vj1: 0.7680
     vnp: 0.7680
-# MODIS C6 to C5 scaling factor (based on OC tuning), the VIIRS is 
-# based on FRP density regression using MODIS AQUA (C6)as reference
-# and with the MODIS C6 to C5 scaling factor considered
+# biome level anchoring to VJ1
 myd:
     tropical_forest: 1
     extratropical_forest: 1
