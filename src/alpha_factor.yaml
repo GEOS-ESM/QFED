@@ -12,7 +12,8 @@ enhance_gas_factor:
     extratropical_forest: 1
     savanna: 1
     grassland: 1
-#The satellite scaling factor was derived through a linear regression between VJ1 and GFED5. #All other satellites use the same satellite factor as VJ1 since biome level anchoring to VJ1 is used based on the values below. 
+#The satellite scaling factor was derived through a linear regression between VJ1 and GFED5. 
+#All other satellites use the same satellite factor as VJ1 since biome level anchoring to VJ1 is used based on the values below. 
 #Note these values are still a work in progress and will likely change.
 satscale:
     myd: 0.7680
