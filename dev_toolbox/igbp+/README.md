@@ -78,10 +78,14 @@ python gen_global_daily_VIIRS_static_source.py $sat --start 2019-01-01 --end 201
 python gen_global_VIIRS_static_source.py --sat VNP --year 2019
 ```
 
+### 5. Global IGBP+ file
+With data from step 1 ~ step 4 ready, excute the ``gen_global_igbp_plus.py`` to concateante all dataset into one
 
-
-
-
+```
+python gen_global_igbp_plus.py --year 2019 --shs VNP VJ1
+```
+- --year: the year of the IGBP+ file to be generated
+- --shs: the sensors of the VIIRS static heat source to be included 
 
 
 
