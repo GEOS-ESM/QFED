@@ -40,13 +40,13 @@ PLUS_resolution: 480
 - `figure_root`: where the verification files are stored
 - `IGBP_resolution`: resolution (per 10 degree tile) of the MODIS IGBP data
 - `PLUS_resolution`: resolution (per 10 degree tile) of the volcano, gasflaring, and static heat source data
----
 
+---
 ## Usage
 
 ### 1. MODIS IGBP data
 
-Execute the ``gen_global_MODIS_IGBP.py`` to concatenate MODIS IGBP file from discreet the sinusodial tiles to a global file 
+Execute the ``gen_global_MODIS_IGBP.py`` to concatenate [MODIS IGBP file](https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MCD12Q1/) from discreet the sinusodial tiles to a global file 
 
 ```
 python gen_global_MODIS_IGBP.py --year 2019
@@ -62,7 +62,7 @@ python gen_global_volcano_source.py
 
 ### 3. Global Gasflaring data
 
-Execute the ``gen_global_gasflaring_source.py`` 
+Execute the ``gen_global_gasflaring_source.py`` to convert the [Global Gas Flaring Dataset](https://eogdata.mines.edu/products/vnf/global_gas_flare.html) into global grided data.
 ```
 python gen_global_gasflaring_source.py
 ```
@@ -77,4 +77,17 @@ python gen_global_daily_VIIRS_static_source.py $sat --start 2019-01-01 --end 201
 ```
 python gen_global_VIIRS_static_source.py --sat VNP --year 2019
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
