@@ -1,0 +1,7 @@
+raw_data_root: "./IGBP_SUPPORT_FILES"
+igbp_input: "/Dedicated/jwang-data/shared_satData/OPNL_FILDA/DATA/LAND_COVER_SINO"
+igbp_output_root: "./IGBP+"
+vnp14img_root: "/Dedicated/jwang-data2/shared_satData/OPNL_FILDA/DATA/LEV1B"
+figure_root: "./FIG"
+IGBP_resolution: 2400
+PLUS_resolution: 480

@@ -13,6 +13,7 @@ import os, sys, glob
 import pandas as pd
 from scipy import stats
 import numpy as np
+import yaml
 from netCDF4 import Dataset
 from lib_IGBP_plus import *
 
@@ -22,12 +23,19 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import datetime
 
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
+
 parser = argparse.ArgumentParser(description="Generate daily grided fire data based on l2 viirs activate fire detection V**14IMG")
 parser.add_argument("sat", help="Sensor short name (e.g., VNP)")
 parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
 parser.add_argument("--end", required=True, help="End date YYYY-MM-DD")
 parser.add_argument("--fresh_csv", required=True, help="True or False, Create the new daily *.csv file")
 args = parser.parse_args()
+
+l2_root  = SETTING['vnp14img_root']
+data_root  = SETTING["raw_data_root"]
 
 sat = args.sat
 date_start = args.start
@@ -37,11 +45,12 @@ fresh_csv = args.fresh_csv
 year = date_start[0:4]
 
 FILL_VALUES = 255
-num_cells = 480
+num_cells = SETTING["PLUS_resolution"]
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-l2_dir   = '/Dedicated/jwang-data2/shared_satData/OPNL_FILDA/DATA/LEV1B/' + sat + '14IMG/'
-csv_out_dir = f'./Daily_CSV/{sat}{year}/'
-nc_out_dir  = f'./Daily_NC/{sat}{year}/'
+l2_dir   = f'{l2_root}/{sat}14IMG/'
+csv_out_dir = f'{data_root}/Daily_CSV/{sat}{year}/'
+nc_out_dir  = f'{data_root}/Daily_NC/{sat}{year}/'
 
 os.makedirs(csv_out_dir, exist_ok=True)
 os.makedirs(nc_out_dir, exist_ok=True)

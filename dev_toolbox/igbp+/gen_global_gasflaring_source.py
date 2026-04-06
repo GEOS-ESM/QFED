@@ -15,19 +15,24 @@ from scipy import stats
 import numpy as np
 from netCDF4 import Dataset
 from lib_IGBP_plus import *
+import yaml
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 		
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
 
 in_dir = '/Dedicated/jwang-data2/mzhou/project/OPNL_FILDA/STATIC_SOURCE/GAS_FLARING_SOURCE_DATA/'
 out_dir = './GL_STATIC/'
 os.makedirs(out_dir, exist_ok=True)
 
 FILL_VALUES = 255
-num_cells=480
+num_cells = SETTING['PLUS_resolution']
+
 flag_verify = True
 
 

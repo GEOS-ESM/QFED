@@ -6,6 +6,7 @@ To run this code, you need
 3. cartopy
 4. netCDF4
 5. pandas
+6. yaml
 '''
 
 import argparse
@@ -15,15 +16,25 @@ from scipy import stats
 import numpy as np
 from netCDF4 import Dataset
 from lib_IGBP_plus import *
+import yaml
 
 
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
 
-data_path = '/Dedicated/jwang-data2/mzhou/project/OPNL_FILDA/STATIC_SOURCE/GVP_Volcano_List/'
-out_dir = './GL_STATIC/'
+data_root  = SETTING["raw_data_root"]
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+data_path = f'{data_root}/GVP_Volcano_List/'
+out_dir   = f'{data_root}/GL_STATIC/'
+fig_dir   = SETTING['figure_root']
 os.makedirs(out_dir, exist_ok=True)
 
 FILL_VALUES = 255
 flag_verify = True
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # Read the global volcano program volcano list
@@ -129,7 +140,6 @@ if flag_verify:
 	lat, lon = get_coordinates(northing, easting, idx)
 
 	# - - - - - - - - - - - - - - - - - - - - - 
-	fig_dir = './FIG/'
 	os.makedirs(fig_dir, exist_ok=True)
 	
 	map_projection = ccrs.Robinson()

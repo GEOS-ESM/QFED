@@ -22,15 +22,19 @@ import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
+
 parser = argparse.ArgumentParser(description="Generate daily grided fire data based on l2 viirs activate fire detection V**14IMG")
-parser.add_argument("sat", help="Sensor short name (e.g., VNP)")
+parser.add_argument("--sat", help="Sensor short name (e.g., VNP)")
 parser.add_argument("--year", required=True, help="Year of analysis YYYY (e.g., 2024)")
 args = parser.parse_args()
 
 sat = args.sat
 year = args.year
 
-flag_verify = True
+flag_verify = False
 
 in_dir  = f'./Daily_NC/{sat}{year}/'
 out_dir = f'./GL_STATIC/'
@@ -38,7 +42,7 @@ os.makedirs(out_dir, exist_ok=True)
 
 
 
-num_cells = 480
+num_cells = SETTING['IGBP_resolution']
 FILL_VALUES = 255
 revisit_cycle = 16
 

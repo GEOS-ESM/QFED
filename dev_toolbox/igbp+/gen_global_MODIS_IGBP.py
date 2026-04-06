@@ -13,6 +13,7 @@ import os, sys, glob, copy
 import pandas as pd
 from scipy import stats
 import numpy as np
+import yaml
 from netCDF4 import Dataset
 from lib_IGBP_plus import *
 
@@ -21,21 +22,27 @@ import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
 
 parser = argparse.ArgumentParser(description="Concatenate MODIS IGBP MCD12Q1")
-parser.add_argument("year", help="Product year")
+parser.add_argument("--year", help="Product year")
 args = parser.parse_args()
 
 year = args.year
+igbp_input = SETTING['igbp_input']
+out_root   = SETTING['raw_data_root']
 
-FILL_VALUES = 31
-num_cells = 2400
 
-
-SURF_DIR = f'/Dedicated/jwang-data/shared_satData/OPNL_FILDA/DATA/LAND_COVER_SINO/{year}/001/'
-out_dir = './GL_IGBP_MODIS/'
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+SURF_DIR = f'{igbp_input}/{year}/001/'
+out_dir = f'{out_root}/GL_IGBP_MODIS/'
 os.makedirs(out_dir, exist_ok=True)
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+FILL_VALUES = 31
+num_cells   = SETTING['IGBP_resolution']
 
 hidMax = 35
 hidMin = 0
