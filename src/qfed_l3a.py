@@ -138,7 +138,7 @@ def process(
     output_grid,
     output,
     obs_system,
-    igbp_template,   # raw template string
+    igbp,
     version,
     watermask,
     compress,
@@ -147,11 +147,6 @@ def process(
     """
     Processes single timestamped time interval.
     """
-    # Format the IGBP path using the year from t_start
-    igbp_path = igbp_template.format(t_start)
-    logging.info(f"Using IGBP file: {igbp_path}")
-    igbp = IGBPNetCDF(igbp_path)
-
     for satellite in obs_system.keys():
 
         platform = Satellite(satellite)
@@ -241,6 +236,27 @@ def main():
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
 
     for t_start, t_end, timestamp in intervals:
+        if t_start == start:
+            # Format the IGBP path using the year from t_start
+            igbp_path = igbp_template.format(t_start)
+            logging.info(f"Using IGBP file: {igbp_path}")
+            # load IGBP dataset
+            igbp = IGBPNetCDF(igbp_path)
+            current_igbp_year = '{0:%Y}'.format(t_start)
+
+        else:
+            # check if IGBP needs to be updated
+            new_igbp_year = '{0:%Y}'.format(t_start)
+            if new_igbp_year != current_igbp_year:
+                # Format the IGBP path using the year from t_start
+                igbp_path = igbp_template.format(t_start)
+                logging.info(f"Using IGBP file: {igbp_path}")
+                # load IGBP dataset
+                igbp = IGBPNetCDF(igbp_path)                
+                current_igbp_year = new_igbp_year
+            else:
+                logging.info(f"Using IGBP file: {igbp_path}")
+                
         process(
             t_start,
             t_end,
@@ -248,7 +264,7 @@ def main():
             output_grid,
             output,
             obs,
-            igbp_template,
+            igbp,
             version,
             watermask,
             args.compress,
