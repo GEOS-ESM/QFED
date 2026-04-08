@@ -1,6 +1,9 @@
 # QFED IGBP+ tool box
 
 Utilities to generate the IGBP, static heat source, gas flaring, and volcano classification for QFED fire pixil screening
+If running on NCCS, as of 6 Apr 2026, there is python dependency error with loading excel files. As a temporary fix, ml use -a /home/mathomp4/modulefiles-SLES15
+  ml python/MINIpyD/3.14
+however, this is a mini environment that can change at any time.
 
 ---
 
@@ -9,11 +12,13 @@ Utilities to generate the IGBP, static heat source, gas flaring, and volcano cla
 ```
 ├── README.md
 ├── config.yaml                                # User config (raw_data_root, igbp_output_root, figure_root)
-├── gen_global_MODIS_IGBP                      # Generate INFOR/<product>/<YYYY>/<YYYY-MM-DD>.csv
-├── gen_global_volcano_source.py               # Download missing/corrupted files (wget + token; supports --output_dir)
-├── gen_global_gasflaring_source.py            # Compare INFOR vs local files; list missing (with downloadsLink)
-├── gen_global_daily_VIIRS_static_source.py    # Check missing HHMM granules per day (VIIRS 6-min / MODIS 5-min)
-└── gen_global_VIIRS_static_source.py          # Daily bars arranged by month; highlight missing days
+├── gen_global_MODIS_IGBP                      # Generates GL_IGBP_MODIS.YYYY.nc
+├── gen_global_volcano_source.py               # Generates GL_GVP_VOLCANO.nc
+├── gen_global_gasflaring_source.py            # Generates GL_VIIRS_GASFLARING.YYYY.nc
+├── gen_global_daily_VIIRS_static_source.py    # Generates daily CSV with binary status of fire detection
+└── gen_global_VIIRS_static_source.py          # Generates counts of annual "fires" considered static sources
+└── gen_global_igbp_plus.py                    # Concatenates IGBP, volcanoes, gas flaring, and static sources to a single file to be used as input to QFED
+
 ```
 
 ---
@@ -69,23 +74,23 @@ python gen_global_gasflaring_source.py
 
 
 ### 4. Global Static heat source data
+This needs to be run separately for each satellite you want to find static sources for. Examples for $sat are VNP, VJ1, and VJ2. The input files are from HTTPS://DOI.ORG/10.5067/VIIRS/{sat}14IMG.002.
 - Step one: generate the daily static heat source based on daily VIIRS I-band fire detection
 ```
 python gen_global_daily_VIIRS_static_source.py $sat --start 2019-01-01 --end 2019-12-31 --fresh_csv True
 ```
 - Step two: conduct revisit cycle analysis on the daily VIIRS static source 
 ```
-python gen_global_VIIRS_static_source.py --sat VNP --year 2019
+python gen_global_VIIRS_static_source.py --sat $sat --year 2019
 ```
 
 ### 5. Global IGBP+ file
-With data from step 1 ~ step 4 ready, excute the ``gen_global_igbp_plus.py`` to concateante all dataset into one
+With data from step 1 ~ step 4 ready, excute the ``gen_global_igbp_plus.py`` to concatenate all dataset into one
 
 ```
-python gen_global_igbp_plus.py --year 2019 --shs VNP VJ1
+python gen_global_igbp_plus.py --year 2019
 ```
 - --year: the year of the IGBP+ file to be generated
-- --shs: the sensors of the VIIRS static heat source to be included 
 
 
 

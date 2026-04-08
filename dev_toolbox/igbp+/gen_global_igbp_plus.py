@@ -16,22 +16,31 @@ import numpy as np
 from netCDF4 import Dataset
 from lib_IGBP_plus import *
 import time, copy
+import yaml
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
+parser = argparse.ArgumentParser(description="Concatenate IGBP+ products into a single file")
+parser.add_argument("--year", help="Product year")
+args = parser.parse_args()
+
+year = args.year
+
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
 
 in_modis_dir = './GL_IGBP_MODIS/'
-in_plus_dir  = './GL_STATIC/'
+in_plus_dir  = SETTING["intermediate_root"]
 out_dir = './IGBP+/'
 os.makedirs(out_dir, exist_ok=True)
 
-num_cells = 2400
-num_cells_plus = 480
+num_cells = SETTING["IGBP_resolution"]
+num_cells_plus = SETTING["PLUS_resolution"]
 
-year = '2024'
 IGBP_FILE = f'{in_modis_dir}GL_IGBP_MODIS.{year}.nc'
 
 ncid = Dataset(IGBP_FILE)
@@ -236,7 +245,7 @@ ncid.igbp_data_source ='MCD12Q1 Version 6.1 (Aqua/Terra MODIS)'
 ncid.igbp_primary_documentation = "https://doi.org/10.5067/MODIS/MCD12Q1.061"
 
 ncid.static_heat_source_data_source = f'VIIRS Active Fire Detection Collection 2'
-ncid.SHH_primary_documentation = f"HTTPS://DOI.ORG/10.5067/VIIRS/VIIRS14IMG.002"
+ncid.SHH_primary_documentation = f"HTTPS://DOI.ORG/10.5067/VIIRS/VNP14IMG.002 and HTTPS://DOI.ORG/10.5067/VIIRS/VJ114IMG.002"
 
 ncid.volcano_data_source = f'The Global Volcanism Program'
 ncid.GVP_primary_documentation = f"https://volcano.si.edu/volcanolist_holocene.cfm"
@@ -245,7 +254,7 @@ ncid.viirs_gasflaring_data_source = f'VIIRS Annual Gas Flared Volume'
 ncid.VGF_primary_documentation = f"https://eogdata.mines.edu/products/vnf/global_gas_flare.html"
 
 
-ncid.history = 'M. Zhou created this CF compliant global file'
-ncid.contact = 'mzhou16@umbc.edu',
+ncid.history = ''
+ncid.contact = 'geosaerosols@lists.nasa.gov',
 ncid.close()
 print(f' - Wrote {savename}\n')

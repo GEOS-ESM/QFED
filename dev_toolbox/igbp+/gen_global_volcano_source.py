@@ -25,10 +25,9 @@ with open("config.yaml", "r") as f:
 
 data_root  = SETTING["raw_data_root"]
 
-
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-data_path = f'{data_root}/GVP_Volcano_List/'
-out_dir   = f'{data_root}/GL_STATIC/'
+data_path = f'{data_root}/GVP_VolcanoList/'
+out_dir   = SETTING['intermediate_root']
 fig_dir   = SETTING['figure_root']
 os.makedirs(out_dir, exist_ok=True)
 
@@ -39,7 +38,7 @@ flag_verify = True
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # Read the global volcano program volcano list
 # https://volcano.si.edu/volcanolist_holocene.cfm
-df = pd.read_excel(data_path + 'GVP_Volcano_List_Holocene.xlsx', sheet_name='Sheet1')
+df = pd.read_csv(data_path + 'GVP_Volcano_List_Holocene.csv')
 
 # set up grids
 grid_sinu = SinusoidalGrid(num_cells=480)
@@ -116,8 +115,8 @@ ncid.Conventions = 'CF',
 ncid.institution = 'Global Modeling and Assimilation Office, NASA/GSFC'
 ncid.data_source = f'Annual Gas Flared Volume'
 ncid.primary_documentation = f"https://volcano.si.edu/volcanolist_holocene.cfm"
-ncid.history = 'M. Zhou created this CF compliant global file'
-ncid.contact = 'mzhou16@umbc.edu',
+ncid.history = 'Excel file provided by GVP was converted to csv'
+ncid.contact = 'geosaerosols@lists.nasa.gov',
 ncid.close()
 print(f' - Wrote {savename}\n')
 
@@ -204,7 +203,7 @@ if flag_verify:
 	               edgecolor = lineColor,color = landClr)
 
 
-	plt.savefig(f'{fig_dir}MAP.QFED_Volcano.png', dpi = 300)
+	plt.savefig(f'{fig_dir}/MAP.QFED_Volcano.png', dpi = 300)
 
 
 

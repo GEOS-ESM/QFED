@@ -25,9 +25,11 @@ from matplotlib.lines import Line2D
 # Load path configuration
 with open("config.yaml", "r") as f:
     SETTING = yaml.safe_load(f)
+    
+data_root  = SETTING["raw_data_root"]
 
-in_dir = '/Dedicated/jwang-data2/mzhou/project/OPNL_FILDA/STATIC_SOURCE/GAS_FLARING_SOURCE_DATA/'
-out_dir = './GL_STATIC/'
+in_dir = f'{data_root}/VIIRS_Global_flaring/'
+out_dir   = SETTING['intermediate_root']
 os.makedirs(out_dir, exist_ok=True)
 
 FILL_VALUES = 255
@@ -37,24 +39,24 @@ flag_verify = True
 
 
 filenames = {}
-filenames['2012']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-filenames['2013']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-filenames['2014']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-filenames['2015']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-filenames['2016']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-filenames['2017']='VIIRS_Global_flaring_d.7_slope_0.029353_2017_web_v1.xlsx'
-filenames['2018']='VIIRS_Global_flaring_d.7_slope_0.029353_2018_web.xlsx'
-filenames['2019']='VIIRS_Global_flaring_d.7_slope_0.029353_2019_web_v20201114.xlsx'
-filenames['2020']='VIIRS_Global_flaring_d.7_slope_0.029353_2020_web_v1.xlsx'
-filenames['2021']='VIIRS_Global_flaring_d.7_slope_0.029353_2021_web.xlsx'
-filenames['2022']='VIIRS_Global_flaring_d.7_slope_0.029353_2022_v20230526_web.xlsx'
-filenames['2023']='VIIRS_Global_flaring_d.7_slope_0.029353_2023_v20230614_web_IDmatch.xlsx'
+#filenames['2012']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+#filenames['2013']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+#filenames['2014']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+#filenames['2015']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+#filenames['2016']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+#filenames['2017']='VIIRS_Global_flaring_d.7_slope_0.029353_2017_web_v1.xlsx'
+#filenames['2018']='VIIRS_Global_flaring_d.7_slope_0.029353_2018_web.xlsx'
+#filenames['2019']='VIIRS_Global_flaring_d.7_slope_0.029353_2019_web_v20201114.xlsx'
+#filenames['2020']='VIIRS_Global_flaring_d.7_slope_0.029353_2020_web_v1.xlsx'
+#filenames['2021']='VIIRS_Global_flaring_d.7_slope_0.029353_2021_web.xlsx'
+#filenames['2022']='VIIRS_Global_flaring_d.7_slope_0.029353_2022_v20230526_web.xlsx'
+#filenames['2023']='VIIRS_Global_flaring_d.7_slope_0.029353_2023_v20230614_web_IDmatch.xlsx'
 filenames['2024']='VIIRS_Global_flaring_d.7_slope_0.029353_2024_v20240730_web_IDmatch.xlsx'
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# Read the global volcano program volcano list
-# https://volcano.si.edu/volcanolist_holocene.cfm
+# Read the global gas flaring data
+# https://eogdata.mines.edu/products/vnf/global_gas_flare.html#data_download
 dfs = {}
 for year in filenames.keys():
     print(f' - Processing {year}')
@@ -160,9 +162,9 @@ for year in dfs.keys():
 	ncid.Conventions = 'CF', 
 	ncid.institution = 'Global Modeling and Assimilation Office, NASA/GSFC'
 	ncid.data_source = f'Annual Gas Flared Volume'
-	ncid.primary_documentation = f"https://volcano.si.edu/volcanolist_holocene.cfm"
-	ncid.history = 'M. Zhou created this CF compliant global file'
-	ncid.contact = 'mzhou16@umbc.edu',
+	ncid.primary_documentation = f"https://eogdata.mines.edu/products/vnf/global_gas_flare.html#data_download"
+	ncid.history = ''
+	ncid.contact = 'geosaerosols@lists.nasa.gov',
 	ncid.close()
 	print(f' - Wrote {savename}\n')
 	
@@ -201,7 +203,7 @@ for year in dfs.keys():
 				   
 		ax.set_title(f'VIIRS Gasflaring ({year})')
 		
-		VOL  = Line2D([0], [0], label='Volcano', 
+		VOL  = Line2D([0], [0], label='Gas Flaring', 
 					  lw = 1, ls='', marker = 'o', 
 					  markersize = 8, color=f"orange")
 		handles = [VOL]
@@ -245,7 +247,7 @@ for year in dfs.keys():
 					   edgecolor = lineColor,color = landClr)
 	
 	
-		plt.savefig(f'{fig_dir}MAP.VIIRS_Gasflaring.{year}.png', dpi = 300)
+		plt.savefig(f'{fig_dir}/MAP.VIIRS_Gasflaring.{year}.png', dpi = 300)
 
 
 

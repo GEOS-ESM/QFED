@@ -32,12 +32,10 @@ args = parser.parse_args()
 
 year = args.year
 igbp_input = SETTING['igbp_input']
-out_root   = SETTING['raw_data_root']
-
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 SURF_DIR = f'{igbp_input}/{year}/001/'
-out_dir = f'{out_root}/GL_IGBP_MODIS/'
+out_dir = f'./GL_IGBP_MODIS/'
 os.makedirs(out_dir, exist_ok=True)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -180,8 +178,8 @@ ncid.Conventions = 'CF',
 ncid.institution = 'Global Modeling and Assimilation Office, NASA/GSFC'
 ncid.data_source ='MCD12Q1 Version 6.1 (Aqua/Terra MODIS)'
 ncid.primary_documentation = "https://doi.org/10.5067/MODIS/MCD12Q1.061"
-ncid.history = 'M. Zhou created this CF compliant global file'
-ncid.contact = 'mzhou16@umbc.edu',
+ncid.history = ''
+ncid.contact = 'geosaerosols@lists.nasa.gov',
 ncid.close()
 print(f' - Wrote {savename}')
 

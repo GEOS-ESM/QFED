@@ -35,7 +35,7 @@ parser.add_argument("--fresh_csv", required=True, help="True or False, Create th
 args = parser.parse_args()
 
 l2_root  = SETTING['vnp14img_root']
-data_root  = SETTING["raw_data_root"]
+data_root  = SETTING["intermediate_root"]
 
 sat = args.sat
 date_start = args.start
@@ -191,8 +191,8 @@ for jdn in jdns:
 	ncid.institution = 'Global Modeling and Assimilation Office, NASA/GSFC'
 	ncid.data_source = f'VIIRS {sat}14IMG Collection 2'
 	ncid.primary_documentation = f"HTTPS://DOI.ORG/10.5067/VIIRS/{sat}14IMG.002"
-	ncid.history = 'M. Zhou created this CF compliant global file'
-	ncid.contact = 'mzhou16@umbc.edu',
+	ncid.history = ''
+	ncid.contact = 'geosaerosols@lists.nasa.gov',
 	ncid.close()
 	print(f' - Wrote {savename}\n')
 

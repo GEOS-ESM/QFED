@@ -16,6 +16,7 @@ import numpy as np
 from netCDF4 import Dataset
 from lib_IGBP_plus import *
 import time, copy
+import yaml
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -36,13 +37,18 @@ year = args.year
 
 flag_verify = False
 
-in_dir  = f'./Daily_NC/{sat}{year}/'
-out_dir = f'./GL_STATIC/'
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
+
+data_root  = SETTING["intermediate_root"]
+in_dir  = f'{data_root}/Daily_NC/{sat}{year}/'
+out_dir = f'{data_root}/'
 os.makedirs(out_dir, exist_ok=True)
 
 
 
-num_cells = SETTING['IGBP_resolution']
+num_cells = SETTING['PLUS_resolution']
 FILL_VALUES = 255
 revisit_cycle = 16
 
@@ -138,8 +144,8 @@ ncid.Conventions = 'CF',
 ncid.institution = 'Global Modeling and Assimilation Office, NASA/GSFC'
 ncid.data_source = f'VIIRS {sat}14IMG Collection 2'
 ncid.primary_documentation = f"HTTPS://DOI.ORG/10.5067/VIIRS/{sat}14IMG.002"
-ncid.history = 'M. Zhou created this CF compliant global file'
-ncid.contact = 'mzhou16@umbc.edu',
+ncid.history = ''
+ncid.contact = 'geosaerosols@lists.nasa.gov',
 ncid.close()
 print(f' - Wrote {savename}\n')
 
