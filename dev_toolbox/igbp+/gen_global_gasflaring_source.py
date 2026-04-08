@@ -10,6 +10,7 @@ To run this code, you need
 
 import argparse
 import os, sys, glob
+import warnings
 import pandas as pd
 from scipy import stats
 import numpy as np
@@ -21,6 +22,13 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+
+# --- ARGPARSE SETUP ---
+parser = argparse.ArgumentParser(description="Process VIIRS Global Flaring data for a specific year")
+parser.add_argument("--year", required=True, type=str, help="Product year (e.g., 2024)")
+args = parser.parse_args()
+target_year = args.year
+# ----------------------
 		
 # Load path configuration
 with open("config.yaml", "r") as f:
@@ -37,22 +45,29 @@ num_cells = SETTING['PLUS_resolution']
 
 flag_verify = True
 
-
 filenames = {}
-#filenames['2012']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-#filenames['2013']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-#filenames['2014']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-#filenames['2015']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-#filenames['2016']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
-#filenames['2017']='VIIRS_Global_flaring_d.7_slope_0.029353_2017_web_v1.xlsx'
-#filenames['2018']='VIIRS_Global_flaring_d.7_slope_0.029353_2018_web.xlsx'
-#filenames['2019']='VIIRS_Global_flaring_d.7_slope_0.029353_2019_web_v20201114.xlsx'
-#filenames['2020']='VIIRS_Global_flaring_d.7_slope_0.029353_2020_web_v1.xlsx'
-#filenames['2021']='VIIRS_Global_flaring_d.7_slope_0.029353_2021_web.xlsx'
-#filenames['2022']='VIIRS_Global_flaring_d.7_slope_0.029353_2022_v20230526_web.xlsx'
-#filenames['2023']='VIIRS_Global_flaring_d.7_slope_0.029353_2023_v20230614_web_IDmatch.xlsx'
+filenames['2012']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+filenames['2013']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+filenames['2014']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+filenames['2015']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+filenames['2016']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
+filenames['2017']='VIIRS_Global_flaring_d.7_slope_0.029353_2017_web_v1.xlsx'
+filenames['2018']='VIIRS_Global_flaring_d.7_slope_0.029353_2018_web.xlsx'
+filenames['2019']='VIIRS_Global_flaring_d.7_slope_0.029353_2019_web_v20201114.xlsx'
+filenames['2020']='VIIRS_Global_flaring_d.7_slope_0.029353_2020_web_v1.xlsx'
+filenames['2021']='VIIRS_Global_flaring_d.7_slope_0.029353_2021_web.xlsx'
+filenames['2022']='VIIRS_Global_flaring_d.7_slope_0.029353_2022_v20230526_web.xlsx'
+filenames['2023']='VIIRS_Global_flaring_d.7_slope_0.029353_2023_v20230614_web_IDmatch.xlsx'
 filenames['2024']='VIIRS_Global_flaring_d.7_slope_0.029353_2024_v20240730_web_IDmatch.xlsx'
 
+# --- YEAR VALIDATION ---
+if target_year not in filenames:
+    warnings.warn(f"Year '{target_year}' is not available in the predefined filenames list.")
+    sys.exit(1)
+
+# Filter the dictionary to ONLY contain the requested year
+filenames = {target_year: filenames[target_year]}
+# -----------------------
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # Read the global gas flaring data
@@ -89,7 +104,6 @@ grid_sinu = SinusoidalGrid(num_cells=num_cells)
 
 # processing...bin data into grids
 for year in dfs.keys():
-	
 	
 	xs, ys = geog_to_sinu(np.array(dfs[year]['latitude']),
 						  np.array(dfs[year]['longitude']))
@@ -248,10 +262,3 @@ for year in dfs.keys():
 	
 	
 		plt.savefig(f'{fig_dir}/MAP.VIIRS_Gasflaring.{year}.png', dpi = 300)
-
-
-
-
-
-
-

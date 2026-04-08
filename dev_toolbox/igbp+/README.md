@@ -69,7 +69,7 @@ python gen_global_volcano_source.py
 
 Execute the ``gen_global_gasflaring_source.py`` to convert the [Global Gas Flaring Dataset](https://eogdata.mines.edu/products/vnf/global_gas_flare.html) into global grided data.
 ```
-python gen_global_gasflaring_source.py
+python gen_global_gasflaring_source.py --year 2019
 ```
 
 
