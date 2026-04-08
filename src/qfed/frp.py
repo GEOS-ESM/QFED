@@ -16,7 +16,6 @@ from qfed import instruments
 from qfed import geolocation_products
 from qfed import fire_products
 from qfed import classification_products
-# from qfed import vegetation
 from qfed import fire
 from qfed import VERSION
 from qfed.emissions import Emissions
@@ -431,7 +430,6 @@ class GriddedFRP:
         
         
         for i in input_data:
-#             self._igbp_dir = i.vegetation
             self._process(i.geolocation, i.fire)
             
         # store n_files as a class attribute during ingest, so it’s available when writing:
