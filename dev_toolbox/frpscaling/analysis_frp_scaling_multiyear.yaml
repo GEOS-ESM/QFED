@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────
+# Analysis Configuration
+# ─────────────────────────────────────────────
+
+# Analysis years (calendar years for data/plots)
+year_range:
+  start: 2024
+  end: 2025  # inclusive
+
+# ─────────────────────────────────────────────
+# Satellite Configuration
+# ─────────────────────────────────────────────
+
+# Which satellite streams to process (order controls output order)
+# vnp = SNPP VIIRS, vj1 = NOAA-20 VIIRS, vj2 = NOAA-21 VIIRS, mod = Terra MODIS
+# order controls output order
+satellites_to_process:
+  - vnp
+  - vj1
+  - mod
+
+# Reference/baseline satellite against which others are compared
+# myd = Aqua MODIS
+baseline_satellite: myd
+
+# ─────────────────────────────────────────────
+# Data Loading Behavior
+# ─────────────────────────────────────────────
+
+# True: force re-read from source; False: use cached/intermediate files if present
+fresh_load: false
+
+# True: generate/show/save plots; False: skip plotting steps
+plot_analysis: true
+
+# ─────────────────────────────────────────────
+# Output & Cache Directories
+# ─────────────────────────────────────────────
+
+figure_dir: "./v3.2"   # destination for saved figures
+cache_dir: "./cache"   # directory for serialized intermediates (e.g., npz/pkl)
+
+# ─────────────────────────────────────────────
+# Parallelism
+# ─────────────────────────────────────────────
+
+# Number of worker processes/threads (depends on your implementation)
+n_workers: 20
+
+# ─────────────────────────────────────────────
+# QFED FRP Input Configuration
+# ─────────────────────────────────────────────
+
+# Root path to QFED FRP inputs used by the loader functions
+base_path: '/discover/nobackup/projects/gmao/iesa/pub/aerosol/emissions/QFED/.v3.2/0.1/FRP/'
+
+prefix: 'QFED V3.2'

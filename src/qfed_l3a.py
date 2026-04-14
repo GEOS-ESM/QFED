@@ -21,6 +21,7 @@ from qfed import fire_products
 from qfed.inventory import Finder
 from qfed.instruments import Instrument, Satellite
 from qfed.frp import GriddedFRP
+from qfed.vegetation import IGBPNetCDF
 from qfed import VERSION
 
 
@@ -148,24 +149,21 @@ def process(
     """
     for satellite in obs_system.keys():
 
-        platform = Satellite(satellite) #Instrument(instrument)
-        
+        platform = Satellite(satellite)
+
         # input files
         gp_file = cli_utils.get_path(obs_system[satellite]['geolocation']['file'])
         fp_file = cli_utils.get_path(obs_system[satellite]['fires']['file'])
-        
-        vg_dir = igbp
 
         # output file
-        output_file = cli_utils.get_path(output[satellite], timestamp=timestamp, 
+        output_file = cli_utils.get_path(output[satellite], timestamp=timestamp,
                                          version=version, sat=satellite)
 
-      
         output_dir = os.path.dirname(output_file)
         os.makedirs(output_dir, exist_ok=True)
 
         # product readers
-        finder = Finder(gp_file, fp_file, vg_dir)
+        finder = Finder(gp_file, fp_file)
         gp_reader = geolocation_products.create(platform)
         fp_reader = fire_products.create(platform)
         cp_reader = classification_products.create(platform)
@@ -173,7 +171,7 @@ def process(
         cp_reader.set_auxiliary(watermask=watermask)
 
         # generate gridded FRP and areas
-        frp = GriddedFRP(satellite, output_grid, finder, gp_reader, fp_reader, cp_reader)
+        frp = GriddedFRP(satellite, output_grid, finder, gp_reader, fp_reader, cp_reader, igbp)
         frp.ingest(t_start, t_end)
         frp.save(
             output_file,
@@ -223,20 +221,42 @@ def main():
 
     watermask = get_auxiliary_watermask(config['qfed']['with']['watermask'])
 
-    igbp = config['qfed']['with']['igbp']
+    # Keep as raw template string; formatting and instantiation happen inside process()
+    igbp_template = config['qfed']['with']['igbp']
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
     output = {
         platform: config['qfed']['output']['frp']['file'] for platform in args.obs
     }
-    
+
     version = f'v{VERSION.replace(".", "_")}'
-    
+
     start, end = cli_utils.get_entire_time_interval(args)
     intervals = cli_utils.get_timestamped_time_intervals(start, end, timedelta(hours=24))
-	
+
     for t_start, t_end, timestamp in intervals:
+        if t_start == start:
+            # Format the IGBP path using the year from t_start
+            igbp_path = igbp_template.format(t_start)
+            logging.info(f"Using IGBP file: {igbp_path}")
+            # load IGBP dataset
+            igbp = IGBPNetCDF(igbp_path)
+            current_igbp_year = '{0:%Y}'.format(t_start)
+
+        else:
+            # check if IGBP needs to be updated
+            new_igbp_year = '{0:%Y}'.format(t_start)
+            if new_igbp_year != current_igbp_year:
+                # Format the IGBP path using the year from t_start
+                igbp_path = igbp_template.format(t_start)
+                logging.info(f"Using IGBP file: {igbp_path}")
+                # load IGBP dataset
+                igbp = IGBPNetCDF(igbp_path)                
+                current_igbp_year = new_igbp_year
+            else:
+                logging.info(f"Using IGBP file: {igbp_path}")
+                
         process(
             t_start,
             t_end,

@@ -9,7 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 ### Added
+- Added scripts to generate the IGBP+ for land surface type updating 
+- Added `gen_global_MODIS_IGBP.py`, `gen_global_volcano_source.py`, `gen_global_gasflaring_source.py`, `lib_IGBP_plus.py` to `dev_toolbox` [25-11-17]
 ### Changed
+- Renamed folder `emissionstuning` to `dev_toolbox` [25-11-17]
+- Modified `qfed_l3a.py`, set removing gas flaring etc. as default configuration  [25-11-14]
+- Rewrote the `vegetation.py` and adapted `inventory.py`, `emissions.py`, and `frp.py` to support IGBP updating [25-11-14]
+- Updated qfed_l3a.py to be able to accept annual varying IGBP+ files
+- Values in alpha_factor.yaml to represent the latest FRP from VJ1 scaled to GFED5, with the other satellites anchored to VJ1
 ### Removed
 ### Deprecated
 
@@ -24,14 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.2.0] - 2026-01-09
 
 ### Fixed 
-
+- This fix addresses the bug found in vegetation.py that incorrect usage of IGBP+ file[2026-02-10]
 - This fix addresses the minor problem raised by PR review [2025-09-09]
 - This fix fixes issue of accidental exclusion of wetlands fires. [2025-09-03]
 - This fix ensures the syntax compatibility across different python version. [2025-09-03]
 - This fix ensures that fire detections across the anti-meridian are retained correctly without accidental exclusion. [2025-08-28]
 - The standard name for time in the emissions output files
-
-### Added
+###Added 
 
 - Added handling of no L2 fire detections in `inventory.py`, `qfed_l3a.py`, and `qfed_l3b.py`, write placeholder L3A and let L3B proceed [25-10-14]
 - Added the `analysis_frp_scaling.py` and `lib_frp_scaling.py` to for log-log FRP density regression tuning [25-10-07]
@@ -56,7 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added ability to scale emissions for all species after they are computed using a scaling mask that was computed offline.
 	
 ### Changed 
-
 - Moved the species configurations `config_NRT.yaml` and `config.yaml` to improve code & configuration separating. [25-12-04]
 - Modified `qfed_l3b.py`, `frp.py`, `instruments.py` to apply Full persistence procedures for emission when no observations are available (e.g., sensor malfunction or data gap). [25-12-04]
 - Modified `fire_products.py`, `cli_utils.py` to fix unclosed NetCDF file handles and improve I/O lifecycle management [25-10-14]

@@ -16,7 +16,6 @@ from qfed import instruments
 from qfed import geolocation_products
 from qfed import fire_products
 from qfed import classification_products
-from qfed import vegetation
 from qfed import fire
 from qfed import VERSION
 from qfed.emissions import Emissions
@@ -36,6 +35,7 @@ class GriddedFRP:
         geolocation_product_reader,
         fire_product_reader,
         classification_product_reader,
+        igbp
     ):
         self._grid = grid
         self._finder = finder
@@ -43,6 +43,7 @@ class GriddedFRP:
         self._fp_reader = fire_product_reader
         self._cp_reader = classification_product_reader
         self.sat = sat
+        self.igbp = igbp
 
 
     def _get_coordinates(self, geolocation_product_file):
@@ -235,7 +236,7 @@ class GriddedFRP:
     def _process_cloud_coast(self):
         """
         Process cloud coast pixels that do not contain active fires.
-        Note that coast pixels are lumped with land pixels.
+        Note that coast pixels are lumped with water pixels.
         """
         i = self._is_cloud['coast'] & self._valid_coordinates
         lon, lat, area = self._select(i)
@@ -285,7 +286,7 @@ class GriddedFRP:
         # assert np.allclose(area, self._area[line, sample])
 
         # get the biome types for all the detections based on IGBP classification (before QA)
-        veg_masks, veg_codes = vegetation.get_category(lon, lat, self._igbp_dir, return_codes=True)
+        veg_masks, veg_codes = self.igbp.get_category(lat, lon, return_codes=True)
         # Restore rule with simplified codes, veg_codes!=0 -> treat as land
         overwrite_to_land = (veg_codes != 0)
 
@@ -429,7 +430,6 @@ class GriddedFRP:
         
         
         for i in input_data:
-            self._igbp_dir = i.vegetation
             self._process(i.geolocation, i.fire)
             
         # store n_files as a class attribute during ingest, so it’s available when writing:
