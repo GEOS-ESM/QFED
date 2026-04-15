@@ -52,8 +52,7 @@ class IGBPNetCDF():
                  gasflaring=False,
                  volcano=False,
                  static_heat_threshold=16,
-                 peat_file=None,
-                 peat_lat_threshold=55.0):
+                 peat_file=None):
         """
         Parameters
         ----------
@@ -74,17 +73,12 @@ class IGBPNetCDF():
         peat_file : str or None, optional
             Path to the GL_PEAT_GPA22 NetCDF file.  When None (default),
             peat reclassification is skipped entirely.
-        peat_lat_threshold : float, optional
-            Northern latitude threshold (degrees) above which extra-tropical
-            forest, savanna, and grassland pixels are eligible for peat
-            reclassification (default 55.0°N).
         """
 
         self.file                = file
         self.nonVeg              = nonVeg
         self.drops               = drops
         self.peat_file           = peat_file
-        self.peat_lat_threshold  = peat_lat_threshold
 
         self._open_igbp()
         self._open_igbp_plus(static_heat=static_heat,
@@ -319,8 +313,8 @@ class IGBPNetCDF():
           3  Cerrado/woody savanna
           4  Grassland
           5  Cropland/Agriculture
-          6  Peat  (extra-tropical forest / savanna / grassland north of
-                    peat_lat_threshold that are peat-dominated, class 1)
+          6  Peat  (extra-tropical forest / savanna / grassland that are
+                    peat-dominated, class 1)
 
         with 0 (non-vegetation) replaced later by nonVeg.
         """
@@ -365,7 +359,6 @@ class IGBPNetCDF():
             (igbp_plus == VOLCANO)
         )
 
-
         veg[mask_trop]    = TROPICAL
         veg[mask_extra]   = EXTRA_TROPICAL
         veg[mask_savanna] = SAVANNA
@@ -375,17 +368,14 @@ class IGBPNetCDF():
 
         # --- peat override ---
         # Reclassify extra-tropical forest (2), savanna (3), and grassland (4)
-        # pixels north of peat_lat_threshold to PEAT (6) when the GPA22
+        # pixels to PEAT (6) when the GPA22
         # peat_mask indicates class 1 (peat-dominated / continuous peatland).
         if self.peat_mask is not None:
             peat_raw = self.getPeatClassification(lat, lon)
 
             mask_peat_eligible = (
-                (lat > self.peat_lat_threshold) &          # north of threshold
                 (veg == EXTRA_TROPICAL) |                  # extratropical forest
-                (lat > self.peat_lat_threshold) &
                 (veg == SAVANNA) |                         # savanna
-                (lat > self.peat_lat_threshold) &
                 (veg == GRASSLAND)                         # grassland
             )
 

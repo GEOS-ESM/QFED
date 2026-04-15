@@ -47,7 +47,6 @@ _IGBP_CACHE: dict = {}
 def _get_igbp(
     igbp_file: str,
     peat_file: str | None = None,
-    peat_lat_threshold: float = 55.0,
 ):
     """
     Return an IGBPNetCDF instance for igbp_file, cached per process.
@@ -55,18 +54,16 @@ def _get_igbp(
     avoiding the need to pickle large numpy arrays across processes.
     """
     global _IGBP_CACHE
-    cache_key = (igbp_file, peat_file, peat_lat_threshold)
+    cache_key = (igbp_file, peat_file)
     if cache_key not in _IGBP_CACHE:
         from qfed.vegetation import IGBPNetCDF
         _IGBP_CACHE[cache_key] = IGBPNetCDF(
             igbp_file,
             peat_file=peat_file,
-            peat_lat_threshold=peat_lat_threshold,
         )
         logging.debug(
             f"Process {os.getpid()}: loaded IGBP from '{igbp_file}' "
-            f"(peat_file={peat_file!r}, "
-            f"peat_lat_threshold={peat_lat_threshold})."
+            f"(peat_file={peat_file!r})."
         )
     return _IGBP_CACHE[cache_key]
 
@@ -151,7 +148,6 @@ def _process_granule(
     jm: int,
     grid_type,
     peat_file: str | None = None,
-    peat_lat_threshold: float = 55.0,
 ) -> dict | None:
     """
     Process one (geolocation, fire-product) granule pair.
@@ -174,9 +170,6 @@ def _process_granule(
     peat_file : str or None
         Path to the GL_PEAT_GPA22 NetCDF file.  None disables peat
         reclassification entirely.
-    peat_lat_threshold : float
-        Latitude (°N) above which eligible pixels may be reclassified
-        as peat.
 
     Returns
     -------
@@ -307,10 +300,9 @@ def _process_granule(
     np.clip(f_frp, 0, 40_000, out=f_frp)
 
     # ---- IGBP vegetation category (cached per process) ------------------
-    # peat_file and peat_lat_threshold are forwarded so the cached
-    # IGBPNetCDF instance is built with full peat support.
-    igbp = _get_igbp(igbp_file, peat_file=peat_file,
-                     peat_lat_threshold=peat_lat_threshold)
+    # peat_file is forwarded so the cached IGBPNetCDF instance is built 
+    # with full peat support.
+    igbp = _get_igbp(igbp_file, peat_file=peat_file)
     veg_masks, veg_codes = igbp.get_category(f_lat, f_lon, return_codes=True)
 
     overwrite_to_land = (
@@ -393,7 +385,6 @@ class GriddedFRP:
         watermask_file: str = '',
         max_workers: int = 4,
         peat_file: str | None = None,
-        peat_lat_threshold: float = 55.0,
     ):
         """
         Parameters
@@ -401,10 +392,6 @@ class GriddedFRP:
         peat_file : str or None, optional
             Path to the GL_PEAT_GPA22 NetCDF file.  When None (default),
             peat reclassification is disabled in every worker process.
-        peat_lat_threshold : float, optional
-            Latitude (°N) above which extra-tropical forest, savanna, and
-            grassland pixels that are peat-dominated (GPA22 class 1) are
-            reclassified as peat (default 55.0).
         """
         self._grid                = grid
         self._finder              = finder
@@ -412,7 +399,6 @@ class GriddedFRP:
         self._watermask_file      = watermask_file
         self._max_workers         = max_workers
         self._peat_file           = peat_file
-        self._peat_lat_threshold  = peat_lat_threshold
 
         # Accept either an IGBPNetCDF instance or a raw path string.
         # Workers always receive the path so they can build their own
@@ -450,8 +436,8 @@ class GriddedFRP:
         Ingest all granules for [t_start, t_end), processing them in
         parallel worker processes.
 
-        peat_file and peat_lat_threshold are forwarded to every worker
-        as plain picklable values (str | None, float).
+        peat_file is forwarded to every worker as a plain picklable 
+        value (str | None).
         """
         self.im        = self._grid.dimensions()['x']
         self.jm        = self._grid.dimensions()['y']
@@ -486,7 +472,6 @@ class GriddedFRP:
                     self.jm,
                     self.grid_type,
                     self._peat_file,            # new
-                    self._peat_lat_threshold,   # new
                 ): item.fire
                 for item in input_data
             }

@@ -140,7 +140,6 @@ def process(
     dry_run,
     max_workers=None,
     peat_file=None,
-    peat_lat_threshold=55.0,
 ):
     """
     Processes all satellites sequentially for a single timestamped
@@ -184,10 +183,6 @@ def process(
         peat reclassification is disabled entirely. Passed as a plain
         string to GriddedFRP so worker processes can load and cache
         their own IGBPNetCDF instances without pickling large arrays.
-    peat_lat_threshold : float, optional
-        Northern latitude threshold (degrees) above which extra-tropical
-        forest, savanna, and grassland pixels that are peat-dominated
-        (GPA22 class 1) are reclassified as peat (default 55.0°N).
     """
     # Format the IGBP path for the year of t_start.
     # The path string is passed directly to GriddedFRP — workers load
@@ -198,7 +193,6 @@ def process(
     if peat_file is not None:
         logging.info(
             f"Peat reclassification enabled: '{peat_file}' "
-            f"(threshold: {peat_lat_threshold}°N)."
         )
     else:
         logging.info("Peat reclassification disabled (no peat file configured).")
@@ -240,7 +234,6 @@ def process(
             watermask_file=watermask_file,
             max_workers=max_workers,
             peat_file=peat_file,
-            peat_lat_threshold=peat_lat_threshold,
         )
         frp.ingest(t_start, t_end)
         frp.save(
@@ -294,7 +287,6 @@ def main():
 
     peat_config         = config['qfed'].get('with', {}).get('peat', {}) or {}
     peat_file           = peat_config.get('file', None)
-    peat_lat_threshold  = float(peat_config.get('lat_threshold', 55.0))
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
@@ -333,7 +325,6 @@ def main():
             args.dry_run,
             max_workers=args.max_workers,
             peat_file=peat_file,
-            peat_lat_threshold=peat_lat_threshold,
         )
 
     logging.info("\n" + "="*70)
