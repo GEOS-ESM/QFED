@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrote the `vegetation.py` and adapted `inventory.py`, `emissions.py`, and `frp.py` to support IGBP updating [25-11-14]
 - Updated qfed_l3a.py to be able to accept annual varying IGBP+ files
 - Processing of FRP granules by running in parallel within the ingest function of frp.py
+- Values in alpha_factor.yaml to represent the latest FRP from VJ1 scaled to GFED5, with the other satellites anchored to VJ1
 ### Removed
 ### Deprecated
 
@@ -64,7 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed 
 - Moved the species configurations `config_NRT.yaml` and `config.yaml` to improve code & configuration separating. [25-12-04]
 - Modified `qfed_l3b.py`, `frp.py`, `instruments.py` to apply Full persistence procedures for emission when no observations are available (e.g., sensor malfunction or data gap). [25-12-04]
->>>>>>> origin/develop
 - Modified `fire_products.py`, `cli_utils.py` to fix unclosed NetCDF file handles and improve I/O lifecycle management [25-10-14]
 - Modified `config_NRT.yaml`, `classification_products.py`, `geolocation_products.py`, `instruments.py`, `utils.py`, `frp.py`, and `emissions.py` to Unify variable and file naming across QFED v3 (align with Code 619 conventions) [25-10-14]
 - Updated values in `alpha_factor.yaml` based new log-log regression analysis. [25-10-06]

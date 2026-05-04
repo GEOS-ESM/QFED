@@ -1,0 +1,8 @@
+raw_data_root: "/discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/"
+igbp_input: "/css/modis/Collection6.1/L3/MCD12Q1-Landcover"
+igbp_output_root: "./IGBP+"
+intermediate_root: "./GL_STATIC/"
+vnp14img_root: "/css/viirs/data/Level2/"
+figure_root: "./FIG"
+IGBP_resolution: 2400
+PLUS_resolution: 480

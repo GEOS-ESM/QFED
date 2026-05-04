@@ -10,26 +10,40 @@ To run this code, you need
 
 import argparse
 import os, sys, glob
+import warnings
 import pandas as pd
 from scipy import stats
 import numpy as np
 from netCDF4 import Dataset
 from lib_IGBP_plus import *
+import yaml
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-		
 
-in_dir = '/Dedicated/jwang-data2/mzhou/project/OPNL_FILDA/STATIC_SOURCE/GAS_FLARING_SOURCE_DATA/'
-out_dir = './GL_STATIC/'
+# --- ARGPARSE SETUP ---
+parser = argparse.ArgumentParser(description="Process VIIRS Global Flaring data for a specific year")
+parser.add_argument("--year", required=True, type=str, help="Product year (e.g., 2024)")
+args = parser.parse_args()
+target_year = args.year
+# ----------------------
+		
+# Load path configuration
+with open("config.yaml", "r") as f:
+    SETTING = yaml.safe_load(f)
+    
+data_root  = SETTING["raw_data_root"]
+
+in_dir = f'{data_root}/VIIRS_Global_flaring/'
+out_dir   = SETTING['intermediate_root']
 os.makedirs(out_dir, exist_ok=True)
 
 FILL_VALUES = 255
-num_cells=480
-flag_verify = True
+num_cells = SETTING['PLUS_resolution']
 
+flag_verify = True
 
 filenames = {}
 filenames['2012']='VIIRS_Global_flaring_d.7_slope_0.0298_2012-2016_web.xlsx'
@@ -46,10 +60,18 @@ filenames['2022']='VIIRS_Global_flaring_d.7_slope_0.029353_2022_v20230526_web.xl
 filenames['2023']='VIIRS_Global_flaring_d.7_slope_0.029353_2023_v20230614_web_IDmatch.xlsx'
 filenames['2024']='VIIRS_Global_flaring_d.7_slope_0.029353_2024_v20240730_web_IDmatch.xlsx'
 
+# --- YEAR VALIDATION ---
+if target_year not in filenames:
+    warnings.warn(f"Year '{target_year}' is not available in the predefined filenames list.")
+    sys.exit(1)
+
+# Filter the dictionary to ONLY contain the requested year
+filenames = {target_year: filenames[target_year]}
+# -----------------------
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-# Read the global volcano program volcano list
-# https://volcano.si.edu/volcanolist_holocene.cfm
+# Read the global gas flaring data
+# https://eogdata.mines.edu/products/vnf/global_gas_flare.html#data_download
 dfs = {}
 for year in filenames.keys():
     print(f' - Processing {year}')
@@ -82,7 +104,6 @@ grid_sinu = SinusoidalGrid(num_cells=num_cells)
 
 # processing...bin data into grids
 for year in dfs.keys():
-	
 	
 	xs, ys = geog_to_sinu(np.array(dfs[year]['latitude']),
 						  np.array(dfs[year]['longitude']))
@@ -155,9 +176,9 @@ for year in dfs.keys():
 	ncid.Conventions = 'CF', 
 	ncid.institution = 'Global Modeling and Assimilation Office, NASA/GSFC'
 	ncid.data_source = f'Annual Gas Flared Volume'
-	ncid.primary_documentation = f"https://volcano.si.edu/volcanolist_holocene.cfm"
-	ncid.history = 'M. Zhou created this CF compliant global file'
-	ncid.contact = 'mzhou16@umbc.edu',
+	ncid.primary_documentation = f"https://eogdata.mines.edu/products/vnf/global_gas_flare.html#data_download"
+	ncid.history = ''
+	ncid.contact = 'geosaerosols@lists.nasa.gov',
 	ncid.close()
 	print(f' - Wrote {savename}\n')
 	
@@ -196,7 +217,7 @@ for year in dfs.keys():
 				   
 		ax.set_title(f'VIIRS Gasflaring ({year})')
 		
-		VOL  = Line2D([0], [0], label='Volcano', 
+		VOL  = Line2D([0], [0], label='Gas Flaring', 
 					  lw = 1, ls='', marker = 'o', 
 					  markersize = 8, color=f"orange")
 		handles = [VOL]
@@ -240,11 +261,4 @@ for year in dfs.keys():
 					   edgecolor = lineColor,color = landClr)
 	
 	
-		plt.savefig(f'{fig_dir}MAP.VIIRS_Gasflaring.{year}.png', dpi = 300)
-
-
-
-
-
-
-
+		plt.savefig(f'{fig_dir}/MAP.VIIRS_Gasflaring.{year}.png', dpi = 300)

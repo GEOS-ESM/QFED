@@ -309,7 +309,7 @@ def main():
             output_grid,
             output,
             obs,
-            igbp_template,
+            igbp,
             version,
             watermask_file,
             args.compress,
