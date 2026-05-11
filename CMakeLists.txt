@@ -1,7 +1,6 @@
-cmake_minimum_required (VERSION 3.13)
+cmake_minimum_required (VERSION 3.24)
 cmake_policy (SET CMP0053 NEW)
 cmake_policy (SET CMP0054 NEW)
-cmake_policy (SET CMP0132 NEW)
 
 project (
   QFED
@@ -26,14 +25,10 @@ endif ()
 #set (ACG_FLAGS -v)
 
 # mepo can now clone subrepos in three styles
-set (ESMA_CMAKE_DIRS
-  cmake
-  @cmake
-  cmake@
-  )
-foreach (dir IN LISTS ESMA_CMAKE_DIRS)
+foreach (dir cmake @cmake cmake@)
   if (EXISTS ${CMAKE_CURRENT_LIST_DIR}/${dir})
     list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/${dir}")
+    set (ESMA_CMAKE_PATH "${CMAKE_CURRENT_LIST_DIR}/${dir}" CACHE PATH "Path to ESMA_cmake code")
   endif ()
 endforeach ()
 
