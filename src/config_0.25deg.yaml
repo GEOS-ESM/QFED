@@ -1,10 +1,10 @@
 define:
-    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/0.25/
+    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/share/gmao_ops/fvInput/ExtData/chemistry/QFED/v3.3r1/sfc/0.25/
     modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis/ 
 
 qfed:
     scaling:      
-        file: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/QFED3/qfed3_regional_scaling_masks_0.25deg.nc4
+        file: /dev/null
         species: ['co2', 'oc', 'so2', 'nh3', 'bc', 'co', 'acet', 'ald2', 'alk4', 'c2h6', 'c3h8', 'ch2o', 'mek', 'no', 'c3h6', 'pm25', 'tpm', 'ch4']
         save_original: false
     output:
@@ -17,7 +17,7 @@ qfed:
              - "QFED"
              - "Y{0:%Y}/M{0:%m}"
              - "qfed_emis_x1152y721_{{species}}.{{version}}.{0:%Y%m%d}.nc4"
-            doi: "10.5067/J71Z8N088NG7"
+            doi: "n/a"
         frp:
             file:
              - *qfed_base_dir
@@ -57,5 +57,5 @@ qfed:
             fires:
                 file: /css/viirs/data/Level2/VJ214IMG/{0:%Y}/{0:%j}/VJ214IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
 
-        igbp: /discover/nobackup/projects/gmao/share/gmao_ops/qfed/Emissions/Vegetation/GL_IGBP_INPE/
+        igbp: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_IGBP_PLUS.MODIS.{0:%Y}.nc
         watermask: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/watermask/watermask-700m.no_coast.nc4
