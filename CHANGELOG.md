@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrote the `vegetation.py` and adapted `inventory.py`, `emissions.py`, and `frp.py` to support IGBP updating [25-11-14]
 - Updated qfed_l3a.py to be able to accept annual varying IGBP+ files
 - Values in alpha_factor.yaml to represent the latest FRP from VJ1 scaled to GFED5, with the other satellites anchored to VJ1
+- recommended python module for IGBP+ codes
 ### Removed
 ### Deprecated
 
