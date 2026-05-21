@@ -1,9 +1,7 @@
 # QFED IGBP+ tool box
 
 Utilities to generate the IGBP, static heat source, gas flaring, and volcano classification for QFED fire pixil screening
-If running on NCCS, as of 6 Apr 2026, there is python dependency error with loading excel files. As a temporary fix, ml use -a /home/mathomp4/modulefiles-SLES15
-  ml python/MINIpyD/3.14
-however, this is a mini environment that can change at any time.
+If running on NCCS, this requires loading python/GEOSpyD/26.3.2-0/3.14 as the python module. Previous python module releases will cause an error when attempting to read .xls files.
 
 ---
 
