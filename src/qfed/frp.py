@@ -634,7 +634,8 @@ class GriddedFRP:
         # Human-readable long names per biome type value
         _frp_long_names = {
             'tf': 'Fire Radiative Power (Tropical Forests)',
-            'xf': 'Fire Radiative Power (Extra-tropical Forests)',
+            'bf': 'Fire Radiative Power (Boreal Forests)',
+            'mf': 'Fire Radiative Power (Temperate Forests)',
             'sv': 'Fire Radiative Power (Savanna)',
             'gl': 'Fire Radiative Power (Grasslands)',
             'ag': 'Fire Radiative Power (Agricultural)',

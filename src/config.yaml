@@ -1,5 +1,5 @@
 define:
-    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/parallel/
+    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/splitforests/
     modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis/ 
 
 qfed:
@@ -27,7 +27,7 @@ qfed:
         frp_fcs:
             file: 
              - *qfed_base_dir
-             - "FRP_FCS/peat"
+             - "FRP_FCS"
              - "Y{0:%Y}/M{0:%m}"
              - "qfed_frp-fcst_{{sat}}.{{version}}.{0:%Y%m%d}.nc4"
     with:
@@ -60,5 +60,5 @@ qfed:
         igbp: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_IGBP_PLUS.MODIS.{0:%Y}.nc
         watermask: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/watermask/watermask-700m.no_coast.nc4
         peat:
-            file: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_PEAT_GPA22.nc
+            file:
             

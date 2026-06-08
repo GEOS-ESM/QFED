@@ -9,11 +9,12 @@ import numpy as np
 import logging
 
 TROPICAL       = 1
-EXTRA_TROPICAL = 2
+BOREAL         = 2
 SAVANNA        = 3
 GRASSLAND      = 4
 AGRICULTURAL   = 5
 PEATLAND       = 6
+TEMPERATE      = 7
 NON_VEGETATION = 0  # internal, will be replaced by nonVeg
 
 STATIC_SOURCE = 21
@@ -31,11 +32,12 @@ class VegetationCategory(IntEnum):
     """
 
     TROPICAL_FOREST      = 1
-    EXTRATROPICAL_FOREST = 2
+    BOREAL_FOREST        = 2
     SAVANNA              = 3
     GRASSLAND            = 4
     AGRICULTURAL         = 5
     PEATLAND             = 6
+    TEMPERATE_FOREST     = 7
     # reserve for future
 #     STATIC_SOURCE = 21
 #     GASFLARING    = 22
@@ -309,12 +311,13 @@ class IGBPNetCDF():
         """
         Aggregate IGBP classes into:
           1  Tropical Forests
-          2  Extra-tropical Forests
+          2  Boreal Forests
           3  Cerrado/woody savanna
           4  Grassland
           5  Cropland/Agriculture
-          6  Peat  (extra-tropical forest / savanna / grassland that are
+          6  Peat  (boreal forest / savanna / grassland that are
                     peat-dominated, class 1)
+          7  Temperate Forests          
 
         with 0 (non-vegetation) replaced later by nonVeg.
         """
@@ -324,21 +327,29 @@ class IGBPNetCDF():
         igbp      = np.array(self.getDetailedVeg(lat, lon),        copy=False)
         igbp_plus = np.array(self.getPlusClassification(lat, lon), copy=False)
 
-        # Initialize to zero (maps fill-value 31 and water 17 → 0)
+        # Initialize to zero (maps fill-value 31, urban 13, and water 17 → 0)
         veg = np.zeros_like(igbp, dtype=np.int16)
 
         abs_lat = np.abs(lat)
 
-        # --- standard biome masks ---
-        mask_trop    = (igbp == 2) & (abs_lat < 30.0)
+        # IGBP classes that are any kind of forest
+        is_forest = (igbp == 1) | (igbp == 2) | (igbp == 3) | \
+                    (igbp == 4) | (igbp == 5)
 
-        mask_extra   = (
-            (igbp == 1) |
-            ((igbp == 2) & (abs_lat >= 30.0)) |
-            (igbp == 3) |
-            (igbp == 4) |
-            (igbp == 5)
+        # Tropical: IGBP 2, 4, 5 within ±30°
+        mask_trop = (
+            ((igbp == 2) | (igbp == 4) | (igbp == 5)) &
+            (abs_lat < 30.0)
         )
+
+        # Boreal: IGBP 1, 3, 5 north of 60° (Southern Hemisphere has none)
+        mask_boreal = (
+            ((igbp == 1) | (igbp == 3) | (igbp == 5)) &
+            (lat > 60.0)
+        )
+
+        # Temperate: any forest pixel that is not tropical or boreal
+        mask_temperate = is_forest & ~mask_trop & ~mask_boreal
 
         mask_savanna = (igbp >= 6) & (igbp <= 9)
 
@@ -359,12 +370,13 @@ class IGBPNetCDF():
             (igbp_plus == VOLCANO)
         )
 
-        veg[mask_trop]    = TROPICAL
-        veg[mask_extra]   = EXTRA_TROPICAL
-        veg[mask_savanna] = SAVANNA
-        veg[mask_grass]   = GRASSLAND
-        veg[mask_crop]    = AGRICULTURAL
-        veg[mask_plus]    = igbp_plus[mask_plus]
+        veg[mask_trop]     = TROPICAL
+        veg[mask_boreal]   = BOREAL
+        veg[mask_temperate]= TEMPERATE
+        veg[mask_savanna]  = SAVANNA
+        veg[mask_grass]    = GRASSLAND
+        veg[mask_crop]     = AGRICULTURAL
+        veg[mask_plus]     = igbp_plus[mask_plus]
 
         # --- peat override ---
         # Reclassify extra-tropical forest (2), savanna (3), and grassland (4)
@@ -374,7 +386,7 @@ class IGBPNetCDF():
             peat_raw = self.getPeatClassification(lat, lon)
 
             mask_peat_eligible = (
-                (veg == EXTRA_TROPICAL) |                  # extratropical forest
+                (veg == BOREAL) |                  # extratropical forest
                 (veg == SAVANNA) |                         # savanna
                 (veg == GRASSLAND)                         # grassland
             )
@@ -393,11 +405,12 @@ class IGBPNetCDF():
 
         Biome codes returned:
           1  Tropical Forest
-          2  Extra-tropical Forest
+          2  Boreal Forest
           3  Cerrado / Woody Savanna
           4  Grassland
           5  Cropland / Agriculture
           6  Peat
+          7  Temperate Forest
         """
         veg = self.getSimpleVeg(lat, lon)
 

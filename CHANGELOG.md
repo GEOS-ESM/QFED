@@ -11,12 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added scripts to generate the IGBP+ for land surface type updating 
 - Added `gen_global_MODIS_IGBP.py`, `gen_global_volcano_source.py`, `gen_global_gasflaring_source.py`, `lib_IGBP_plus.py` to `dev_toolbox` [25-11-17]
+- Added peat as a possible biome
 ### Changed
 - Renamed folder `emissionstuning` to `dev_toolbox` [25-11-17]
 - Modified `qfed_l3a.py`, set removing gas flaring etc. as default configuration  [25-11-14]
 - Rewrote the `vegetation.py` and adapted `inventory.py`, `emissions.py`, and `frp.py` to support IGBP updating [25-11-14]
 - Updated qfed_l3a.py to be able to accept annual varying IGBP+ files
 - Processing of FRP granules by running in parallel within the ingest function of frp.py
+- Reorganized forests from tropical and extratropical to tropical, temperate, and boreal
+- Updated ALL emission factors to be from Andreae 2019
+
 ### Removed
 ### Deprecated
 
