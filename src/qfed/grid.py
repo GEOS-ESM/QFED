@@ -137,3 +137,13 @@ class Grid:
 
     def lat(self):
         return self._glat
+
+    @property
+    def alias(self):
+        """
+        Public accessor for the grid resolution alias string.
+
+        Returns the alias used to construct the grid, e.g.
+        'c', 'd', 'e', 'f', '0.1x0.1', 'c180', etc.
+        """
+        return self._alias
