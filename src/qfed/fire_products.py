@@ -96,15 +96,15 @@ class MODIS(ActiveFireProduct):
         result = os.path.basename(tmp_path)
 
         # unpack info from the geolocation filename
-        _p = re.compile(('^(?P<product>M(O|Y)D03)'
-                         '.'
-                         'A(?P<year>\d\d\d\d)(?P<doy>\d\d\d)'
-                         '.'
-                         '(?P<hh>\d\d)(?P<mm>\d\d)'
-                         '.'
-                         '(?P<version>\d\d\d)'
-                         '.*.'
-                         '(?P<extension>(nc|hdf))'))
+        _p = re.compile((r'^(?P<product>M(O|Y)D03)'
+                         r'.'
+                         r'A(?P<year>\d\d\d\d)(?P<doy>\d\d\d)'
+                         r'.'
+                         r'(?P<hh>\d\d)(?P<mm>\d\d)'
+                         r'.'
+                         r'(?P<version>\d\d\d)'
+                         r'.*.'
+                         r'(?P<extension>(nc|hdf))'))
         _m = _p.match(result)
 
         product = _m.group('product')
