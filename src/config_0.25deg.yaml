@@ -1,6 +1,5 @@
 define:
     qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/share/gmao_ops/fvInput/ExtData/chemistry/QFED/v3.3r1/sfc/0.25/
-    modis_base_dir: &modis_base_dir /discover/nobackup/dao_ops/intermediate/flk/modis/ 
 
 qfed:
     scaling:      
