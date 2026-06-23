@@ -104,9 +104,8 @@ class MODIS(GeolocationProduct):
     def __read(self, file, variable):
         try:
             mxd03 = SD.SD(file)
-        except SD.HDF4Error:
-            self.message_on_file_error(file)
-            return
+        except SD.HDF4Error as e:
+            raise OSError(f"HDF4 library failed to open '{file}'") from e
 
         data = mxd03.select(variable).get()
         try:
