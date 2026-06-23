@@ -19,11 +19,14 @@ from qfed import fire
 from qfed import VERSION
 
 
+# Global variable to hold shared data
+_SHARED_IGBP = None
+_SHARED_WATERMASK = None
+
 # ---------------------------------------------------------------------------
 # Module-level QC scaling cache — read once per process
 # ---------------------------------------------------------------------------
 _QC_SCALING_CACHE: dict | None = None
-
 
 def _get_qc_scaling(path: str = 'qcscalingfactors.yaml') -> dict:
     """
@@ -36,54 +39,6 @@ def _get_qc_scaling(path: str = 'qcscalingfactors.yaml') -> dict:
             _QC_SCALING_CACHE = yaml.safe_load(fh)
         logging.debug("Loaded QC scaling factors from disk (cached).")
     return _QC_SCALING_CACHE
-
-
-# ---------------------------------------------------------------------------
-# Module-level IGBP cache — instantiated once per worker process
-# ---------------------------------------------------------------------------
-_IGBP_CACHE: dict = {}
-
-
-def _get_igbp(igbp_file: str):
-    """
-    Return an IGBPNetCDF instance for igbp_file, cached per process.
-
-    Each worker process builds its own instance from the file path,
-    avoiding the need to pickle large numpy arrays across processes.
-    """
-    global _IGBP_CACHE
-    if igbp_file not in _IGBP_CACHE:
-        from qfed.vegetation import IGBPNetCDF
-        _IGBP_CACHE[igbp_file] = IGBPNetCDF(igbp_file)
-        logging.debug(
-            f"Process {os.getpid()}: loaded IGBP from '{igbp_file}'."
-        )
-    return _IGBP_CACHE[igbp_file]
-
-
-# ---------------------------------------------------------------------------
-# Module-level watermask cache — loaded once per worker process
-# ---------------------------------------------------------------------------
-_WATERMASK_CACHE: dict = {}
-
-
-def _get_watermask(watermask_file: str) -> np.ndarray:
-    """
-    Return the watermask array for watermask_file, cached per process.
-
-    Each worker process loads its own copy from the file path,
-    avoiding the cost of pickling a large numpy array across process
-    boundaries for every granule.
-    """
-    global _WATERMASK_CACHE
-    if watermask_file not in _WATERMASK_CACHE:
-        f = nc.Dataset(watermask_file)
-        _WATERMASK_CACHE[watermask_file] = f.variables['watermask'][...]
-        f.close()
-        logging.debug(
-            f"Process {os.getpid()}: loaded watermask from '{watermask_file}'."
-        )
-    return _WATERMASK_CACHE[watermask_file]
 
 
 # ---------------------------------------------------------------------------
@@ -132,8 +87,6 @@ def _process_granule(
     satellite: str,
     gp_file_pattern: str,
     fp_file: str,
-    igbp_file: str,
-    watermask_file: str,
     im: int,
     jm: int,
     grid_type,
@@ -146,9 +99,7 @@ def _process_granule(
     instances are created fresh per granule — they are stateless with
     respect to files (no persistent handles) so construction is cheap.
 
-    IGBP and watermask are loaded from their file paths on first use
-    within each worker process and cached for subsequent granules
-    assigned to the same worker.
+    IGBP and Watermask are loaded from global shared variables 
 
     FRP is keyed by plain strings (bb.type.value, e.g. 'tf', 'xf',
     'sv', 'gl') to avoid object-identity issues when the result dict
@@ -211,10 +162,15 @@ def _process_granule(
     }
 
     # ---- geolocation ----------------------------------------------------
-    lon, lat, valid_coords, _, _ = gp_reader.get_coordinates(gp_file)
+    try:
+        lon, lat, valid_coords, _, _ = gp_reader.get_coordinates(gp_file)
+    except OSError as e:
+        logging.error(f"Skipping '{fp_filename}': {e}")
+        return None
 
-    # ---- watermask (cached per process) ---------------------------------
-    watermask = _get_watermask(watermask_file)
+    # ---- watermask (shared copy) ----------------------------------------
+    global _SHARED_WATERMASK
+    watermask = _SHARED_WATERMASK
 
     # ---- classification -------------------------------------------------
     # set_auxiliary and read both mutate cp_reader, but each process
@@ -298,9 +254,9 @@ def _process_granule(
     # single vectorised pass to clip FRP outliers
     np.clip(f_frp, 0, 40_000, out=f_frp)
 
-    # ---- IGBP vegetation category (cached per process) ------------------
-    igbp = _get_igbp(igbp_file)
-    veg_masks, veg_codes = igbp.get_category(f_lat, f_lon, return_codes=True)
+    # ---- IGBP vegetation category (shared copy) ------------------
+    global _SHARED_IGBP
+    veg_masks, veg_codes = _SHARED_IGBP.get_category(f_lat, f_lon, return_codes=True)
 
     # promote IGBP-land pixels that QA misclassified as water/coast
     overwrite_to_land = (
@@ -442,6 +398,22 @@ class GriddedFRP:
         future.result() and are logged with full tracebacks, making
         failures clearly distinguishable from legitimate skips.
         """
+        global _SHARED_IGBP
+        global _SHARED_WATERMASK
+        # Load the IGBP data into memory ONCE in the main process
+        if _SHARED_IGBP is None:
+            logging.info(f"Pre-loading IGBP data into shared memory from {self._igbp_file}")
+            from qfed.vegetation import IGBPNetCDF
+            _SHARED_IGBP = IGBPNetCDF(self._igbp_file)
+            
+        # Load the watermask data into memory ONCE in the main process
+        if _SHARED_WATERMASK is None:
+            logging.info(f"Pre-loading watermask data into shared memory from {self._watermask_file}")
+            f = nc.Dataset(self._watermask_file)
+            _SHARED_WATERMASK = f.variables['watermask'][...]
+            f.close()
+
+
         self.im        = self._grid.dimensions()['x']
         self.jm        = self._grid.dimensions()['y']
         self.glon      = self._grid.lon()
@@ -457,20 +429,38 @@ class GriddedFRP:
             logging.warning("No input files found for this time interval.")
             return
 
+        # calculate number of workers
+        if self._max_workers is not None:
+            smart_workers = self._max_workers
+        else:
+            try:
+                cpu_limit = len(os.sched_getaffinity(0))
+            except AttributeError:
+                cpu_limit = os.cpu_count() or 6
+
+            try:
+                mem_bytes = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+                mem_gb = mem_bytes / (1024 ** 3)
+            except ValueError:
+                mem_gb = 16.0 # Safe fallback
+
+            # Heuristic: Main process = 4GB. Each worker = ~2.5GB
+            available_mem = max(mem_gb - 4.0, 0)
+            mem_limit = max(1, int(available_mem // 2.5))
+            smart_workers = min(cpu_limit, mem_limit, self.n_input_files)        
+
         logging.info(
             f"Processing {self.n_input_files} granule(s) with "
-            f"up to {self._max_workers} parallel worker process(es)."
+            f"up to {smart_workers} parallel worker process(es)."
         )
 
-        with ProcessPoolExecutor(max_workers=self._max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=smart_workers) as executor:
             futures = {
                 executor.submit(
                     _process_granule,
                     self.sat,
                     item.geolocation,
                     item.fire,
-                    self._igbp_file,
-                    self._watermask_file,
                     self.im,
                     self.jm,
                     self.grid_type,
