@@ -486,6 +486,9 @@ class VIIRS(PixelClassifier):
         There is no information to determine whether 
         they are land or water, so their surface  
         classification is set to 'unknown'.
+        
+        If a watermask is provided, it is used to classify
+        cloud pixels as land, water or coast.
         '''
         pixel = (self._fire_mask == VIIRS.CLOUD)
 
@@ -494,28 +497,50 @@ class VIIRS(PixelClassifier):
             AUX_COAST = 1
             AUX_LAND  = 2
 
-            d_lon = 360.0/self._watermask.shape[1]
-            d_lat = 180.0/self._watermask.shape[0]
-            j = np.floor((self._lon + 180.0)/d_lon).astype(int)
-            i = np.floor((self._lat +  90.0)/d_lat).astype(int)
+            n_rows, n_cols = self._watermask.shape
 
-            pole = i > self._watermask.shape[0] - 1
-            i[pole] = self._watermask.shape[0] - 1
-            if np.any(pole):
-                logging.debug(f'Detected cloud pixels with latitude >= 90.')
-                logging.debug(f'The range of cloud latitudes is [{self._lat.min()}, {self._lat.max()}]')
+            # --- Issue 1 Fix: robust index calculation using searchsorted ---
+            # Avoids floating-point rounding errors in np.floor(coord/d) 
+            # that can misassign pixels sitting exactly on watermask cell 
+            # boundaries, which is stack-sensitive (NumPy version, CPU ISA).
+            lon_grid = np.linspace(-180.0, 180.0, n_cols, endpoint=False)
+            lat_grid = np.linspace( -90.0,  90.0, n_rows, endpoint=False)
 
-            wrap = j > self._watermask.shape[1] - 1
-            j[wrap] = j[wrap] - self._watermask.shape[1]
-            if np.any(wrap):
-                logging.debug(f'Detected cloud pixels with longitude >= 180.')
-                logging.debug(f'The range of cloud longitudes is [{self._lon.min()}, {self._lon.max()}]')
+            j = np.searchsorted(lon_grid, self._lon, side='right') - 1
+            i = np.searchsorted(lat_grid, self._lat, side='right') - 1
+
+            # --- Issue 2 Fix: clamp latitude, wrap longitude ---
+            # Latitude is bounded [-90, 90]: clamp to valid row range.
+            # Longitude is circular [-180, 180]: wrap to valid column range.
+
+            lat_out_of_range = (i < 0) | (i > n_rows - 1)
+            if np.any(lat_out_of_range):
+                logging.debug(
+                    f'Detected {np.sum(lat_out_of_range)} cloud pixels with '
+                    f'latitude outside [-90, 90]. '
+                    f'Latitude range: '
+                    f'[{self._lat.min():.4f}, {self._lat.max():.4f}]. '
+                    f'Clamping to valid range.'
+                )
+            i = np.clip(i, 0, n_rows - 1)
+
+            lon_out_of_range = (j < 0) | (j > n_cols - 1)
+            if np.any(lon_out_of_range):
+                logging.debug(
+                    f'Detected {np.sum(lon_out_of_range)} cloud pixels with '
+                    f'longitude outside [-180, 180]. '
+                    f'Longitude range: '
+                    f'[{self._lon.min():.4f}, {self._lon.max():.4f}]. '
+                    f'Wrapping to valid range.'
+                )
+            j = np.mod(j, n_cols)
 
             result = {}
-            result['land' ] = pixel & (self._watermask[i,j] == AUX_LAND)
-            result['water'] = pixel & (self._watermask[i,j] == AUX_WATER)
-            result['coast'  ] = pixel & (self._watermask[i,j] == AUX_COAST)
+            result['land'   ] = pixel & (self._watermask[i, j] == AUX_LAND)
+            result['water'  ] = pixel & (self._watermask[i, j] == AUX_WATER)
+            result['coast'  ] = pixel & (self._watermask[i, j] == AUX_COAST)
             result['unknown'] = (self._fire_mask >= 0) & self._no_such_classification()
+
         else:
             result = self._place_as_unknown(pixel)
 
