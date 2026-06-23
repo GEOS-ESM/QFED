@@ -76,10 +76,6 @@ class GeolocationProduct(ABC):
             # wrap interval: valid if >= lo360 OR <= hi360
             return (lon360 >= lo360) | (lon360 <= hi360)
 
-
-    def message_on_file_error(self, file):
-        logging.warning(f"Cannot open the geolocation file '{file}' - excluding it.")
-
     @abc.abstractmethod
     def get_longitude(self):
         return
@@ -140,9 +136,8 @@ class VIIRS_NPP(GeolocationProduct):
     def __read_hdf(self, file, variable):
         try:
             vnp03 = SD.SD(file)
-        except SD.HDF4Error:
-            self.message_on_file_error(file)
-            return
+        except SD.HDF4Error as e:
+            raise OSError(f"HDF4 library failed to open '{file}'") from e
 
         data = vnp03.select(variable).get()
         return data
@@ -150,9 +145,8 @@ class VIIRS_NPP(GeolocationProduct):
     def __read_nc(self, file, variable):
         try:
            vnp03 = nc.Dataset(file)
-        except IOError:
-           self.message_on_file_error(file)
-           return
+        except IOError as e:
+           raise OSError(f"NetCDF4 library failed to open '{file}'") from e
 
         data = vnp03.variables[variable]
         return data[...]
@@ -186,9 +180,8 @@ class VIIRS_JPSS(GeolocationProduct):
     def __read(self, file, variable):
         try:
            vjs03 = nc.Dataset(file)
-        except IOError:
-           self.message_on_file_error(file)
-           return
+        except IOError as e:
+           raise OSError(f"NetCDF4 library failed to open '{file}'") from e
 
         data = vjs03.groups['geolocation_data'].variables[variable]
         
