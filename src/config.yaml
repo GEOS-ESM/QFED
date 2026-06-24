@@ -60,6 +60,4 @@ qfed:
         igbp: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_IGBP_PLUS.MODIS.{0:%Y}.nc
         watermask: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/watermask/watermask-700m.no_coast.nc4
         peat:
-            file: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_PEAT_GPA22.nc
-
-            
+            file: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_PEAT_GPA22.nc            

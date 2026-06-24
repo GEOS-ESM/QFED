@@ -370,7 +370,6 @@ class IGBPNetCDF():
             (igbp_plus == VOLCANO)
         )
 
-
         veg[mask_trop]     = TROPICAL
         veg[mask_boreal]   = BOREAL
         veg[mask_temperate]= TEMPERATE
