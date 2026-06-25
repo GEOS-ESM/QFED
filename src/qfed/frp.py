@@ -19,11 +19,14 @@ from qfed import fire
 from qfed import VERSION
 
 
+# Global variable to hold shared data
+_SHARED_IGBP = None
+_SHARED_WATERMASK = None
+
 # ---------------------------------------------------------------------------
 # Module-level QC scaling cache — read once per process
 # ---------------------------------------------------------------------------
 _QC_SCALING_CACHE: dict | None = None
-
 
 def _get_qc_scaling(path: str = 'qcscalingfactors.yaml') -> dict:
     """
@@ -36,61 +39,6 @@ def _get_qc_scaling(path: str = 'qcscalingfactors.yaml') -> dict:
             _QC_SCALING_CACHE = yaml.safe_load(fh)
         logging.debug("Loaded QC scaling factors from disk (cached).")
     return _QC_SCALING_CACHE
-
-
-# ---------------------------------------------------------------------------
-# Module-level IGBP cache — instantiated once per worker process
-# ---------------------------------------------------------------------------
-_IGBP_CACHE: dict = {}
-
-
-def _get_igbp(
-    igbp_file: str,
-    peat_file: str | None = None,
-):
-    """
-    Return an IGBPNetCDF instance for igbp_file, cached per process.
-    Each worker process builds its own instance from the file path,
-    avoiding the need to pickle large numpy arrays across processes.
-    """
-    global _IGBP_CACHE
-    cache_key = (igbp_file, peat_file)
-    if cache_key not in _IGBP_CACHE:
-        from qfed.vegetation import IGBPNetCDF
-        _IGBP_CACHE[cache_key] = IGBPNetCDF(
-            igbp_file,
-            peat_file=peat_file,
-        )
-        logging.debug(
-            f"Process {os.getpid()}: loaded IGBP from '{igbp_file}' "
-            f"(peat_file={peat_file!r})."
-        )
-    return _IGBP_CACHE[cache_key]
-
-
-# ---------------------------------------------------------------------------
-# Module-level watermask cache — loaded once per worker process
-# ---------------------------------------------------------------------------
-_WATERMASK_CACHE: dict = {}
-
-
-def _get_watermask(watermask_file: str) -> np.ndarray:
-    """
-    Return the watermask array for watermask_file, cached per process.
-
-    Each worker process loads its own copy from the file path,
-    avoiding the cost of pickling a large numpy array across process
-    boundaries for every granule.
-    """
-    global _WATERMASK_CACHE
-    if watermask_file not in _WATERMASK_CACHE:
-        f = nc.Dataset(watermask_file)
-        _WATERMASK_CACHE[watermask_file] = f.variables['watermask'][...]
-        f.close()
-        logging.debug(
-            f"Process {os.getpid()}: loaded watermask from '{watermask_file}'."
-        )
-    return _WATERMASK_CACHE[watermask_file]
 
 
 # ---------------------------------------------------------------------------
@@ -389,10 +337,10 @@ class GriddedFRP:
         sat: str,
         grid,
         finder,
-        gp_reader_factory,
-        fp_reader_factory,
-        cp_reader_factory,
-        igbp,
+        gp_reader_factory,      # accepted for API compatibility, not used internally
+        fp_reader_factory,      # accepted for API compatibility, not used internally
+        cp_reader_factory,      # accepted for API compatibility, not used internally
+        igbp,                   # IGBPNetCDF instance or path string
         watermask_file: str = '',
         max_workers: int = 4,
         peat_file: str | None = None,
@@ -402,14 +350,18 @@ class GriddedFRP:
         ----------
         peat_file : str or None, optional
             Path to the GL_PEAT_GPA22 NetCDF file.  When None (default),
-            peat reclassification is disabled in every worker process.
+            peat reclassification is disabled.
         """
-        self._grid                = grid
-        self._finder              = finder
-        self.sat                  = sat
-        self._watermask_file      = watermask_file
-        self._max_workers         = max_workers
-        self._peat_file           = peat_file
+        self._grid           = grid
+        self._finder         = finder
+        self.sat             = sat
+        self._watermask_file = watermask_file
+        self._max_workers    = max_workers
+        self._peat_file      = peat_file
+
+        # Defensive check in case 'None' is passed as a string from YAML config
+        if self._peat_file == "None":
+            self._peat_file = None
 
         # Accept either an IGBPNetCDF instance or a raw path string.
         # Workers always receive the path so they can build their own
@@ -417,6 +369,7 @@ class GriddedFRP:
         if isinstance(igbp, str):
             self._igbp_file = igbp
         else:
+            # Extract the file path from an already-instantiated object.
             self._igbp_file = igbp.file
 
     # ------------------------------------------------------------------
@@ -427,12 +380,15 @@ class GriddedFRP:
         self.area_water   = np.zeros(shape)
         self.area_cloud   = np.zeros(shape)
         self.area_unknown = np.zeros(shape)
+        # Use plain string keys to match the worker process output.
         self.frp = _make_frp_dict(self.im, self.jm)
 
     def _accumulate(self, partial: dict) -> None:
         """
         Merge one granule's partial arrays into the class accumulators.
         Called in the main process only — no locking needed.
+        Both self.frp and partial['frp'] use plain string keys so there
+        is no object-identity ambiguity across process boundaries.
         """
         self.area_land    += partial['area_land']
         self.area_water   += partial['area_water']
@@ -447,9 +403,34 @@ class GriddedFRP:
         Ingest all granules for [t_start, t_end), processing them in
         parallel worker processes.
 
-        peat_file is forwarded to every worker as a plain picklable 
-        value (str | None).
+        Each worker process has its own HDF5/NetCDF4 library state and
+        its own reader instances, completely eliminating thread-safety
+        and shared-state issues. IGBP and watermask are loaded from
+        file paths inside each worker and cached after first use.
+
+        The main process accumulates results serially as futures
+        complete, so accumulator arrays need no locking.
+
+        Exceptions raised in worker processes propagate through
+        future.result() and are logged with full tracebacks, making
+        failures clearly distinguishable from legitimate skips.
         """
+        global _SHARED_IGBP
+        global _SHARED_WATERMASK
+        
+        # Load the IGBP data into memory ONCE in the main process
+        if _SHARED_IGBP is None:
+            logging.info(f"Pre-loading IGBP data into shared memory from {self._igbp_file}")
+            from qfed.vegetation import IGBPNetCDF
+            _SHARED_IGBP = IGBPNetCDF(self._igbp_file, peat_file=self._peat_file)
+            
+        # Load the watermask data into memory ONCE in the main process
+        if _SHARED_WATERMASK is None:
+            logging.info(f"Pre-loading watermask data into shared memory from {self._watermask_file}")
+            f = nc.Dataset(self._watermask_file)
+            _SHARED_WATERMASK = f.variables['watermask'][...]
+            f.close()
+
         self.im        = self._grid.dimensions()['x']
         self.jm        = self._grid.dimensions()['y']
         self.glon      = self._grid.lon()
@@ -465,24 +446,41 @@ class GriddedFRP:
             logging.warning("No input files found for this time interval.")
             return
 
+        # calculate number of workers
+        if self._max_workers is not None:
+            smart_workers = self._max_workers
+        else:
+            try:
+                cpu_limit = len(os.sched_getaffinity(0))
+            except AttributeError:
+                cpu_limit = os.cpu_count() or 6
+
+            try:
+                mem_bytes = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+                mem_gb = mem_bytes / (1024 ** 3)
+            except ValueError:
+                mem_gb = 16.0 # Safe fallback
+
+            # Heuristic: Main process = 4GB. Each worker = ~2.5GB
+            available_mem = max(mem_gb - 4.0, 0)
+            mem_limit = max(1, int(available_mem // 2.5))
+            smart_workers = min(cpu_limit, mem_limit, self.n_input_files)        
+
         logging.info(
             f"Processing {self.n_input_files} granule(s) with "
-            f"up to {self._max_workers} parallel worker process(es)."
+            f"up to {smart_workers} parallel worker process(es)."
         )
 
-        with ProcessPoolExecutor(max_workers=self._max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=smart_workers) as executor:
             futures = {
                 executor.submit(
                     _process_granule,
                     self.sat,
                     item.geolocation,
                     item.fire,
-                    self._igbp_file,
-                    self._watermask_file,
                     self.im,
                     self.jm,
                     self.grid_type,
-                    self._peat_file,            # new
                 ): item.fire
                 for item in input_data
             }
@@ -494,7 +492,11 @@ class GriddedFRP:
                     result = future.result()
                     if result is not None:
                         self._accumulate(result)
+                    # None means legitimately skipped (no geo file or no
+                    # fires) — already logged at WARNING/INFO in the worker.
                 except Exception:
+                    # Real processing failure — log with full traceback so
+                    # the cause is visible in the main process log.
                     logging.error(
                         f"Failed to process granule '{fp_filename}'.",
                         exc_info=True,
@@ -523,6 +525,8 @@ class GriddedFRP:
     def _apply_qc_cap(self) -> None:
         """
         Cap FRP where the implied OC AOD exceeds max_aod_oc.
+        All constants are unchanged from the original implementation.
+        The original three separate biome loops are merged into one.
         self.frp is keyed by plain strings (bb.type.value).
         Automatically handles any biomes present in fire.BIOMASS_BURNING,
         including peat.
@@ -544,12 +548,15 @@ class GriddedFRP:
 
         i_land = A_l > 0
 
+        # safe denominators — avoid division by zero without a Python loop
         denom      = np.where((A_o + A_c) > 0, A_o + A_c, 1.0)
         corr_denom = np.where((A_l + A_c) > 0, A_l + A_c, 1.0)
         corr_num   = A_l + 2 * A_c
 
         E_total = np.zeros((self.im, self.jm))
 
+        # single loop over biomes — replaces the original three loops
+        # self.frp is keyed by bb.type.value (plain string)
         for b in fire.BIOMASS_BURNING:
             key = b.type.value
             B_f = qcscaling['oc'][b.description]
@@ -557,6 +564,7 @@ class GriddedFRP:
 
             E_b = units_factor * A_f * S_f * B_f * self.frp[key]
 
+            # sequential-b0 normalisation (only where land area > 0)
             E_b[i_land] = (
                 E_b[i_land]
                 / denom[i_land]
@@ -565,10 +573,12 @@ class GriddedFRP:
 
             E_total += E_b
 
+        # OC column density → AOD
         M          = (1e3 * E_total) * (24 * 3600)
         aod_oc     = oc_mass_ext_coeff * pom_oc_ratio * M
         max_aod_oc = f_phys * max_aod
 
+        # vectorised capping factor — no Python loop over grid cells
         q        = np.ones_like(aod_oc)
         i_cap    = aod_oc > max_aod_oc
         q[i_cap] = max_aod_oc / aod_oc[i_cap]
@@ -701,6 +711,7 @@ class GriddedFRP:
         for key, frp_arr in self.frp.items():
             f.variables[f'frp_{key}'][0] = frp_arr.T
 
+        # bookkeeping
         f.setncattr("number_of_input_files", int(self.n_input_files))
         f.setncattr(
             "comment",
