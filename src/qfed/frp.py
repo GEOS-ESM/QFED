@@ -142,12 +142,9 @@ def _process_granule(
     satellite: str,
     gp_file_pattern: str,
     fp_file: str,
-    igbp_file: str,
-    watermask_file: str,
     im: int,
     jm: int,
     grid_type,
-    peat_file: str | None = None,
 ) -> dict | None:
     """
     Process one (geolocation, fire-product) granule pair.
@@ -157,29 +154,19 @@ def _process_granule(
     instances are created fresh per granule — they are stateless with
     respect to files (no persistent handles) so construction is cheap.
 
-    IGBP and watermask are loaded from their file paths on first use
-    within each worker process and cached for subsequent granules
-    assigned to the same worker.
+    IGBP and Watermask are loaded from global shared variables 
 
     FRP is keyed by plain strings (bb.type.value, e.g. 'tf', 'xf',
-    'sv', 'gl', 'pt') to avoid object-identity issues when the result
-    dict is unpickled in the main process.
+    'sv', 'gl', 'pt') to avoid object-identity issues when the result dict
+    is unpickled in the main process.
 
-    Parameters
-    ----------
-    peat_file : str or None
-        Path to the GL_PEAT_GPA22 NetCDF file.  None disables peat
-        reclassification entirely.
+    Returns:
+        dict  — partial accumulator arrays on success
+        None  — granule legitimately skipped (no geo file or no fires)
 
-    Returns
-    -------
-    dict  — partial accumulator arrays on success
-    None  — granule legitimately skipped (no geo file or no fires)
-
-    Raises
-    ------
-    Exception — on any processing error, allowing the main process to
-                log the full traceback via future.result()
+    Raises:
+        Exception — on any processing error, allowing the main process
+                    to log the full traceback via future.result()
     """
     import qfed.geolocation_products as geolocation_products
     import qfed.fire_products as fire_products
@@ -200,20 +187,21 @@ def _process_granule(
     gp_file = match[0]
 
     # ---- create reader instances ----------------------------------------
+    # Cheap: no file handles are stored. Each process gets its own
+    # instances, so there is no shared mutable state between workers.
     platform  = Satellite(satellite)
     gp_reader = geolocation_products.create(platform)
     fp_reader = fire_products.create(platform)
     cp_reader = classification_products.create(platform)
 
-    # ---- early exit if granule has no fires -----------------------------
-    n_fires = fp_reader.get_num_fire_pixels(fp_file)
-    if n_fires == 0:
-        logging.info(f"Skipping '{fp_filename}': no fires detected.")
-        return None
-
     logging.info(f"Processing '{fp_filename}'.")
 
+    # No try/except here — exceptions propagate to the main process where
+    # they are caught by future.result() and logged with a full traceback.
+
     # ---- partial result buffers -----------------------------------------
+    # FRP uses plain string keys to avoid object-identity issues when
+    # this dict is pickled back to the main process.
     result = {
         'area_land':    np.zeros((im, jm)),
         'area_water':   np.zeros((im, jm)),
@@ -223,29 +211,25 @@ def _process_granule(
     }
 
     # ---- geolocation ----------------------------------------------------
-    lon, lat, valid_coords, _, _ = gp_reader.get_coordinates(gp_file)
+    try:
+        lon, lat, valid_coords, _, _ = gp_reader.get_coordinates(gp_file)
+    except OSError as e:
+        logging.error(f"Skipping '{fp_filename}': {e}")
+        return None
 
-    # ---- watermask (cached per process) ---------------------------------
-    watermask = _get_watermask(watermask_file)
+    # ---- watermask (shared copy) ----------------------------------------
+    global _SHARED_WATERMASK
+    watermask = _SHARED_WATERMASK
 
     # ---- classification -------------------------------------------------
+    # set_auxiliary and read both mutate cp_reader, but each process
+    # owns its own instance so there is no cross-worker interference.
     cp_reader.set_auxiliary(lon=lon, lat=lat, watermask=watermask)
     cp_reader.read(fp_file)
 
     is_cloud      = cp_reader.get_cloud()
     is_cloud_free = cp_reader.get_cloud_free()
     area_px       = cp_reader.get_area()
-
-    # ---- build combined fire masks once, reused 3x below ----------------
-    fire_low  = cp_reader.get_fire(confidence='low')
-    fire_nom  = cp_reader.get_fire(confidence='nominal')
-    fire_high = cp_reader.get_fire(confidence='high')
-    fire_any  = cp_reader.get_fire(confidence='non-zero')
-
-    combined_fire = {
-        surf: (fire_low[surf] | fire_nom[surf] | fire_high[surf])
-        for surf in ('land', 'water', 'coast')
-    }
 
     # ---- helper: apply mask + valid_coords, then flatten ----------------
     _false = np.zeros_like(valid_coords)
@@ -258,28 +242,36 @@ def _process_granule(
     # NON-FIRE area accumulation
     # ==================================================================
 
+    # cloud-free land
     result['area_land']    += _binareas(
         *_select_area(is_cloud_free['land']), im, jm, grid_type
     )
+    # cloud-free coast → water bucket
     result['area_water']   += _binareas(
         *_select_area(is_cloud_free['coast']), im, jm, grid_type
     )
+    # cloud-free water
     result['area_water']   += _binareas(
         *_select_area(is_cloud_free['water']), im, jm, grid_type
     )
+    # cloud land
     result['area_cloud']   += _binareas(
         *_select_area(is_cloud['land']), im, jm, grid_type
     )
+    # cloud coast → water bucket
     result['area_water']   += _binareas(
         *_select_area(is_cloud['coast']), im, jm, grid_type
     )
+    # cloud water → water bucket
     result['area_water']   += _binareas(
         *_select_area(is_cloud['water']), im, jm, grid_type
     )
+    # cloud unknown
     result['area_unknown'] += _binareas(
         *_select_area(is_cloud.get('unknown', _false)), im, jm, grid_type
     )
 
+    # sanity check: cloud-free unknown should always be empty
     _, _, unk_area = _select_area(is_cloud_free.get('unknown', _false))
     if len(unk_area) > 0:
         logging.critical(
@@ -287,9 +279,27 @@ def _process_granule(
             f"'{fp_filename}'! Excluding them."
         )
 
+    # ---- early exit if granule has no fires (after area accumulation) ---
+    n_fires = fp_reader.get_num_fire_pixels(fp_file)
+    if n_fires == 0:
+        logging.info(f"Successfully processed '{fp_filename}' (No fires, accumulated clear/cloud area).")
+        return result
+
     # ==================================================================
     # FIRE pixel accumulation
     # ==================================================================
+
+    # ---- build combined fire masks once, reused 3x below ----------------
+    fire_low  = cp_reader.get_fire(confidence='low')
+    fire_nom  = cp_reader.get_fire(confidence='nominal')
+    fire_high = cp_reader.get_fire(confidence='high')
+    fire_any  = cp_reader.get_fire(confidence='non-zero')
+
+    combined_fire = {
+        surf: (fire_low[surf] | fire_nom[surf] | fire_high[surf])
+        for surf in ('land', 'water', 'coast')
+    }
+
     f_lon    = fp_reader.get_fire_longitude(fp_file)
     f_lat    = fp_reader.get_fire_latitude(fp_file)
     f_frp    = fp_reader.get_fire_frp(fp_file).copy()
@@ -297,17 +307,17 @@ def _process_granule(
     f_sample = fp_reader.get_fire_sample(fp_file)
     f_area   = fp_reader.get_fire_pixel_area(fp_file)
 
+    # single vectorised pass to clip FRP outliers
     np.clip(f_frp, 0, 40_000, out=f_frp)
 
-    # ---- IGBP vegetation category (cached per process) ------------------
-    # peat_file is forwarded so the cached IGBPNetCDF instance is built 
-    # with full peat support.
-    igbp = _get_igbp(igbp_file, peat_file=peat_file)
-    veg_masks, veg_codes = igbp.get_category(f_lat, f_lon, return_codes=True)
+    # ---- IGBP vegetation category (shared copy) ------------------
+    global _SHARED_IGBP
+    veg_masks, veg_codes = _SHARED_IGBP.get_category(f_lat, f_lon, return_codes=True)
 
+    # promote IGBP-land pixels that QA misclassified as water/coast
     overwrite_to_land = (
         (veg_codes != 0)
-        & fire_any['valid'][f_line, f_sample]
+        & fire_any['valid'][f_line, f_sample]   # exclude residual bowtie
     )
 
     i_valid = valid_coords[f_line, f_sample]
@@ -352,6 +362,7 @@ def _process_granule(
     )
 
     # --- per-biome FRP ---------------------------------------------------
+    # Use bb.type.value (plain string) as key — matches _make_frp_dict()
     if n_land > 0:
         for bb in fire.BIOMASS_BURNING:
             j = veg_masks[bb.vegetation] & i_land
