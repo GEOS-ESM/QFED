@@ -1,5 +1,5 @@
 define:
-    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/share/gmao_ops/fvInput/ExtData/chemistry/QFED/v3.3-nrt/sfc/0.1/
+    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/develop+biomescheck/
 
 qfed:
     scaling:      

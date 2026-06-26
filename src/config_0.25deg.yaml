@@ -32,12 +32,12 @@ qfed:
     with:
         mod: # MODIS TERRA
             geolocation:
-                file: /css/modis/Collection6.1/L1/MOD03/{0:%Y}/{0:%j}/MOD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
+                file: /discover/nobackup/projects/gmao/iesa/aerosol/data/MODIS/Level1/061/MOD03/{0:%Y}/{0:%j}/MOD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
             fires:
                 file: /css/modis/Collection6.1/L2/MOD14_L2/{0:%Y}/{0:%j}/MOD14.A{0:%Y%j}.{0:%H%M}.061.*.hdf
         myd: # MODIS AQUA
             geolocation:
-                file: /css/modis/Collection6.1/L1/MYD03/{0:%Y}/{0:%j}/MYD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
+                file: /discover/nobackup/projects/gmao/iesa/aerosol/data/MODIS/Level1/061/MYD03/{0:%Y}/{0:%j}/MYD03.A{0:%Y%j}.{0:%H%M}.061.*.hdf
             fires: 
                 file: /css/modis/Collection6.1/L2/MYD14_L2/{0:%Y}/{0:%j}/MYD14.A{0:%Y%j}.{0:%H%M}.*.hdf
         vnp:  # VIIRS S-NPP
