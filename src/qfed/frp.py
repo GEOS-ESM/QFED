@@ -462,8 +462,8 @@ class GriddedFRP:
                 mem_gb = 16.0 # Safe fallback
 
             # Heuristic: Main process = 4GB. Each worker = ~2.5GB
-            available_mem = max(mem_gb - 4.0, 0)
-            mem_limit = max(1, int(available_mem // 2.5))
+            available_mem = max(mem_gb - 6.0, 0)
+            mem_limit = max(1, int(available_mem // 5))
             smart_workers = min(cpu_limit, mem_limit, self.n_input_files)        
 
         logging.info(
