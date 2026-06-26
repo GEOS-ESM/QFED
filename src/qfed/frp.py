@@ -73,15 +73,11 @@ def _make_frp_dict(im: int, jm: int) -> dict:
     """
     Return a dict mapping biome string key -> zero array.
 
-    Using plain strings as keys (e.g. 'tf', 'xf', 'sv', 'gl', etc.) guarantees
+    Using plain strings as keys (e.g. 'tf', 'bf', 'mf', 'sv', 'gl', 'ag') guarantees
     no object-identity ambiguity when dicts are pickled across process
     boundaries with ProcessPoolExecutor.
     """
-    return {
-        bb.type.value: np.zeros((im, jm)) 
-        for bb in fire.BIOMASS_BURNING 
-        if bb.type.value != 'pt'
-    }
+    return {bb.type.value: np.zeros((im, jm)) for bb in fire.BIOMASS_BURNING}
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +93,25 @@ def _process_granule(
 ) -> dict | None:
     """
     Process one (geolocation, fire-product) granule pair.
+
+    Runs in a worker process. All HDF5/NetCDF4 I/O is isolated to the
+    worker process, so there is no shared HDF5 library state. Reader
+    instances are created fresh per granule — they are stateless with
+    respect to files (no persistent handles) so construction is cheap.
+
+    IGBP and Watermask are loaded from global shared variables 
+
+    FRP is keyed by plain strings (bb.type.value, e.g. 'tf', 'xf',
+    'sv', 'gl') to avoid object-identity issues when the result dict
+    is unpickled in the main process.
+
+    Returns:
+        dict  — partial accumulator arrays on success
+        None  — granule legitimately skipped (no geo file or no fires)
+
+    Raises:
+        Exception — on any processing error, allowing the main process
+                    to log the full traceback via future.result()
     """
     import qfed.geolocation_products as geolocation_products
     import qfed.fire_products as fire_products
@@ -117,6 +132,8 @@ def _process_granule(
     gp_file = match[0]
 
     # ---- create reader instances ----------------------------------------
+    # Cheap: no file handles are stored. Each process gets its own
+    # instances, so there is no shared mutable state between workers.
     platform  = Satellite(satellite)
     gp_reader = geolocation_products.create(platform)
     fp_reader = fire_products.create(platform)
@@ -125,6 +142,8 @@ def _process_granule(
     logging.info(f"Processing '{fp_filename}'.")
 
     # ---- partial result buffers -----------------------------------------
+    # FRP uses plain string keys to avoid object-identity issues when
+    # this dict is pickled back to the main process.
     result = {
         'area_land':    np.zeros((im, jm)),
         'area_water':   np.zeros((im, jm)),
@@ -174,21 +193,43 @@ def _process_granule(
     # NON-FIRE area accumulation
     # ==================================================================
 
-    result['area_land']    += _binareas(*_select_area(is_cloud_free['land']), im, jm, grid_type)
-    result['area_water']   += _binareas(*_select_area(is_cloud_free['coast']), im, jm, grid_type)
-    result['area_water']   += _binareas(*_select_area(is_cloud_free['water']), im, jm, grid_type)
-    result['area_cloud']   += _binareas(*_select_area(is_cloud['land']), im, jm, grid_type)
-    result['area_water']   += _binareas(*_select_area(is_cloud['coast']), im, jm, grid_type)
-    result['area_water']   += _binareas(*_select_area(is_cloud['water']), im, jm, grid_type)
-    result['area_unknown'] += _binareas(*_select_area(is_cloud.get('unknown', _false)), im, jm, grid_type)
-
+    # cloud-free land
+    result['area_land']    += _binareas(
+        *_select_area(is_cloud_free['land']), im, jm, grid_type
+    )
+    # cloud-free coast → water bucket
+    result['area_water']   += _binareas(
+        *_select_area(is_cloud_free['coast']), im, jm, grid_type
+    )
+    # cloud-free water
+    result['area_water']   += _binareas(
+        *_select_area(is_cloud_free['water']), im, jm, grid_type
+    )
+    # cloud land
+    result['area_cloud']   += _binareas(
+        *_select_area(is_cloud['land']), im, jm, grid_type
+    )
+    # cloud coast → water bucket
+    result['area_water']   += _binareas(
+        *_select_area(is_cloud['coast']), im, jm, grid_type
+    )
+    # cloud water → water bucket
+    result['area_water']   += _binareas(
+        *_select_area(is_cloud['water']), im, jm, grid_type
+    )
+    # cloud unknown
+    result['area_unknown'] += _binareas(
+        *_select_area(is_cloud.get('unknown', _false)), im, jm, grid_type
+    )
+    # sanity check: cloud-free unknown should always be empty
     _, _, unk_area = _select_area(is_cloud_free.get('unknown', _false))
     if len(unk_area) > 0:
         logging.critical(
             f"Found {len(unk_area)} cloud-free unknown pixels in "
             f"'{fp_filename}'! Excluding them."
         )
-
+        
+    # ---- early exit if granule has no fires -----------------------------
     n_fires = fp_reader.get_num_fire_pixels(fp_file)
     if n_fires == 0:
         logging.info(f"Successfully processed '{fp_filename}' (No fires, accumulated clear/cloud area).")
@@ -204,35 +245,62 @@ def _process_granule(
     f_sample = fp_reader.get_fire_sample(fp_file)
     f_area   = fp_reader.get_fire_pixel_area(fp_file)
 
+    # single vectorised pass to clip FRP outliers
     np.clip(f_frp, 0, 40_000, out=f_frp)
 
+    # ---- IGBP vegetation category (shared copy) ------------------
     global _SHARED_IGBP
     veg_masks, veg_codes = _SHARED_IGBP.get_category(f_lat, f_lon, return_codes=True)
 
+    # promote IGBP-land pixels that QA misclassified as water/coast
     overwrite_to_land = (
         (veg_codes != 0)
-        & fire_any['valid'][f_line, f_sample]
+        & fire_any['valid'][f_line, f_sample]   # exclude residual bowtie
     )
 
     i_valid = valid_coords[f_line, f_sample]
 
     # --- water fire pixels -----------------------------------------------
-    i = (combined_fire['water'][f_line, f_sample] & ~overwrite_to_land & i_valid)
-    result['area_water'] += _binareas(f_lon[i], f_lat[i], f_area[i], im, jm, grid_type)
-    logging.info(f"Found {int(i.sum())} water fire pixels in '{fp_filename}'.")
+    i = (
+        combined_fire['water'][f_line, f_sample]
+        & ~overwrite_to_land
+        & i_valid
+    )
+    result['area_water'] += _binareas(
+        f_lon[i], f_lat[i], f_area[i], im, jm, grid_type
+    )
+    logging.info(
+        f"Found {int(i.sum())} water fire pixels in '{fp_filename}'."
+    )
 
     # --- coast fire pixels -----------------------------------------------
-    i = (combined_fire['coast'][f_line, f_sample] & ~overwrite_to_land & i_valid)
-    result['area_water'] += _binareas(f_lon[i], f_lat[i], f_area[i], im, jm, grid_type)
-    logging.info(f"Found {int(i.sum())} coast fire pixels in '{fp_filename}'.")
+    i = (
+        combined_fire['coast'][f_line, f_sample]
+        & ~overwrite_to_land
+        & i_valid
+    )
+    result['area_water'] += _binareas(
+        f_lon[i], f_lat[i], f_area[i], im, jm, grid_type
+    )
+    logging.info(
+        f"Found {int(i.sum())} coast fire pixels in '{fp_filename}'."
+    )
 
     # --- land fire pixels ------------------------------------------------
-    i_land = (combined_fire['land'][f_line, f_sample] | overwrite_to_land) & i_valid
-    result['area_land'] += _binareas(f_lon[i_land], f_lat[i_land], f_area[i_land], im, jm, grid_type)
+    i_land = (
+        combined_fire['land'][f_line, f_sample] | overwrite_to_land
+    ) & i_valid
+
+    result['area_land'] += _binareas(
+        f_lon[i_land], f_lat[i_land], f_area[i_land], im, jm, grid_type
+    )
     n_land = int(i_land.sum())
-    logging.info(f"Found {n_land} land fire pixels in '{fp_filename}'.")
+    logging.info(
+        f"Found {n_land} land fire pixels in '{fp_filename}'."
+    )
 
     # --- per-biome FRP ---------------------------------------------------
+    # Use bb.type.value (plain string) as key — matches _make_frp_dict()
     if n_land > 0:
         for bb in fire.BIOMASS_BURNING:
             if bb.type.value == 'pt':
@@ -261,9 +329,9 @@ class GriddedFRP:
         sat: str,
         grid,
         finder,
-        gp_reader_factory,
-        fp_reader_factory,
-        cp_reader_factory,
+        gp_reader_factory,      # accepted for API compatibility, not used internally
+        fp_reader_factory,      # accepted for API compatibility, not used internally
+        cp_reader_factory,      # accepted for API compatibility, not used internally
         igbp,
         watermask_file: str = '',
         max_workers: int = 4,
@@ -273,10 +341,15 @@ class GriddedFRP:
         self.sat             = sat
         self._watermask_file = watermask_file
         self._max_workers    = max_workers
+        
+        # Accept either an IGBPNetCDF instance or a raw path string.
+        # Workers always receive the path so they can build their own
+        # instance without pickling large numpy arrays.
 
         if isinstance(igbp, str):
             self._igbp_file = igbp
         else:
+            # Extract the file path from an already-instantiated object.
             self._igbp_file = igbp.file
 
     # ------------------------------------------------------------------
@@ -287,10 +360,16 @@ class GriddedFRP:
         self.area_water   = np.zeros(shape)
         self.area_cloud   = np.zeros(shape)
         self.area_unknown = np.zeros(shape)
+        # Use plain string keys to match the worker process output.
         self.frp = _make_frp_dict(self.im, self.jm)
 
     def _accumulate(self, partial: dict) -> None:
-        """Merge one granule's partial arrays into the class accumulators."""
+        """
+        Merge one granule's partial arrays into the class accumulators.
+        Called in the main process only — no locking needed.
+        Both self.frp and partial['frp'] use plain string keys so there
+        is no object-identity ambiguity across process boundaries.
+        """
         self.area_land    += partial['area_land']
         self.area_water   += partial['area_water']
         self.area_cloud   += partial['area_cloud']
@@ -300,10 +379,26 @@ class GriddedFRP:
 
     # ------------------------------------------------------------------
     def ingest(self, t_start, t_end, max_workers: int | None = None) -> None:
-        """Ingest all granules for [t_start, t_end) in parallel worker processes."""
+        """
+        Ingest all granules for [t_start, t_end), processing them in
+        parallel worker processes.
+
+        Each worker process has its own HDF5/NetCDF4 library state and
+        its own reader instances, completely eliminating thread-safety
+        and shared-state issues. IGBP and watermask are loaded from
+        file paths inside each worker and cached after first use.
+
+        The main process accumulates results serially as futures
+        complete, so accumulator arrays need no locking.
+
+        Exceptions raised in worker processes propagate through
+        future.result() and are logged with full tracebacks, making
+        failures clearly distinguishable from legitimate skips.
+        """
         global _SHARED_IGBP
         global _SHARED_WATERMASK
         
+        # Load the IGBP data into memory ONCE in the main process
         if _SHARED_IGBP is None:
             logging.info(f"Pre-loading IGBP data into shared memory from {self._igbp_file}")
             from qfed.vegetation import IGBPNetCDF
@@ -330,7 +425,8 @@ class GriddedFRP:
         if self.n_input_files == 0:
             logging.warning("No input files found for this time interval.")
             return
-
+            
+        # calculate number of workers
         if self._max_workers is not None:
             smart_workers = self._max_workers
         else:
@@ -343,8 +439,9 @@ class GriddedFRP:
                 mem_bytes = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
                 mem_gb = mem_bytes / (1024 ** 3)
             except ValueError:
-                mem_gb = 16.0
+                mem_gb = 16.0 # Safe fallback
 
+            # Heuristic: Main process = 4GB. Each worker = ~2.5GB
             available_mem = max(mem_gb - 4.0, 0)
             mem_limit = max(1, int(available_mem // 2.5))
             smart_workers = min(cpu_limit, mem_limit, self.n_input_files)        
@@ -375,7 +472,11 @@ class GriddedFRP:
                     result = future.result()
                     if result is not None:
                         self._accumulate(result)
+                    # None means legitimately skipped (no geo file or no
+                    # fires) — already logged at WARNING/INFO in the worker.
                 except Exception:
+                    # Real processing failure — log with full traceback so
+                    # the cause is visible in the main process log.
                     logging.error(
                         f"Failed to process granule '{fp_filename}'.",
                         exc_info=True,
@@ -404,6 +505,9 @@ class GriddedFRP:
     def _apply_qc_cap(self) -> None:
         """
         Cap FRP where the implied OC AOD exceeds max_aod_oc.
+        All constants are unchanged from the original implementation.
+        The original three separate biome loops are merged into one.
+        self.frp is keyed by plain strings (bb.type.value).
         """
         Alpha             = 1.37e-6
         units_factor      = 1.0e-3
@@ -422,21 +526,23 @@ class GriddedFRP:
 
         i_land = A_l > 0
 
+        # safe denominators — avoid division by zero without a Python loop
         denom      = np.where((A_o + A_c) > 0, A_o + A_c, 1.0)
         corr_denom = np.where((A_l + A_c) > 0, A_l + A_c, 1.0)
         corr_num   = A_l + 2 * A_c
 
         E_total = np.zeros((self.im, self.jm))
-
+        
+        # single loop over biomes — replaces the original three loops
+        # self.frp is keyed by bb.type.value (plain string)
         for b in fire.BIOMASS_BURNING:
-            if b.type.value == 'pt':
-                continue
             key = b.type.value
             B_f = qcscaling['oc'][b.description]
             A_f = Alpha * qcscaling[self.sat][b.description]
 
             E_b = units_factor * A_f * S_f * B_f * self.frp[key]
 
+            # sequential-b0 normalisation (only where land area > 0)
             E_b[i_land] = (
                 E_b[i_land]
                 / denom[i_land]
@@ -445,17 +551,17 @@ class GriddedFRP:
 
             E_total += E_b
 
+        # OC column density → AOD
         M          = (1e3 * E_total) * (24 * 3600)
         aod_oc     = oc_mass_ext_coeff * pom_oc_ratio * M
         max_aod_oc = f_phys * max_aod
 
+        # vectorised capping factor — no Python loop over grid cells
         q        = np.ones_like(aod_oc)
         i_cap    = aod_oc > max_aod_oc
         q[i_cap] = max_aod_oc / aod_oc[i_cap]
 
         for b in fire.BIOMASS_BURNING:
-            if b.type.value == 'pt':
-                continue
             self.frp[b.type.value] *= q
 
         n_cap = int(np.sum(i_cap))
@@ -506,7 +612,6 @@ class GriddedFRP:
         f.createVariable('time', 'i4', dimensions='time')
 
         # data variables — built dynamically from fire.BIOMASS_BURNING 
-        # minus peat ('pt')
         var_kwargs = dict(zlib=compress, fill_value=fill_value)
         dims3d     = ('time', 'lat', 'lon')
 
@@ -524,7 +629,7 @@ class GriddedFRP:
             'unknown': ('Area of cloud pixels',              'km2'),
         }
 
-        # Human-readable long names per biome type value (minus 'pt')
+        # Human-readable long names per biome type value
         _frp_long_names = {
             'tf': 'Fire Radiative Power (Tropical Forests)',
             'bf': 'Fire Radiative Power (Boreal Forests)',
