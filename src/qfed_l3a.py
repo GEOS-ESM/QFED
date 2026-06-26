@@ -230,7 +230,7 @@ def process(
         frp.save(
             output_file,
             timestamp,
-            qc=True,
+            qc=False,
             compress=compress,
             satellite=satellite,
             fill_value=1e20,
