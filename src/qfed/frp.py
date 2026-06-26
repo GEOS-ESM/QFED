@@ -164,6 +164,8 @@ def _process_granule(
     watermask = _SHARED_WATERMASK
 
     # ---- classification -------------------------------------------------
+    # set_auxiliary and read both mutate cp_reader, but each process
+    # owns its own instance so there is no cross-worker interference.
     cp_reader.set_auxiliary(lon=lon, lat=lat, watermask=watermask)
     cp_reader.read(fp_file)
 
@@ -302,9 +304,6 @@ def _process_granule(
     # --- per-biome FRP ---------------------------------------------------
     # Use bb.type.value (plain string) as key — matches _make_frp_dict()
     if n_land > 0:
-        for bb in fire.BIOMASS_BURNING:
-            if bb.type.value == 'pt':
-                continue
             j = veg_masks[bb.vegetation] & i_land
             if np.any(j):
                 result['frp'][bb.type.value] += _binareas(
@@ -332,7 +331,7 @@ class GriddedFRP:
         gp_reader_factory,      # accepted for API compatibility, not used internally
         fp_reader_factory,      # accepted for API compatibility, not used internally
         cp_reader_factory,      # accepted for API compatibility, not used internally
-        igbp,
+        igbp,                   # IGBPNetCDF instance or path string
         watermask_file: str = '',
         max_workers: int = 4,
     ):
@@ -404,6 +403,7 @@ class GriddedFRP:
             from qfed.vegetation import IGBPNetCDF
             _SHARED_IGBP = IGBPNetCDF(self._igbp_file)
             
+        # Load the watermask data into memory ONCE in the main process  
         if _SHARED_WATERMASK is None:
             logging.info(f"Pre-loading watermask data into shared memory from {self._watermask_file}")
             f = nc.Dataset(self._watermask_file)
