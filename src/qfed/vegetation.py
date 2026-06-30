@@ -198,7 +198,7 @@ class IGBPNetCDF():
         """
         # get the index for IGBP
         ix, iy = self._index_from_latlon(lat, lon, self.dx, self.dy, self.x_min, self.y_max)
-
+        
         # clip indices to the array bounds
         ny, nx = self.surface_type.shape
         ix = np.clip(ix, 0, nx - 1)
