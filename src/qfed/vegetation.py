@@ -48,8 +48,8 @@ class IGBPNetCDF():
 
     def __init__(self,
                  file,
-                 nonVeg=NON_VEGETATION,
-                 drops=[STATIC_SOURCE, GASFLARING, VOLCANO],
+                 nonVeg = NON_VEGETATION,
+                 drops = [STATIC_SOURCE, GASFLARING, VOLCANO],
                  static_heat=False,
                  gasflaring=False,
                  volcano=False,
@@ -97,10 +97,10 @@ class IGBPNetCDF():
         self.surface_type = ncid['surface_type'][:]
 
         self.x_min = np.min(ncid['easting'][:])
-        self.dx    = abs(np.mean(np.diff(ncid['easting'][:])))
+        self.dx = abs(np.mean(np.diff(ncid['easting'][:])))
 
         self.y_max = np.max(ncid['northing'][:])
-        self.dy    = abs(np.mean(np.diff(ncid['northing'][:])))
+        self.dy = abs(np.mean(np.diff(ncid['northing'][:])))
 
         ncid.close()
 
@@ -113,15 +113,15 @@ class IGBPNetCDF():
 
         try:
             dim_northing = len(ncid['northing_plus'][:])
-            dim_easting  = len(ncid['easting_plus'][:])
+            dim_easting = len(ncid['easting_plus'][:])
 
             self.x_plus_min = np.min(ncid['easting_plus'][:])
-            self.dx_plus    = abs(np.mean(np.diff(ncid['easting_plus'][:])))
+            self.dx_plus = abs(np.mean(np.diff(ncid['easting_plus'][:])))
 
             self.y_plus_max = np.max(ncid['northing_plus'][:])
-            self.dy_plus    = abs(np.mean(np.diff(ncid['northing_plus'][:])))
+            self.dy_plus = abs(np.mean(np.diff(ncid['northing_plus'][:])))
 
-            self.plus_mask = np.zeros((dim_northing, dim_easting), dtype=np.uint8)
+            self.plus_mask = np.zeros( (dim_northing, dim_easting), dtype=np.uint8)
 
             if static_heat:
                 try:
@@ -129,8 +129,8 @@ class IGBPNetCDF():
                 except KeyError:
                     field = None
                 if field is not None:
-                    idx = np.where((field >= static_heat_threshold) & (field < 255))
-                    self.plus_mask[idx] = STATIC_SOURCE
+                    idx = np.where((field >=static_heat_threshold) & (field<255))
+                    self.plus_mask[idx] = STATIC_SOURCE # e.g, 21
 
             if gasflaring:
                 try:
@@ -138,8 +138,8 @@ class IGBPNetCDF():
                 except KeyError:
                     field = None
                 if field is not None:
-                    idx = np.where(field == 1)
-                    self.plus_mask[idx] = GASFLARING
+                    idx = np.where((field ==1))
+                    self.plus_mask[idx] = GASFLARING    # e.g., 22
 
             if volcano:
                 try:
@@ -147,20 +147,21 @@ class IGBPNetCDF():
                 except KeyError:
                     field = None
                 if field is not None:
-                    idx = np.where(field == 1)
-                    self.plus_mask[idx] = VOLCANO
+                    idx = np.where((field ==1))
+                    self.plus_mask[idx] = VOLCANO    # e.g., 23
 
         finally:
+            # Always close, even if something above raises
             ncid.close()
 
 
     @staticmethod
     def _geog_to_sinu(lat, lon):
         """
-        Convert geographic coordinates (deg) to MODIS sinusoidal x,y (metres).
+        Convert geographic coordinates (deg) to MODIS sinusoidal x,y (meters).
         lat, lon can be scalars or arrays.
         """
-        R   = 6371007.181000
+        R = 6371007.181000
         rad = np.pi / 180.0
 
         phi   = lat * rad
@@ -174,7 +175,7 @@ class IGBPNetCDF():
 
     def _index_from_latlon(self, lat, lon, dx, dy, x_min, y_max):
         """
-        Convert lat/lon arrays to (iy, ix) indices for a sinusoidal grid
+        Convert lat/lon arrays to (iy, ix) indices for self.surface_type.
         described by dx, dy, x_min, y_max.
         """
         x, y = self._geog_to_sinu(lat, lon)
@@ -192,12 +193,12 @@ class IGBPNetCDF():
     def getDetailedVeg(self, lat, lon):
         """
         Return raw IGBP classes (1..17, 99, 100, etc.) at given lat/lon.
-        lat, lon: numpy arrays or scalars with the same shape.
+        lat, lon: numpy arrays or scalars with same shape.
         """
-        ix, iy = self._index_from_latlon(lat, lon,
-                                         self.dx, self.dy,
-                                         self.x_min, self.y_max)
+        #get the index for IGBP
+        ix, iy = self._index_from_latlon(lat, lon, self.dx, self.dy, self.x_min, self.y_max)
 
+        # clip indices to the array bounds
         ny, nx = self.surface_type.shape
         ix = np.clip(ix, 0, nx - 1)
         iy = np.clip(iy, 0, ny - 1)
@@ -325,8 +326,8 @@ class IGBPNetCDF():
         """
         Returns
         -------
-        category : dict {VegetationCategory: bool mask}
-        veg      : (optional) array of simplified veg codes aligned with lat/lon
+        - category : dict {VegetationCategory: bool mask}
+        - veg      : (optional) array of simplified veg codes aligned with lat/lon
         """
         veg = self.simplified_vegetation(lat, lon)
 
