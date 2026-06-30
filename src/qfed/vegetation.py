@@ -46,13 +46,13 @@ class VegetationCategory(IntEnum):
 
 class IGBPNetCDF():
 
-    def __init__(self,
+    def __init__(self, 
                  file,
                  nonVeg = NON_VEGETATION,
                  drops = [STATIC_SOURCE, GASFLARING, VOLCANO],
                  static_heat=False,
-                 gasflaring=False,
-                 volcano=False,
+                 gasflaring=False, 
+                 volcano=False, 
                  static_heat_threshold=16):
         """
         Parameters
@@ -112,15 +112,17 @@ class IGBPNetCDF():
         ncid.set_auto_mask(False)
 
         try:
+            # --- coords & dimensions ---
             dim_northing = len(ncid['northing_plus'][:])
             dim_easting = len(ncid['easting_plus'][:])
 
             self.x_plus_min = np.min(ncid['easting_plus'][:])
             self.dx_plus = abs(np.mean(np.diff(ncid['easting_plus'][:])))
 
-            self.y_plus_max = np.max(ncid['northing_plus'][:])
+            self.y_plus_max  = np.max(ncid['northing_plus'][:])
             self.dy_plus = abs(np.mean(np.diff(ncid['northing_plus'][:])))
 
+            # Create the plus mask
             self.plus_mask = np.zeros( (dim_northing, dim_easting), dtype=np.uint8)
 
             if static_heat:
@@ -130,7 +132,7 @@ class IGBPNetCDF():
                     field = None
                 if field is not None:
                     idx = np.where((field >=static_heat_threshold) & (field<255))
-                    self.plus_mask[idx] = STATIC_SOURCE # e.g, 21
+                    self.plus_mask[idx] = STATIC_SOURCE  # e.g. 21
 
             if gasflaring:
                 try:
@@ -148,8 +150,7 @@ class IGBPNetCDF():
                     field = None
                 if field is not None:
                     idx = np.where((field ==1))
-                    self.plus_mask[idx] = VOLCANO    # e.g., 23
-
+                    self.plus_mask[idx] = VOLCANO       # e.g., 23
         finally:
             # Always close, even if something above raises
             ncid.close()
@@ -195,7 +196,7 @@ class IGBPNetCDF():
         Return raw IGBP classes (1..17, 99, 100, etc.) at given lat/lon.
         lat, lon: numpy arrays or scalars with same shape.
         """
-        #get the index for IGBP
+        # get the index for IGBP
         ix, iy = self._index_from_latlon(lat, lon, self.dx, self.dy, self.x_min, self.y_max)
 
         # clip indices to the array bounds
@@ -316,8 +317,8 @@ class IGBPNetCDF():
             for category in self.drops:
                 mask |= (veg == category)
 
-            veg = veg.copy()
-            veg[mask] = self.nonVeg
+            veg = veg.copy()     # avoid modifying underlying array unexpectedly
+            veg[mask] = self.nonVeg   # e.g., map 0/water to GRASSLAND, etc.
 
         return veg
 
@@ -325,7 +326,6 @@ class IGBPNetCDF():
     def get_category(self, lat, lon, return_codes=False):
         """
         Returns
-        -------
         - category : dict {VegetationCategory: bool mask}
         - veg      : (optional) array of simplified veg codes aligned with lat/lon
         """
@@ -336,3 +336,26 @@ class IGBPNetCDF():
             category[c] = (veg == c.value)
 
         return (category, veg) if return_codes else category
+        
+# if __name__ == "__main__":
+#     IGBP_FILE = '/Dedicated/jwang-data2/shared_satData/GMAO_QFED/GL_IGBP_MODIS/GL_IGBP_MODIS.2024.nc'
+#     IGBP_FILE = '/Dedicated/jwang-data2/mzhou/project/OPNL_FILDA/STATIC_SOURCE/IGBP+/GL_IGBP_PLUS.MODIS.2024.nc'
+#     igbp = IGBPNetCDF(IGBP_FILE,
+#                       nonVeg= NON_VEGETATION,
+#                       drops = [0, 21, 22, 23, 31],
+#                       static_heat=True,
+#                       gasflaring=True,
+#                       volcano=True,
+#                       static_heat_threshold = 16)
+#     
+#     # for 2024, 
+#     # Point 1 volvano; Point 2 gas flaring; Point 3 static source; 
+#     # point 4 Evergreen Broadleaf Forests in Amazon
+#     # point 5, Desert in Sahara; 
+#     # point 6, Deciduous Needleleaf Forests in Siberia
+#     # point 7, Deciduous Needleleaf Forests in Sahara; 
+#     # point 8, Evergreen Broadleaf Forests near Seattle
+#     test_lats = np.array([40.73, 71.875, -41.13333333, -6.096703, 20.200317, 60.745892, 46.951504])
+#     test_lons = np.array([13.897, 71.8438974, 146.84388815, -63.889643, 8.779006, 118.950086, -121.697682])
+#     
+#     print( igbp.get_category(test_lats, test_lons))
