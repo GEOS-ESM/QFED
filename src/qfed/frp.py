@@ -118,6 +118,7 @@ def _process_granule(
     import qfed.classification_products as classification_products
     from qfed.instruments import Satellite
 
+    
     fp_filename = os.path.basename(fp_file)
 
     # ---- locate geolocation file ----------------------------------------
@@ -301,9 +302,11 @@ def _process_granule(
         f"Found {n_land} land fire pixels in '{fp_filename}'."
     )
 
-    # --- per-biome FRP ---------------------------------------------------
+# --- per-biome FRP ---------------------------------------------------
     # Use bb.type.value (plain string) as key — matches _make_frp_dict()
     if n_land > 0:
+        # ADD THIS LOOP: Iterate over each biomass burning type
+        for bb in fire.BIOMASS_BURNING:
             j = veg_masks[bb.vegetation] & i_land
             if np.any(j):
                 result['frp'][bb.type.value] += _binareas(
@@ -466,12 +469,13 @@ class GriddedFRP:
             }
 
             for future in as_completed(futures):
-                fp_file = futures[future]
+                fp_file = futures.pop(future)
                 fp_filename = os.path.basename(fp_file)
                 try:
                     result = future.result()
                     if result is not None:
                         self._accumulate(result)
+                    del result # get rid of the data after is is processes to save memory
                     # None means legitimately skipped (no geo file or no
                     # fires) — already logged at WARNING/INFO in the worker.
                 except Exception:
