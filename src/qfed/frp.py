@@ -302,10 +302,10 @@ def _process_granule(
         f"Found {n_land} land fire pixels in '{fp_filename}'."
     )
 
-# --- per-biome FRP ---------------------------------------------------
+    # --- per-biome FRP ---------------------------------------------------
     # Use bb.type.value (plain string) as key — matches _make_frp_dict()
     if n_land > 0:
-        # ADD THIS LOOP: Iterate over each biomass burning type
+        # Iterate over each biome listed in fire.py
         for bb in fire.BIOMASS_BURNING:
             j = veg_masks[bb.vegetation] & i_land
             if np.any(j):
@@ -343,11 +343,10 @@ class GriddedFRP:
         self.sat             = sat
         self._watermask_file = watermask_file
         self._max_workers    = max_workers
-        
+
         # Accept either an IGBPNetCDF instance or a raw path string.
         # Workers always receive the path so they can build their own
         # instance without pickling large numpy arrays.
-
         if isinstance(igbp, str):
             self._igbp_file = igbp
         else:
@@ -406,7 +405,7 @@ class GriddedFRP:
             from qfed.vegetation import IGBPNetCDF
             _SHARED_IGBP = IGBPNetCDF(self._igbp_file)
             
-        # Load the watermask data into memory ONCE in the main process  
+        # Load the watermask data into memory ONCE in the main process
         if _SHARED_WATERMASK is None:
             logging.info(f"Pre-loading watermask data into shared memory from {self._watermask_file}")
             f = nc.Dataset(self._watermask_file)
@@ -428,7 +427,7 @@ class GriddedFRP:
         if self.n_input_files == 0:
             logging.warning("No input files found for this time interval.")
             return
-            
+
         # calculate number of workers
         if self._max_workers is not None:
             smart_workers = self._max_workers
@@ -474,10 +473,13 @@ class GriddedFRP:
                 try:
                     result = future.result()
                     if result is not None:
+                        # None means legitimately skipped (no geo file or no
+                        # fires) — already logged at WARNING/INFO in the worker.
                         self._accumulate(result)
-                    del result # get rid of the data after is is processes to save memory
-                    # None means legitimately skipped (no geo file or no
-                    # fires) — already logged at WARNING/INFO in the worker.
+                        
+                    # get rid of the input data after it is processed to save memory    
+                    del result 
+
                 except Exception:
                     # Real processing failure — log with full traceback so
                     # the cause is visible in the main process log.
@@ -536,7 +538,7 @@ class GriddedFRP:
         corr_num   = A_l + 2 * A_c
 
         E_total = np.zeros((self.im, self.jm))
-        
+
         # single loop over biomes — replaces the original three loops
         # self.frp is keyed by bb.type.value (plain string)
         for b in fire.BIOMASS_BURNING:
