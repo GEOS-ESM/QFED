@@ -139,12 +139,6 @@ def _process_granule(
     fp_reader = fire_products.create(platform)
     cp_reader = classification_products.create(platform)
 
-    # ---- early exit if granule has no fires -----------------------------
-    n_fires = fp_reader.get_num_fire_pixels(fp_file)
-    if n_fires == 0:
-        logging.info(f"Skipping '{fp_filename}': no fires detected.")
-        return None
-
     logging.info(f"Processing '{fp_filename}'.")
 
     # No try/except here — exceptions propagate to the main process where
@@ -240,6 +234,12 @@ def _process_granule(
             f"Found {len(unk_area)} cloud-free unknown pixels in "
             f"'{fp_filename}'! Excluding them."
         )
+
+    # ---- early exit if granule has no fires (after area accumulation) ---
+    n_fires = fp_reader.get_num_fire_pixels(fp_file)
+    if n_fires == 0:
+        logging.info(f"Successfully processed '{fp_filename}' (No fires, accumulated clear/cloud area).")
+        return result
 
     # ==================================================================
     # FIRE pixel accumulation

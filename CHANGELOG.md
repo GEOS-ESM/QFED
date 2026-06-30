@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - classification_products.py to account for non-zero diff changes associated with updated the python stack
+- exclusion of accumulated land and cloud over non-fire pixels potentially overlapping with fire pixels
 ### Added
 - Added scripts to generate the IGBP+ for land surface type updating 
 - Added `gen_global_MODIS_IGBP.py`, `gen_global_volcano_source.py`, `gen_global_gasflaring_source.py`, `lib_IGBP_plus.py` to `dev_toolbox` [25-11-17]
