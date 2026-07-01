@@ -18,19 +18,18 @@ enhance_gas_factor:
     grassland: 1
     agricultural: 1
     peatland: 1
-# satellite scale factor based on comparison with GFED CO, since VIIRS 
-# FRP density is scale to the AQUA level, the satellite factor should be 
-# the same as AQUA
+# The satellite scaling factor for VJ1 was derived through a linear regression
+# of CO emissions in log space to GFED5 NRT for 2023-2034. Other satellites will
+# then be anchored to VJ1. This is still a work in progress and these values will change. 
 satscale:
     myd: 1
-    mod: 2.5386
-    vj2: 0.55
-    vj1: 0.6
-    vnp: 0.7033
+    mod: 1
+    vj2: 1
+    vj1: 0.6731
+    vnp: 1
 
-# MODIS C6 to C5 scaling factor (based on OC tuning), the VIIRS is 
-# based on FRP density regression using MODIS AQUA (C6)as reference
-# and with the MODIS C6 to C5 scaling factor considered
+# biome level anchoring is no longer used and is therefore set to 1 
+# until emissions.py is update to remove these fields
 myd:
     tropical_forest: 1
     temperate_forest: 1
