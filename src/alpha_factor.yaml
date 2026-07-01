@@ -19,14 +19,14 @@ enhance_gas_factor:
     agricultural: 1
     peatland: 1
 # The satellite scaling factor for VJ1 was derived through a linear regression
-# of CO emissions in log space to GFED5 NRT for 2023-2034. Other satellites will
-# then be anchored to VJ1. This is still a work in progress and these values will change. 
+# of CO emissions in log space to GFED5 NRT for 2023-2034. VNP and VJ2 are anchored
+# to VJ1. MODIS is TBD. These values may change. 
 satscale:
     myd: 1
     mod: 1
-    vj2: 1
+    vj2: 0.5800
     vj1: 0.6731
-    vnp: 1
+    vnp: 0.7033
 
 # biome level anchoring is no longer used and is therefore set to 1 
 # until emissions.py is update to remove these fields
