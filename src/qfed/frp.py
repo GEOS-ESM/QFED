@@ -249,7 +249,8 @@ def _process_granule(
     f_area   = fp_reader.get_fire_pixel_area(fp_file)
 
     # single vectorised pass to clip FRP outliers
-    np.clip(f_frp, 0, 40_000, out=f_frp)
+    #40000 was chosen as it is just above the max for all platforms using the equation FRP = A*sigma* (L4_fire - L4_background) / C
+    np.clip(f_frp, 0, 40_000, out=f_frp) 
 
     # ---- IGBP vegetation category (shared copy) ------------------
     global _SHARED_IGBP
