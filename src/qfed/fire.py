@@ -21,13 +21,14 @@ class FireType(Enum):
     """
 
     TROPICAL_FOREST = 'tf'
-    EXTRATROPICAL_FOREST = 'xf'
     SAVANNA = 'sv'
     GRASSLAND = 'gl'
     AGRICULTURAL = 'ag'
-    PEETLAND = 'pt'
+    PEATLAND = 'pt'
     FLARING = 'fl'
     WASTE = 'ws'
+    TEMPERATE_FOREST = 'mf'
+    BOREAL_FOREST = 'bf'
 
 
 @dataclass(frozen=True, eq=True)
@@ -48,9 +49,14 @@ BIOMASS_BURNING = (
         vegetation=VegetationCategory.TROPICAL_FOREST,
     ),
     Fire(
-        description='Extra-tropical Forest',
-        type=FireType.EXTRATROPICAL_FOREST,
-        vegetation=VegetationCategory.EXTRATROPICAL_FOREST,
+        description='Boreal Forest',
+        type=FireType.BOREAL_FOREST,
+        vegetation=VegetationCategory.BOREAL_FOREST,
+    ),
+    Fire(
+        description='Temperate Forest',
+        type=FireType.TEMPERATE_FOREST,
+        vegetation=VegetationCategory.TEMPERATE_FOREST,
     ),
     Fire(
         description='Savanna',
@@ -61,6 +67,11 @@ BIOMASS_BURNING = (
         description='Grassland',
         type=FireType.GRASSLAND,
         vegetation=VegetationCategory.GRASSLAND,
+    ),
+    Fire(
+        description='Agricultural',
+        type=FireType.AGRICULTURAL,
+        vegetation=VegetationCategory.AGRICULTURAL,
     ),
 )
 

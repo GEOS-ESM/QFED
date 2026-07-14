@@ -138,6 +138,7 @@ def process(
     watermask_file,
     compress,
     dry_run,
+    FRPcapping=True,
     max_workers=None,
 ):
     """
@@ -202,7 +203,7 @@ def process(
 
         output_dir = os.path.dirname(output_file)
         os.makedirs(output_dir, exist_ok=True)
-
+        
         # Product readers
         # These are passed to GriddedFRP for API compatibility but are
         # not used internally by the parallel implementation — each
@@ -230,7 +231,7 @@ def process(
         frp.save(
             output_file,
             timestamp,
-            qc=True,
+            qc=FRPcapping,
             compress=compress,
             satellite=satellite,
             fill_value=1e20,
@@ -271,7 +272,7 @@ def main():
         return
 
     output_grid = grid.Grid(resolution)
-
+    FRPcapping=config['qfed']['with']['FRPcapping']
     # Pass the watermask file path to process() — workers load their
     # own copies from this path, so we do not read it into memory here.
     watermask_file = config['qfed']['with']['watermask']
@@ -314,6 +315,7 @@ def main():
             watermask_file,
             args.compress,
             args.dry_run,
+            FRPcapping,
             max_workers=args.max_workers,
         )
 

@@ -3,47 +3,70 @@ Alpha: 1.37e-6
 # enhancement factors for species contributing to AOD
 enhance_aerosol_factor:
     tropical_forest: 1
-    extratropical_forest: 1
+    temperate_forest: 1
+    boreal_forest: 1
     savanna: 1
     grassland: 1
+    agricultural: 1
+    peatland: 1
 # enhancement factors for non-aerosol species
 enhance_gas_factor:
     tropical_forest: 1
-    extratropical_forest: 1
+    temperate_forest: 1
+    boreal_forest: 1
     savanna: 1
     grassland: 1
-#The satellite scaling factor was derived through a linear regression between VJ1 and GFED5. 
-#All other satellites use the same satellite factor as VJ1 since biome level anchoring to VJ1 is used based on the values below. 
-#Note these values are still a work in progress and will likely change.
+    agricultural: 1
+    peatland: 1
+# The satellite scaling factor for VJ1 was derived through a linear regression
+# of CO emissions in log space to GFED5 NRT for 2023-2034. VNP and VJ2 are anchored
+# to VJ1. MODIS is TBD. These values may change. 
 satscale:
-    myd: 0.7680
-    mod: 0.7680
-    vj2: 0.7680
-    vj1: 0.7680
-    vnp: 0.7680
-# biome level anchoring to VJ1; FRPs still need to be processed for myd and mod so these values are temporarily set to 1. VJ1 is the anchor and will retain the value of 1.
+    myd: 1
+    mod: 1
+    vj2: 0.5800
+    vj1: 0.6731
+    vnp: 0.7033
+
+# biome level anchoring is no longer used and is therefore set to 1 
+# until emissions.py is update to remove these fields
 myd:
     tropical_forest: 1
-    extratropical_forest: 1
+    temperate_forest: 1
+    boreal_forest: 1
     savanna: 1
     grassland: 1
+    agricultural: 1
+    peatland: 1
 mod:
     tropical_forest: 1
-    extratropical_forest: 1
+    temperate_forest: 1
+    boreal_forest: 1
     savanna: 1
     grassland: 1
+    agricultural: 1
+    peatland: 1
 vj2:
-    tropical_forest: 0.907912
-    extratropical_forest: 0.907894
-    savanna: 0.888717
-    grassland: 0.886121
+    tropical_forest: 1
+    temperate_forest: 1
+    boreal_forest: 1
+    savanna: 1
+    grassland: 1
+    agricultural: 1
+    peatland: 1
 vj1:
     tropical_forest: 1
-    extratropical_forest: 1
+    temperate_forest: 1
+    boreal_forest: 1
     savanna: 1
     grassland: 1
+    agricultural: 1
+    peatland: 1
 vnp:
-    tropical_forest: 1.001681
-    extratropical_forest: 1.025322
-    savanna: 1.011056
-    grassland: 1.018419
+    tropical_forest: 1
+    temperate_forest: 1
+    boreal_forest: 1
+    savanna: 1
+    grassland: 1
+    agricultural: 1
+    peatland: 1

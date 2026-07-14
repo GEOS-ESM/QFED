@@ -73,7 +73,7 @@ def _make_frp_dict(im: int, jm: int) -> dict:
     """
     Return a dict mapping biome string key -> zero array.
 
-    Using plain strings as keys (e.g. 'tf', 'xf', 'sv', 'gl') guarantees
+    Using plain strings as keys (e.g. 'tf', 'bf', 'mf', 'sv', 'gl', 'ag') guarantees
     no object-identity ambiguity when dicts are pickled across process
     boundaries with ProcessPoolExecutor.
     """
@@ -118,6 +118,7 @@ def _process_granule(
     import qfed.classification_products as classification_products
     from qfed.instruments import Satellite
 
+    
     fp_filename = os.path.basename(fp_file)
 
     # ---- locate geolocation file ----------------------------------------
@@ -140,9 +141,6 @@ def _process_granule(
     cp_reader = classification_products.create(platform)
 
     logging.info(f"Processing '{fp_filename}'.")
-
-    # No try/except here — exceptions propagate to the main process where
-    # they are caught by future.result() and logged with a full traceback.
 
     # ---- partial result buffers -----------------------------------------
     # FRP uses plain string keys to avoid object-identity issues when
@@ -226,7 +224,6 @@ def _process_granule(
     result['area_unknown'] += _binareas(
         *_select_area(is_cloud.get('unknown', _false)), im, jm, grid_type
     )
-
     # sanity check: cloud-free unknown should always be empty
     _, _, unk_area = _select_area(is_cloud_free.get('unknown', _false))
     if len(unk_area) > 0:
@@ -234,8 +231,8 @@ def _process_granule(
             f"Found {len(unk_area)} cloud-free unknown pixels in "
             f"'{fp_filename}'! Excluding them."
         )
-
-    # ---- early exit if granule has no fires (after area accumulation) ---
+        
+    # ---- early exit if granule has no fires -----------------------------
     n_fires = fp_reader.get_num_fire_pixels(fp_file)
     if n_fires == 0:
         logging.info(f"Successfully processed '{fp_filename}' (No fires, accumulated clear/cloud area).")
@@ -252,7 +249,8 @@ def _process_granule(
     f_area   = fp_reader.get_fire_pixel_area(fp_file)
 
     # single vectorised pass to clip FRP outliers
-    np.clip(f_frp, 0, 40_000, out=f_frp)
+    #40000 was chosen as it is just above the max for all platforms using the equation FRP = A*sigma* (L4_fire - L4_background) / C
+    np.clip(f_frp, 0, 40_000, out=f_frp) 
 
     # ---- IGBP vegetation category (shared copy) ------------------
     global _SHARED_IGBP
@@ -308,6 +306,7 @@ def _process_granule(
     # --- per-biome FRP ---------------------------------------------------
     # Use bb.type.value (plain string) as key — matches _make_frp_dict()
     if n_land > 0:
+        # Iterate over each biome listed in fire.py
         for bb in fire.BIOMASS_BURNING:
             j = veg_masks[bb.vegetation] & i_land
             if np.any(j):
@@ -400,6 +399,7 @@ class GriddedFRP:
         """
         global _SHARED_IGBP
         global _SHARED_WATERMASK
+        
         # Load the IGBP data into memory ONCE in the main process
         if _SHARED_IGBP is None:
             logging.info(f"Pre-loading IGBP data into shared memory from {self._igbp_file}")
@@ -469,14 +469,18 @@ class GriddedFRP:
             }
 
             for future in as_completed(futures):
-                fp_file = futures[future]
+                fp_file = futures.pop(future)
                 fp_filename = os.path.basename(fp_file)
                 try:
                     result = future.result()
                     if result is not None:
+                        # None means legitimately skipped (no geo file or no
+                        # fires) — already logged at WARNING/INFO in the worker.
                         self._accumulate(result)
-                    # None means legitimately skipped (no geo file or no
-                    # fires) — already logged at WARNING/INFO in the worker.
+                        
+                    # get rid of the input data after it is processed to save memory    
+                    del result 
+
                 except Exception:
                     # Real processing failure — log with full traceback so
                     # the cause is visible in the main process log.
@@ -614,25 +618,44 @@ class GriddedFRP:
         f.createVariable('lat',  'f8', dimensions='lat')
         f.createVariable('time', 'i4', dimensions='time')
 
-        # data variables
+        # data variables — built dynamically from fire.BIOMASS_BURNING 
         var_kwargs = dict(zlib=compress, fill_value=fill_value)
-        dims3d = ('time', 'lat', 'lon')
-        for vname in ('land', 'water', 'cloud', 'unknown',
-                      'frp_tf', 'frp_xf', 'frp_sv', 'frp_gl'):
+        dims3d     = ('time', 'lat', 'lon')
+
+        area_vars = ('land', 'water', 'cloud', 'unknown')
+        frp_vars  = [f'frp_{bb.type.value}' for bb in fire.BIOMASS_BURNING]
+
+        for vname in (*area_vars, *frp_vars):
             f.createVariable(vname, 'f4', dimensions=dims3d, **var_kwargs)
 
         # variable metadata
-        v_meta = {
-            'land':    ('Area of cloud-free land pixels',               'km2'),
-            'water':   ('Area of water pixels',                         'km2'),
-            'cloud':   ('Area of cloud pixels over land',               'km2'),
-            'unknown': ('Area of cloud pixels',                         'km2'),
-            'frp_tf':  ('Fire Radiative Power (Tropical Forests)',      'MW'),
-            'frp_xf':  ('Fire Radiative Power (Extra-tropical Forests)','MW'),
-            'frp_sv':  ('Fire Radiative Power (Savanna)',               'MW'),
-            'frp_gl':  ('Fire Radiative Power (Grasslands)',            'MW'),
+        area_meta = {
+            'land':    ('Area of cloud-free land pixels',    'km2'),
+            'water':   ('Area of water pixels',              'km2'),
+            'cloud':   ('Area of cloud pixels over land',    'km2'),
+            'unknown': ('Area of cloud pixels',              'km2'),
         }
 
+        # Human-readable long names per biome type value
+        _frp_long_names = {
+            'tf': 'Fire Radiative Power (Tropical Forests)',
+            'bf': 'Fire Radiative Power (Boreal Forests)',
+            'mf': 'Fire Radiative Power (Temperate Forests)',
+            'sv': 'Fire Radiative Power (Savanna)',
+            'gl': 'Fire Radiative Power (Grasslands)',
+            'ag': 'Fire Radiative Power (Agricultural)',
+        }
+
+        v_meta = {**area_meta}
+        for bb in fire.BIOMASS_BURNING:
+            key      = bb.type.value
+            vname    = f'frp_{key}'
+            longname = _frp_long_names.get(
+                key, f'Fire Radiative Power ({bb.description})'
+            )
+            v_meta[vname] = (longname, 'MW')
+
+        # coordinate metadata
         v = f.variables['lon']
         v.long_name = 'longitude'; v.standard_name = 'longitude'
         v.units = 'degrees_east';  v.comment = 'center_of_cell'
@@ -666,7 +689,7 @@ class GriddedFRP:
         f.variables['cloud'][0]   = self.area_cloud.T
         f.variables['unknown'][0] = self.area_unknown.T
 
-        # FRP arrays — self.frp is keyed by plain strings ('tf','xf','sv','gl')
+        # FRP arrays — written dynamically for all filtered biomes
         for key, frp_arr in self.frp.items():
             f.variables[f'frp_{key}'][0] = frp_arr.T
 

@@ -9,15 +9,17 @@ import numpy as np
 import logging
 
 TROPICAL       = 1
-EXTRA_TROPICAL = 2
+BOREAL         = 2
 SAVANNA        = 3
 GRASSLAND      = 4
+AGRICULTURAL   = 5
+PEATLAND       = 6
+TEMPERATE      = 7
 NON_VEGETATION = 0  # internal, will be replaced by nonVeg
 
 STATIC_SOURCE = 21
 GASFLARING    = 22
 VOLCANO       = 23
-
 
 
 @unique
@@ -29,10 +31,13 @@ class VegetationCategory(IntEnum):
     consistent with simplified_vegetation().
     """
 
-    TROPICAL_FOREST = 1
-    EXTRATROPICAL_FOREST = 2
-    SAVANNA = 3
-    GRASSLAND = 4
+    TROPICAL_FOREST      = 1
+    BOREAL_FOREST        = 2
+    SAVANNA              = 3
+    GRASSLAND            = 4
+    AGRICULTURAL         = 5
+    PEATLAND             = 6
+    TEMPERATE_FOREST     = 7
     # reserve for future
 #     STATIC_SOURCE = 21
 #     GASFLARING    = 22
@@ -49,22 +54,44 @@ class IGBPNetCDF():
                  gasflaring=False, 
                  volcano=False, 
                  static_heat_threshold=16):
-        
-        self.file   = file
-        self.nonVeg = nonVeg
-        self.drops  = drops
-        
+        """
+        Parameters
+        ----------
+        file : str
+            Path to the IGBP NetCDF file.
+        nonVeg : int, optional
+            Code used to replace non-vegetation pixels (default NON_VEGETATION=0).
+        drops : list of int, optional
+            Category codes that will be remapped to nonVeg.
+        static_heat : bool, optional
+            Whether to read static heat source mask from the IGBP+ file.
+        gasflaring : bool, optional
+            Whether to read gas-flaring mask from the IGBP+ file.
+        volcano : bool, optional
+            Whether to read volcano mask from the IGBP+ file.
+        static_heat_threshold : int, optional
+            Minimum value in static_heat_mask to qualify as a static source.
+        """
+
+        self.file                = file
+        self.nonVeg              = nonVeg
+        self.drops               = drops
+
         self._open_igbp()
         self._open_igbp_plus(static_heat=static_heat,
                              gasflaring=gasflaring,
                              volcano=volcano,
                              static_heat_threshold=static_heat_threshold)
 
-    
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
     def _open_igbp(self):
-    
+
         logging.info(f"Reading IGBP file {self.file}")
-        
+
         ncid = Dataset(self.file, 'r')
         ncid.set_auto_mask(False)
         self.surface_type = ncid['surface_type'][:]
@@ -72,17 +99,18 @@ class IGBPNetCDF():
         self.x_min = np.min(ncid['easting'][:])
         self.dx = abs(np.mean(np.diff(ncid['easting'][:])))
 
-        self.y_max  = np.max(ncid['northing'][:])
+        self.y_max = np.max(ncid['northing'][:])
         self.dy = abs(np.mean(np.diff(ncid['northing'][:])))
-        
+
         ncid.close()
 
-    def _open_igbp_plus(self, static_heat=False, gasflaring=False, 
+
+    def _open_igbp_plus(self, static_heat=False, gasflaring=False,
                         volcano=False, static_heat_threshold=16):
 
         ncid = Dataset(self.file, 'r')
         ncid.set_auto_mask(False)
-        
+
         try:
             # --- coords & dimensions ---
             dim_northing = len(ncid['northing_plus'][:])
@@ -102,17 +130,15 @@ class IGBPNetCDF():
                     field = ncid['static_heat_mask'][:]
                 except KeyError:
                     field = None
-                
                 if field is not None:
                     idx = np.where((field >=static_heat_threshold) & (field<255))
-                    self.plus_mask[idx] = STATIC_SOURCE  # e.g., 21
+                    self.plus_mask[idx] = STATIC_SOURCE  # e.g. 21
 
             if gasflaring:
                 try:
                     field = ncid['gasflaring_mask'][:]
                 except KeyError:
                     field = None
-                
                 if field is not None:
                     idx = np.where((field ==1))
                     self.plus_mask[idx] = GASFLARING    # e.g., 22
@@ -122,14 +148,13 @@ class IGBPNetCDF():
                     field = ncid['volcano_mask'][:]
                 except KeyError:
                     field = None
-                    
                 if field is not None:
                     idx = np.where((field ==1))
-                    self.plus_mask[idx] = VOLCANO       # e.g., 23               
+                    self.plus_mask[idx] = VOLCANO       # e.g., 23
         finally:
             # Always close, even if something above raises
             ncid.close()
-       
+
 
     @staticmethod
     def _geog_to_sinu(lat, lon):
@@ -139,7 +164,7 @@ class IGBPNetCDF():
         """
         R = 6371007.181000
         rad = np.pi / 180.0
-        
+
         phi   = lat * rad
         lamda = lon * rad
 
@@ -147,19 +172,24 @@ class IGBPNetCDF():
         x = np.cos(phi) * lamda * R
 
         return x, y
-    
+
 
     def _index_from_latlon(self, lat, lon, dx, dy, x_min, y_max):
         """
         Convert lat/lon arrays to (iy, ix) indices for self.surface_type.
+        described by dx, dy, x_min, y_max.
         """
-
         x, y = self._geog_to_sinu(lat, lon)
 
         ix = np.floor((x - x_min + 0.5 * dx) / dx).astype(int)
         iy = np.floor((y_max - y + 0.5 * dy) / dy).astype(int)
 
         return ix, iy
+
+
+    # ------------------------------------------------------------------
+    # Public query methods
+    # ------------------------------------------------------------------
 
     def getDetailedVeg(self, lat, lon):
         """
@@ -173,101 +203,116 @@ class IGBPNetCDF():
         ny, nx = self.surface_type.shape
         ix = np.clip(ix, 0, nx - 1)
         iy = np.clip(iy, 0, ny - 1)
-        
+
         return self.surface_type[iy, ix]
+
 
     def getPlusClassification(self, lat, lon):
         """
-        Return raw IGBP classes (1..17, 99, 100, etc.) at given lat/lon.
-        lat, lon: numpy arrays or scalars with same shape.
+        Return the IGBP+ override code at given lat/lon
+        (STATIC_SOURCE, GASFLARING, VOLCANO, or 0).
         """
-        # get the index for IGBP
-        ix, iy = self._index_from_latlon(lat, lon, self.dx_plus, self.dy_plus, self.x_plus_min, self.y_plus_max)
-        
-        # clip indices to the array bounds
+        ix, iy = self._index_from_latlon(lat, lon,
+                                         self.dx_plus, self.dy_plus,
+                                         self.x_plus_min, self.y_plus_max)
+
         ny, nx = self.plus_mask.shape
         ix = np.clip(ix, 0, nx - 1)
         iy = np.clip(iy, 0, ny - 1)
-        
+
         return self.plus_mask[iy, ix]
-    
-    
+
+
     def getSimpleVeg(self, lat, lon):
         """
         Aggregate IGBP classes into:
           1  Tropical Forests
-          2  Extra-tropical Forests
+          2  Boreal Forests
           3  Cerrado/woody savanna
-          4  Grassland/cropland
-        with 0 (non-vegetation) replaced by nonVeg.
+          4  Grassland
+          5  Cropland/Agriculture
+          6  Peat
+          7  Temperate Forests          
+
+        with 0 (non-vegetation) replaced later by nonVeg.
         """
-        igbp = self.getDetailedVeg(lat, lon)
-        igbp = np.array(igbp, copy=False)
+        lat = np.asarray(lat)
+        lon = np.asarray(lon)
 
-        igbp_plus = self.getPlusClassification(lat, lon)
-        igbp_plus = np.array(igbp_plus, copy=False)
+        igbp      = np.array(self.getDetailedVeg(lat, lon),        copy=False)
+        igbp_plus = np.array(self.getPlusClassification(lat, lon), copy=False)
 
-        # use zero array array to initilize the veg array
-        # this zero initlization essentially maps the 
-        # fill value  (31) to -> zero
-        # water pixel (17) to -> zero
+        # Initialize to zero (maps fill-value 31, urban 13, and water 17 → 0)
         veg = np.zeros_like(igbp, dtype=np.int16)
- 
-        # Latitude condition for tropical vs extra-tropical broadleaf
+
         abs_lat = np.abs(lat)
 
-        # Tropical forests: IGBP 2, within |lat| < 30 degree
-        mask_trop = (igbp == 2) & (abs_lat < 30.0)
+        # IGBP classes that are any kind of forest
+        is_forest = (igbp == 1) | (igbp == 2) | (igbp == 3) | \
+                    (igbp == 4) | (igbp == 5)
 
-        # Extra-tropical forests:
-        #   Evergreen needleleaf (1)
-        #   Evergreen broadleaf (2) outside tropics
-        #   Deciduous needleleaf (3)
-        #   Deciduous broadleaf (4)
-        #   Mixed forest (5)
-        mask_extra = (
-            (igbp == 1) |
-            ((igbp == 2) & (abs_lat >= 30.0)) |
-            (igbp == 3) |
-            (igbp == 4) |
-            (igbp == 5)
+        # Tropical: IGBP 2, 4, 5 within ±30°
+        mask_trop = (
+            ((igbp == 2) | (igbp == 4) | (igbp == 5)) &
+            (abs_lat < 30.0)
         )
 
-        # Cerrado / woody savanna: IGBP 6–9
+        # Boreal: IGBP 1, 3, 5 north of 60° (Southern Hemisphere has none)
+        mask_boreal = (
+            ((igbp == 1) | (igbp == 3) | (igbp == 5)) &
+            (lat > 60.0)
+        )
+
+        # Temperate: any forest pixel that is not tropical or boreal
+        mask_temperate = is_forest & ~mask_trop & ~mask_boreal
+
         mask_savanna = (igbp >= 6) & (igbp <= 9)
 
-        # Grassland/cropland: IGBP 10–16
-        # old code map water pixel (17) to glassland...
-        mask_grass = (igbp >= 10) & (igbp < 17)
-        
-        # This mask overwrites the veg with plus 
-        mask_plus = (igbp_plus == STATIC_SOURCE) | (igbp_plus == GASFLARING) | (igbp_plus == VOLCANO)
-        
-        veg[mask_trop]    = TROPICAL
-        veg[mask_extra]   = EXTRA_TROPICAL
-        veg[mask_savanna] = SAVANNA
-        veg[mask_grass]   = GRASSLAND
-        veg[mask_plus]    = igbp_plus[mask_plus]
+        mask_grass   = (
+            (igbp == 10) |
+            (igbp == 11) |
+            (igbp == 13) |
+            (igbp == 15) |
+            (igbp == 16)
+        )
+
+        mask_crop    = (igbp == 12) | (igbp == 14)
+
+        # This mask overwrites the veg with plus
+        mask_plus    = (
+            (igbp_plus == STATIC_SOURCE) |
+            (igbp_plus == GASFLARING)    |
+            (igbp_plus == VOLCANO)
+        )
+
+        veg[mask_trop]     = TROPICAL
+        veg[mask_boreal]   = BOREAL
+        veg[mask_temperate]= TEMPERATE
+        veg[mask_savanna]  = SAVANNA
+        veg[mask_grass]    = GRASSLAND
+        veg[mask_crop]     = AGRICULTURAL
+        veg[mask_plus]     = igbp_plus[mask_plus]
 
         return veg
 
+
     def simplified_vegetation(self, lat, lon):
         """
-        Helper method - aggregates IGBP vegetation classes
-        into a reduced set of vegetation types:
+        Wrapper around getSimpleVeg() that applies the nonVeg substitution
+        for any category code listed in self.drops.
 
-          1 -> Tropical Forest:         IGBP  1, 30S < lat < 30N
-          2 -> Extra-tropical Forests:  IGBP  1, 2(lat <=30S or lat >= 30N), 3, 4, 5
-          3 -> Cerrado/Woody Savanna:   IGBP  6, 7, 8, 9
-          4 -> Grassland/Cropland:      IGBP 10, 11, ..., 16
+        Biome codes returned:
+          1  Tropical Forest
+          2  Boreal Forest
+          3  Cerrado / Woody Savanna
+          4  Grassland
+          5  Cropland / Agriculture
+          6  Peat
+          7  Temperate Forest
         """
-
-
         veg = self.getSimpleVeg(lat, lon)
-        # substitute non vegetation (water, snow/ice) data with
-        # another type, e.g. GRASSLAND by default
-        if self.nonVeg is not None:
 
+        if self.nonVeg is not None:
             mask = np.zeros_like(veg, dtype=bool)
             for category in self.drops:
                 mask |= (veg == category)
@@ -277,12 +322,12 @@ class IGBPNetCDF():
 
         return veg
 
-    
+
     def get_category(self, lat, lon, return_codes=False):
         """
-        Returns:
-          - category: dict {VegetationCategory: bool mask}
-          - veg (optional): 1D/ND array of simplified veg codes (1..4) aligned with lon/lat
+        Returns
+        - category : dict {VegetationCategory: bool mask}
+        - veg      : (optional) array of simplified veg codes aligned with lat/lon
         """
         veg = self.simplified_vegetation(lat, lon)
 
@@ -291,8 +336,7 @@ class IGBPNetCDF():
             category[c] = (veg == c.value)
 
         return (category, veg) if return_codes else category
-
-
+        
 # if __name__ == "__main__":
 #     IGBP_FILE = '/Dedicated/jwang-data2/shared_satData/GMAO_QFED/GL_IGBP_MODIS/GL_IGBP_MODIS.2024.nc'
 #     IGBP_FILE = '/Dedicated/jwang-data2/mzhou/project/OPNL_FILDA/STATIC_SOURCE/IGBP+/GL_IGBP_PLUS.MODIS.2024.nc'
@@ -315,4 +359,3 @@ class IGBPNetCDF():
 #     test_lons = np.array([13.897, 71.8438974, 146.84388815, -63.889643, 8.779006, 118.950086, -121.697682])
 #     
 #     print( igbp.get_category(test_lats, test_lons))
-    

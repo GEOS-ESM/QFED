@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated qfed_l3a.py to be able to accept annual varying IGBP+ files
 - Processing of FRP granules by running in parallel within the ingest function of frp.py
 - Values in alpha_factor.yaml to represent the latest FRP from VJ1 scaled to GFED5, with the other satellites anchored to VJ1
+- Biomes (now includes savannah, grassland, tropical forest, temperate forest, boreal forest, agriculture)
 ### Removed
 ### Deprecated
 
