@@ -73,5 +73,10 @@ BIOMASS_BURNING = (
         type=FireType.AGRICULTURAL,
         vegetation=VegetationCategory.AGRICULTURAL,
     ),
+     Fire(
+        description='Peatland',
+        type=FireType.PEATLAND,
+        vegetation=VegetationCategory.PEATLAND,
+    ),   
 )
 

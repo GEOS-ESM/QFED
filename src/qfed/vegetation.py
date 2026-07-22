@@ -53,7 +53,8 @@ class IGBPNetCDF():
                  static_heat=False,
                  gasflaring=False, 
                  volcano=False, 
-                 static_heat_threshold=16):
+                 static_heat_threshold=16,
+                 peat_file=None):
         """
         Parameters
         ----------
@@ -71,17 +72,22 @@ class IGBPNetCDF():
             Whether to read volcano mask from the IGBP+ file.
         static_heat_threshold : int, optional
             Minimum value in static_heat_mask to qualify as a static source.
+        peat_file : str or None, optional
+            Path to the GL_PEAT_GPA22 NetCDF file.  When None (default),
+            peat reclassification is skipped entirely.
         """
 
         self.file                = file
         self.nonVeg              = nonVeg
         self.drops               = drops
+        self.peat_file           = peat_file
 
         self._open_igbp()
         self._open_igbp_plus(static_heat=static_heat,
                              gasflaring=gasflaring,
                              volcano=volcano,
                              static_heat_threshold=static_heat_threshold)
+        self._open_peat()
 
 
     # ------------------------------------------------------------------
@@ -156,6 +162,54 @@ class IGBPNetCDF():
             ncid.close()
 
 
+    def _open_peat(self):
+        """
+        Read the peat_mask variable from the GL_PEAT_GPA22 NetCDF file.
+
+        Sets the following instance attributes (all None when peat_file
+        is not supplied):
+            peat_mask      : 2-D uint8 array  (northing × easting)
+                             0 = non-peat land
+                             1 = peat-dominated (continuous)
+                             2 = peat-in-soil-mosaic
+                           255 = no data / fill
+            x_peat_min     : minimum easting  (metres, sinusoidal)
+            dx_peat        : easting  pixel size (metres)
+            y_peat_max     : maximum northing (metres, sinusoidal)
+            dy_peat        : northing pixel size (metres)
+        """
+
+        # Initialise to None so downstream code can test `if self.peat_mask is not None`
+        self.peat_mask  = None
+        self.x_peat_min = None
+        self.dx_peat    = None
+        self.y_peat_max = None
+        self.dy_peat    = None
+
+        if self.peat_file is None:
+            return
+
+        logging.info(f"Reading peat file {self.peat_file}")
+
+        ncid = Dataset(self.peat_file, 'r')
+        ncid.set_auto_mask(False)
+
+        try:
+            self.peat_mask = ncid['peat_mask'][:]          # ubyte, fill=255
+
+            easting  = ncid['easting'][:]
+            northing = ncid['northing'][:]
+
+            self.x_peat_min = np.min(easting)
+            self.dx_peat    = abs(np.mean(np.diff(easting)))
+
+            self.y_peat_max = np.max(northing)
+            self.dy_peat    = abs(np.mean(np.diff(northing)))
+
+        finally:
+            ncid.close()
+
+
     @staticmethod
     def _geog_to_sinu(lat, lon):
         """
@@ -221,6 +275,38 @@ class IGBPNetCDF():
         iy = np.clip(iy, 0, ny - 1)
 
         return self.plus_mask[iy, ix]
+
+
+    def getPeatClassification(self, lat, lon):
+        """
+        Return the raw peat_mask value at given lat/lon.
+
+        Returns
+        -------
+        numpy array of uint8
+            0   : non-peat land
+            1   : peat-dominated (continuous)
+            2   : peat-in-soil-mosaic
+            255 : no-data / fill  (treat as non-peat in downstream logic)
+
+        Returns an array of zeros (non-peat) for all points when no
+        peat file was loaded.
+        """
+        lat = np.asarray(lat)
+        lon = np.asarray(lon)
+
+        if self.peat_mask is None:
+            return np.zeros(lat.shape, dtype=np.uint8)
+
+        ix, iy = self._index_from_latlon(lat, lon,
+                                         self.dx_peat, self.dy_peat,
+                                         self.x_peat_min, self.y_peat_max)
+
+        ny, nx = self.peat_mask.shape
+        ix = np.clip(ix, 0, nx - 1)
+        iy = np.clip(iy, 0, ny - 1)
+
+        return self.peat_mask[iy, ix]
 
 
     def getSimpleVeg(self, lat, lon):
@@ -293,6 +379,22 @@ class IGBPNetCDF():
         veg[mask_crop]     = AGRICULTURAL
         veg[mask_plus]     = igbp_plus[mask_plus]
 
+        # --- peat override ---
+        # Reclassify boreal/temperate forest, savanna, and grassland
+        # pixels to PEAT (6) when the GPA22
+        # peat_mask indicates class 1 (peat-dominated / continuous peatland).
+        if self.peat_mask is not None:
+            peat_raw = self.getPeatClassification(lat, lon)
+
+            mask_peat_eligible = (
+                (veg == SAVANNA) |                         # savanna
+                (veg == GRASSLAND)                         # grassland
+            )
+
+            mask_peat = mask_peat_eligible & (peat_raw == 1)
+
+            veg[mask_peat] = PEATLAND
+
         return veg
 
 
@@ -349,7 +451,7 @@ class IGBPNetCDF():
 #                       static_heat_threshold = 16)
 #     
 #     # for 2024, 
-#     # Point 1 volvano; Point 2 gas flaring; Point 3 static source; 
+#     # Point 1 volcano; Point 2 gas flaring; Point 3 static source; 
 #     # point 4 Evergreen Broadleaf Forests in Amazon
 #     # point 5, Desert in Sahara; 
 #     # point 6, Deciduous Needleleaf Forests in Siberia
