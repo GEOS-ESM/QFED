@@ -163,7 +163,7 @@ def _process_granule(
     # ---- watermask (shared copy) ----------------------------------------
     global _SHARED_WATERMASK
     watermask = _SHARED_WATERMASK
-
+    
     # ---- classification -------------------------------------------------
     # set_auxiliary and read both mutate cp_reader, but each process
     # owns its own instance so there is no cross-worker interference.
@@ -338,12 +338,14 @@ class GriddedFRP:
         igbp,                   # IGBPNetCDF instance or path string
         watermask_file: str = '',
         max_workers: int = 4,
+        peat_file: str | None = None,
     ):
         self._grid           = grid
         self._finder         = finder
         self.sat             = sat
         self._watermask_file = watermask_file
         self._max_workers    = max_workers
+        self._peat_file      = peat_file
 
         # Accept either an IGBPNetCDF instance or a raw path string.
         # Workers always receive the path so they can build their own
@@ -404,7 +406,7 @@ class GriddedFRP:
         if _SHARED_IGBP is None:
             logging.info(f"Pre-loading IGBP data into shared memory from {self._igbp_file}")
             from qfed.vegetation import IGBPNetCDF
-            _SHARED_IGBP = IGBPNetCDF(self._igbp_file)
+            _SHARED_IGBP = IGBPNetCDF(self._igbp_file, peat_file=self._peat_file)
             
         # Load the watermask data into memory ONCE in the main process
         if _SHARED_WATERMASK is None:
@@ -644,6 +646,7 @@ class GriddedFRP:
             'sv': 'Fire Radiative Power (Savanna)',
             'gl': 'Fire Radiative Power (Grasslands)',
             'ag': 'Fire Radiative Power (Agricultural)',
+            'pt': 'Fire Radiative Power (Peat)',
         }
 
         v_meta = {**area_meta}

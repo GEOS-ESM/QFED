@@ -8,6 +8,7 @@ import subprocess
 import logging
 import yaml
 from datetime import date, datetime, timedelta
+import concurrent.futures
 
 import numpy as np
 import netCDF4 as nc
@@ -204,11 +205,36 @@ class Emissions:
         i = A_l > 0
         j = (A_l + A_c) > 0
 
-        E = {}
-        E_ = {}
-        for s in species:
-            E[s] = {bb: np.zeros((self.im, self.jm)) for bb in self.biomass_burning}
-            E_[s] = {bb: np.zeros((self.im, self.jm)) for bb in self.biomass_burning}
+        # --- PRECOMPUTE CONSTANTS AND WEIGHTS TO AVOID REPEATED ARRAY ALLOCATIONS ---
+        decay_factor = np.exp(-dt/tau)
+
+        weight_E_b = np.zeros((self.im, self.jm), dtype=np.float32)
+        weight_E_b_ = np.zeros((self.im, self.jm), dtype=np.float32)
+        
+        # Precompute denominator and ratio for 'default' / 'sequential' method
+        denom_j = A_o[j] + A_c[j]
+        ratio_j = A_c[j] / (A_l[j] + A_c[j])
+        weight_E_b[j] = (1.0 + ratio_j) / denom_j
+        weight_E_b_[j] = ratio_j / denom_j
+
+        # Precompute weights for other methods
+        weight_seq_zero = np.zeros((self.im, self.jm), dtype=np.float32)
+        weight_seq_zero[i] = (1.0 + A_c[i] / (A_l[i] + A_c[i])) / (A_o[i] + A_c[i])
+
+        weight_nofires = np.zeros((self.im, self.jm), dtype=np.float32)
+        weight_nofires[i] = 1.0 / (A_o[i] + A_c[i])
+
+        weight_similarity = np.zeros((self.im, self.jm), dtype=np.float32)
+        weight_similarity[i] = (1.0 / A_l[i]) * ((A_l[i] + A_c[i]) / (A_o[i] + A_c[i]))
+
+        weight_sim_qfed22 = np.zeros((self.im, self.jm), dtype=np.float32)
+        weight_sim_qfed22[i] = 1.0 / A_o[i]
+        # ----------------------------------------------------------------------------
+
+        # Helper function to process a single species in parallel
+        def process_species(s):
+            e_s = {bb: np.zeros((self.im, self.jm), dtype=np.float32) for bb in self.biomass_burning}
+            e_s_ = {bb: np.zeros((self.im, self.jm), dtype=np.float32) for bb in self.biomass_burning}
 
             for p in self.platform:
                 S_f = self.satellite_factor(p)
@@ -220,35 +246,48 @@ class Emissions:
                     # TODO: A_f should be a dict.
                     B_f, eB_f = self.emission_factor(s, bb)
                     A_f = self.effective_combustion_rate(p, s, bb)
-                    E[s][bb][:, :] += units_factor * A_f * S_f * B_f * FRP[bb]
-                    E_[s][bb][:, :] += units_factor * A_f * S_f * B_f * F[bb] * A_
+                    
+                    # Precalculate the scalar multiplier to avoid repeated array-scalar multiplication
+                    scalar_mult = units_factor * A_f * S_f * B_f
+                    
+                    e_s[bb][:, :] += scalar_mult * FRP[bb]
+                    e_s_[bb][:, :] += scalar_mult * F[bb] * A_
 
             for bb in self.biomass_burning:
-                E_b = E[s][bb][:, :]
-                E_b_ = E_[s][bb][:, :] * np.exp(-dt/tau)
+                E_b = e_s[bb][:, :]
+                E_b_ = e_s_[bb][:, :] * decay_factor
 
                 if (method == 'default') or (method == 'sequential'):
-                    E_b[j] = ( (E_b[j]  / (A_o[j] + A_c[j])) * (1 + A_c[j] / (A_l[j] + A_c[j])) +
-                               (E_b_[j] / (A_o[j] + A_c[j])) * (    A_c[j] / (A_l[j] + A_c[j])) )
+                    E_b[j] = E_b[j] * weight_E_b[j] + E_b_[j] * weight_E_b_[j]
 
-                if method == 'sequential-zero':
-                    E_b[i] = (
-                        E_b[i] / (A_o[i] + A_c[i]) * (1.0 + A_c[i] / (A_l[i] + A_c[i]))
-                    )
+                elif method == 'sequential-zero':
+                    E_b[i] = E_b[i] * weight_seq_zero[i]
 
-                if method == 'nofires':
-                    E_b[i] = E_b[i] / (A_o[i] + A_c[i])
+                elif method == 'nofires':
+                    E_b[i] = E_b[i] * weight_nofires[i]
 
-                if method == 'similarity':
-                    E_b[i] = E_b[i] / A_l[i] * ((A_l[i] + A_c[i]) / (A_o[i] + A_c[i]))
+                elif method == 'similarity':
+                    E_b[i] = E_b[i] * weight_similarity[i]
 
-                if method == 'similarity_qfed-2.2':
-                    E_b[i] = E_b[i] / A_o[i]
+                elif method == 'similarity_qfed-2.2':
+                    E_b[i] = E_b[i] * weight_sim_qfed22[i]
+
+            return s, e_s, e_s_
+
+        E = {}
+        E_ = {}
+        
+        # Execute species processing in parallel using threads
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_species = {executor.submit(process_species, s): s for s in species}
+            for future in concurrent.futures.as_completed(future_to_species):
+                s, e_s, e_s_ = future.result()
+                E[s] = e_s
+                E_[s] = e_s_
 
         self.estimate = E
         
         # Update forecast of FRP density based on current emissions
-
 
         # Select first species to use for calculating forecast
         s = list(species)[0]

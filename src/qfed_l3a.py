@@ -134,6 +134,7 @@ def process(
     output,
     obs_system,
     igbp_template,
+    peat_file,
     version,
     watermask_file,
     compress,
@@ -185,6 +186,7 @@ def process(
     igbp_path = igbp_template.format(t_start)
     logging.info(f"Using IGBP file: {igbp_path}")
 
+
     for satellite in obs_system.keys():
 
         platform = Satellite(satellite)
@@ -213,6 +215,7 @@ def process(
         fp_reader = fire_products.create(platform)
         cp_reader = classification_products.create(platform)
 
+
         # Generate gridded FRP and areas.
         # Pass igbp_path and watermask_file as strings — workers load
         # and cache their own instances, avoiding large array pickling.
@@ -225,6 +228,7 @@ def process(
             cp_reader,
             igbp_path,
             watermask_file=watermask_file,
+            peat_file=peat_file,
             max_workers=max_workers,
         )
         frp.ingest(t_start, t_end)
@@ -279,6 +283,7 @@ def main():
 
     # Keep as a raw template string; formatted with t_start inside process()
     igbp_template = config['qfed']['with']['igbp']
+    peat_file = config['qfed']['with'].get('peat', None) 
 
     obs = {platform: config['qfed']['with'][platform] for platform in args.obs}
 
@@ -311,6 +316,7 @@ def main():
             output,
             obs,
             igbp_template,
+            peat_file,
             version,
             watermask_file,
             args.compress,

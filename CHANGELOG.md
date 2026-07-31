@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added scripts to generate the IGBP+ for land surface type updating 
 - Added `gen_global_MODIS_IGBP.py`, `gen_global_volcano_source.py`, `gen_global_gasflaring_source.py`, `lib_IGBP_plus.py` to `dev_toolbox` [25-11-17]
+- Functionality for peat, but this is zero-diff if no peat file is given
 ### Changed
 - Update `components.yaml` to match current versions from GEOSgcm `main`
 - Renamed folder `emissionstuning` to `dev_toolbox` [25-11-17]
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Processing of FRP granules by running in parallel within the ingest function of frp.py
 - Values in alpha_factor.yaml to represent the latest FRP from VJ1 scaled to GFED5, with the other satellites anchored to VJ1
 - Biomes (now includes savannah, grassland, tropical forest, temperate forest, boreal forest, agriculture)
+- emissions.py to precompute fields used for all emissions calculations and then calculate each species in parallel
 ### Removed
 ### Deprecated
 

@@ -1,5 +1,5 @@
 define:
-    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/
+    qfed_base_dir: &qfed_base_dir /discover/nobackup/projects/gmao/geos_aerosols/acollow/QFED/peat
 
 qfed:
     scaling:
@@ -57,5 +57,6 @@ qfed:
                 file: /css/viirs/data/Level2/VJ214IMG/{0:%Y}/{0:%j}/VJ214IMG.A{0:%Y%j}.{0:%H%M}.002.*.nc
 
         igbp: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_IGBP_PLUS.MODIS.{0:%Y}.nc
+        peat: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/IGBP+/GL_PEAT_GPA22.nc
         watermask: /discover/nobackup/projects/gmao/geos_aerosols/shared/emissions/watermask/watermask-700m.no_coast.nc4
         FRPcapping: False
